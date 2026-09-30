@@ -514,7 +514,7 @@
     try {
       const paymentBody = {
         method: form.elements.payment_method.value,
-        ...(form.elements.payment_method.value === "CASH" ? {} : { phone: form.elements.phone.value.trim() })
+        phone: form.elements.phone.value.trim()
       };
       payment = await apiFetch(`/orders/${encodeURIComponent(order.id)}/payments`, { method: "POST", body: JSON.stringify(paymentBody) });
     } catch (error) {
