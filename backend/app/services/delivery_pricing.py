@@ -43,6 +43,9 @@ DeliveryMode = Literal["DELIVERY", "PICKUP"]
 #: ``platform_settings`` key holding an explicit delivery-pricing configuration.
 PRICING_SETTING_KEY = "delivery_pricing"
 
+#: Fallback source label for direct pricing-engine callers that already supplied a road route.
+SUPPLIED_ROAD_ROUTE = "SUPPLIED_ROAD_ROUTE"
+
 #: Version label for the approved Phase 4A COM-FEE-001/COM-FEE-008 parameters.
 APPROVED_PRICING_VERSION = "phase4a-com-fee-001"
 
