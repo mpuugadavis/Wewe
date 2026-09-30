@@ -245,18 +245,18 @@
       const stock = Number(listing.stock_available || 0);
       const stockLabel = stock < 1 ? "Out of stock" : stock <= 5 ? stock + " left" : "In stock";
       const stockClass = stock < 1 ? "out" : stock <= 5 ? "low" : "";
-      return \`<article class="product-card" data-product-id="\${productId}" data-listing-id="\${listingId}">
-        <div class="product-image \${image ? "" : "image-placeholder"}">\${image ? \`<img src="\${escapeHtml(image)}" alt="\${escapeHtml(product.name)}" loading="lazy">\` : '<span>WEWE</span>'}
-          <button class="wish-button \${wished ? "is-wished" : ""}" aria-label="\${wished ? "Remove from" : "Add to"} wishlist" data-action="toggle-wishlist" data-product-id="\${productId}">\${wished ? "♥" : "♡"}</button>
-          <button class="quick-add" data-action="add-cart" data-listing-id="\${listingId}" \${stock < 1 ? "disabled" : ""}>\${stock < 1 ? "Unavailable" : "Quick add"}</button>
+      return `<article class="product-card" data-product-id="${productId}" data-listing-id="${listingId}">
+        <div class="product-image ${image ? "" : "image-placeholder"}">${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy">` : '<span>WEWE</span>'}
+          <button class="wish-button ${wished ? "is-wished" : ""}" aria-label="${wished ? "Remove from" : "Add to"} wishlist" data-action="toggle-wishlist" data-product-id="${productId}">${wished ? "♥" : "♡"}</button>
+          <button class="quick-add" data-action="add-cart" data-listing-id="${listingId}" ${stock < 1 ? "disabled" : ""}>${stock < 1 ? "Unavailable" : "Quick add"}</button>
         </div>
         <div class="product-info">
-          <div class="product-seller">\${escapeHtml(listing.retailer_name || "Campus retailer")}</div>
-          <button class="product-title" data-action="product-details" data-product-id="\${productId}">\${escapeHtml(product.name)}</button>
-          <div class="product-meta"><span class="stock-pill \${stockClass}">\${stockLabel}</span><span class="muted">Campus listing</span></div>
-          <div class="product-price-row"><strong>\${money(listing.price_ugx)}</strong><button class="add-button" data-action="add-cart" data-listing-id="\${listingId}" \${stock < 1 ? "disabled" : ""}>\${stock < 1 ? "Unavailable" : "Add to cart"}</button></div>
+          <div class="product-seller">${escapeHtml(listing.retailer_name || "Campus retailer")}</div>
+          <button class="product-title" data-action="product-details" data-product-id="${productId}">${escapeHtml(product.name)}</button>
+          <div class="product-meta"><span class="stock-pill ${stockClass}">${stockLabel}</span><span class="muted">Campus listing</span></div>
+          <div class="product-price-row"><strong>${money(listing.price_ugx)}</strong><button class="add-button" data-action="add-cart" data-listing-id="${listingId}" ${stock < 1 ? "disabled" : ""}>${stock < 1 ? "Unavailable" : "Add to cart"}</button></div>
         </div>
-      </article>\`;
+      </article>`;
     }).join("") : '<div class="empty-state"><div class="empty-icon">⌕</div><h3>No products found</h3><p>Try another search, category or availability filter.</p><button class="button-outline" data-action="clear-search">Clear filters</button></div>';
     syncCartBadge();
   }
