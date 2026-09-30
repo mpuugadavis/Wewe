@@ -491,7 +491,7 @@
       <div data-checkout-pickup class="hidden"><label class="field">Pickup point<select name="pickup_point_id">${pickupPoints.map(point => `<option value="${escapeHtml(point.id)}">${escapeHtml(point.name)}${point.directions ? ` — ${escapeHtml(point.directions)}` : ""}</option>`).join("")}</select></label></div>
       <div class="field"><span>Payment method</span><div class="payment-options"><label class="payment-option selected"><input type="radio" name="payment_method" value="MTN_MOMO" checked> <b>MTN Mobile Money</b><small>Pay securely from your MTN line.</small></label><label class="payment-option"><input type="radio" name="payment_method" value="AIRTEL_MONEY"> <b>Airtel Money</b><small>Pay securely from your Airtel line.</small></label></div></div>
       <label class="field" data-payment-phone>Mobile money phone<input name="phone" type="tel" placeholder="+256700000000" required autocomplete="tel"></label>
-      <div class="checkout-totals"><p>Subtotal <b>${money(cart.subtotal_ugx)}</b></p><p>Delivery fee <span>Live quote shown below</span></p><p class="muted">The server calculates the final fee and total when placing the order.</p></div>
+      <div id="checkoutQuote" class="checkout-quote"><p class="api-state">Calculating delivery route…</p></div>
       <p class="form-message" aria-live="polite"></p><button class="button-primary">Place order</button>
     </form>`;
     if (!saved.length) {
