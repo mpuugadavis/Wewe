@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     #: needs no key. Either way the distance comes from a real road route.
     routing_provider: Literal["GOOGLE_MAPS", "OSRM"] = "OSRM"
     google_maps_api_key: SecretStr | None = None
+    #: Browser-restricted key used only by the Maps JavaScript API in the WEWE frontend.
+    google_maps_browser_api_key: str | None = None
     #: Optional override of the routing service base URL (proxy or self-hosted
     #: OSRM instance). When unset the provider's public endpoint is used.
     routing_base_url: str | None = None
