@@ -60,7 +60,7 @@ def seed() -> None:
             db.flush()
 
         hall_records = {}
-        for name, kind in (("Livingstone Hall", "HALL"), ("Nsibirwa Hall", "HALL"), ("Mary Stuart Hall", "HALL"), ("Makerere View Hostel", "HOSTEL")):
+        for name, kind in (("Africa Hall", "HALL"), ("Complex Hall", "HALL"), ("Livingstone Hall", "HALL"), ("Lumumba Hall", "HALL"), ("Mary Stuart Hall", "HALL"), ("Mitchell Hall", "HALL"), ("Nkrumah Hall", "HALL"), ("Nsibirwa Hall", "HALL"), ("University Hall", "HALL"), ("Makerere International Students Hostel", "HOSTEL"), ("Muhika Hostel", "HOSTEL"), ("JJ Hostel", "HOSTEL")):
             hall = db.scalar(select(Hall).where(Hall.campus_id == campus.id, Hall.name == name))
             if hall is None:
                 hall = Hall(campus_id=campus.id, name=name, kind=kind)
@@ -84,6 +84,15 @@ def seed() -> None:
             return point
 
         shop_point = public_point("Kikoni shopfront", directions="Opposite the main campus gate", latitude="0.335300", longitude="32.571300")
+        # Curated campus destinations. Their coordinates may be supplied later
+        # from Google Place Details; until then Google routing geocodes the
+        # descriptive campus address rather than inventing coordinates.
+        for curated_hall in hall_records.values():
+            if curated_hall.kind != "HALL":
+                continue
+            public_point(curated_hall.name, kind="BUILDING", hall_id=curated_hall.id, directions="Makerere University Main Campus")
+        for hostel_name in ("Makerere International Students Hostel", "Muhika Hostel", "JJ Hostel"):
+            public_point(hostel_name, kind="BUILDING", directions="Near Makerere University Main Campus")
         pickup_location = public_point("Main Library pickup desk", kind="PICKUP_POINT", directions="Ground floor reception", latitude="0.327000", longitude="32.580600")
         pickup = db.get(PickupPoint, pickup_location.id)
         if pickup is None:
