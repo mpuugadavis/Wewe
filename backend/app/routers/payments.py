@@ -5,6 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.limiter import limiter
 from app.dependencies import Principal, require_roles
 from app.models import (
     NotificationOutbox,
@@ -28,6 +29,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 
 @router.post("/webhooks/{provider}")
+@limiter.limit("120/minute")
 async def provider_webhook(
     provider: str,
     payload: PaymentWebhookIn,
