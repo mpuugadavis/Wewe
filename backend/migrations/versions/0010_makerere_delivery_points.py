@@ -29,6 +29,11 @@ def upgrade() -> None:
     for name in HALLS:
         hall = bind.execute(text("SELECT id FROM halls WHERE campus_id = :campus_id AND name = :name LIMIT 1"), {"campus_id": campus_id, "name": name}).first()
         if not hall:
+            hall_id = str(uuid4())
+            bind.execute(text("""INSERT INTO halls (id, campus_id, name, kind, is_active, created_at, updated_at) VALUES (:id, :campus_id, :name, 'HALL', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"""), {"id": hall_id, "campus_id": campus_id, "name": name})
+            hall = (hall_id,)
+        hall = bind.execute(text("SELECT id FROM halls WHERE campus_id = :campus_id AND name = :name LIMIT 1"), {"campus_id": campus_id, "name": name}).first()
+        if not hall:
             continue
         exists = bind.execute(text("SELECT id FROM delivery_points WHERE campus_id = :campus_id AND name = :name AND owner_user_id IS NULL LIMIT 1"), {"campus_id": campus_id, "name": name}).first()
         if not exists:
