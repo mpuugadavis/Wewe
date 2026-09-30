@@ -190,7 +190,7 @@
 
   async function loadCatalog() {
     const grid = $("#productGrid");
-    grid.innerHTML = '<p class="api-state">Loading available products…</p>';
+    grid.innerHTML = '<div class="skeleton-grid" aria-label="Loading products">'+Array.from({length: 8}, () => '<div class="skeleton"></div>').join("")+'</div>';
     $("#categoryList").innerHTML = "";
     $("#sellerRow").innerHTML = "";
     try {
@@ -235,19 +235,29 @@
 
   function renderCatalog() {
     const rows = visibleProducts();
+    const count = $("#productCount");
+    if (count) count.textContent = rows.length ? rows.length + " product" + (rows.length === 1 ? "" : "s") + " available" : "";
     $("#productGrid").innerHTML = rows.length ? rows.map(({ product, listing }) => {
       const image = safeImage(product.images?.[0]);
       const productId = escapeHtml(product.id);
       const listingId = escapeHtml(listing.retailer_product_id);
       const wished = state.wishlist.has(product.id);
-      return `<article class="product-card" data-product-id="${productId}" data-listing-id="${listingId}">
-        <div class="product-image ${image ? "" : "image-placeholder"}">${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy">` : '<span>WEWE</span>'}
-          <button class="wish-button ${wished ? "is-wished" : ""}" aria-label="${wished ? "Remove from" : "Add to"} wishlist" data-action="toggle-wishlist" data-product-id="${productId}">${wished ? "♥" : "♡"}</button>
-        </div><div class="product-info"><div class="product-seller">${escapeHtml(listing.retailer_name || "Campus retailer")}</div>
-          <button class="product-title" data-action="product-details" data-product-id="${productId}">${escapeHtml(product.name)}</button>
-          <div class="product-bottom"><strong>${money(listing.price_ugx)}</strong><button class="add-button" data-action="add-cart" data-listing-id="${listingId}" ${Number(listing.stock_available) < 1 ? "disabled" : ""}>${Number(listing.stock_available) < 1 ? "Unavailable" : "Add"}</button></div>
-        </div></article>`;
-    }).join("") : '<p class="api-state">No available products match your search.</p>';
+      const stock = Number(listing.stock_available || 0);
+      const stockLabel = stock < 1 ? "Out of stock" : stock <= 5 ? stock + " left" : "In stock";
+      const stockClass = stock < 1 ? "out" : stock <= 5 ? "low" : "";
+      return \`<article class="product-card" data-product-id="\${productId}" data-listing-id="\${listingId}">
+        <div class="product-image \${image ? "" : "image-placeholder"}">\${image ? \`<img src="\${escapeHtml(image)}" alt="\${escapeHtml(product.name)}" loading="lazy">\` : '<span>WEWE</span>'}
+          <button class="wish-button \${wished ? "is-wished" : ""}" aria-label="\${wished ? "Remove from" : "Add to"} wishlist" data-action="toggle-wishlist" data-product-id="\${productId}">\${wished ? "♥" : "♡"}</button>
+          <button class="quick-add" data-action="add-cart" data-listing-id="\${listingId}" \${stock < 1 ? "disabled" : ""}>\${stock < 1 ? "Unavailable" : "Quick add"}</button>
+        </div>
+        <div class="product-info">
+          <div class="product-seller">\${escapeHtml(listing.retailer_name || "Campus retailer")}</div>
+          <button class="product-title" data-action="product-details" data-product-id="\${productId}">\${escapeHtml(product.name)}</button>
+          <div class="product-meta"><span class="stock-pill \${stockClass}">\${stockLabel}</span><span class="muted">Campus listing</span></div>
+          <div class="product-price-row"><strong>\${money(listing.price_ugx)}</strong><button class="add-button" data-action="add-cart" data-listing-id="\${listingId}" \${stock < 1 ? "disabled" : ""}>\${stock < 1 ? "Unavailable" : "Add to cart"}</button></div>
+        </div>
+      </article>\`;
+    }).join("") : '<div class="empty-state"><div class="empty-icon">⌕</div><h3>No products found</h3><p>Try another search, category or availability filter.</p><button class="button-outline" data-action="clear-search">Clear filters</button></div>';
     syncCartBadge();
   }
 
@@ -804,6 +814,7 @@
     if (action === "show-register") return showAuth(true);
     if (action === "show-login") return showAuth(false);
     if (action === "retry-catalog") return loadCatalog();
+    if (action === "clear-search") { state.search = ""; state.activeCategory = "all"; state.availability = "all"; $("#searchInput").value = ""; $("#availabilityFilter").value = "all"; renderCategories(); return renderCatalog(); }
     if (action === "storefront") return showDashboard(false);
     if (action === "sign-out") return signOut();
     if (action === "dashboard-section") {
