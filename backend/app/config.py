@@ -31,11 +31,10 @@ class Settings(BaseSettings):
     mtn_momo_api_secret: SecretStr | None = None
     airtel_money_api_key: SecretStr | None = None
     airtel_money_api_secret: SecretStr | None = None
-    #: Road-route lookups (COM-FEE-004). ``GOOGLE_MAPS`` uses the Google Maps
-    #: Directions/Geocoding APIs and requires ``GOOGLE_MAPS_API_KEY``; ``OSRM``
-    #: uses the OpenStreetMap OSRM road service plus the Nominatim geocoder and
-    #: needs no key. Either way the distance comes from a real road route.
-    routing_provider: Literal["GOOGLE_MAPS", "OSRM"] = "GOOGLE_MAPS"
+    #: Road-route distance for delivery pricing (COM-FEE-004). Google Maps is
+    #: opt-in because it requires a billed Cloud project/key. OSRM is the
+    #: safe local-development default and still uses a real road route.
+    routing_provider: Literal["GOOGLE_MAPS", "OSRM"] = "OSRM"
     google_maps_api_key: SecretStr | None = None
     #: Browser-restricted key used only by the Maps JavaScript API in the WEWE frontend.
     google_maps_browser_api_key: str | None = None
