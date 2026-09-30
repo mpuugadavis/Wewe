@@ -1,0 +1,3 @@
+# Local database backups and audit artifacts. These contain real data (including
+# password hashes) and must never be committed.
+backups/
