@@ -300,9 +300,10 @@
   async function addToCart(listingId, quantity = 1) {
     if (!state.user) return showAuth();
     if (state.user.role !== "CUSTOMER") return showToast("Sign in with a customer account to add items.");
-    state.cart = await apiFetch("/cart/items", { method: "POST", body: JSON.stringify({ retailer_product_id: listingId, quantity: 1 }) });
+    const safeQuantity = Math.max(1, Math.min(100, Number(quantity) || 1));
+    state.cart = await apiFetch("/cart/items", { method: "POST", body: JSON.stringify({ retailer_product_id: listingId, quantity: safeQuantity }) });
     syncCartBadge();
-    showToast("Added to your cart.");
+    showToast(safeQuantity > 1 ? `${safeQuantity} items added to your cart.` : "Added to your cart.");
   }
 
   async function cartQuantity(itemId, quantity) {
