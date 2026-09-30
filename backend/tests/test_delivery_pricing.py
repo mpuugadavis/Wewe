@@ -54,6 +54,7 @@ from app.services.delivery_pricing import (
 )
 from app.services.routing import GeoCoordinate, RoutingProviderError
 from app.services.orders import create_order
+from app.services.payments import PaymentInitiation, payment_providers
 from app.routers.commerce import _adjust_order_after_rejection
 
 PASSWORD = "delivery-pricing-password-42"
@@ -787,7 +788,7 @@ def test_rejected_fulfillment_removes_only_its_own_committed_fee(database, fake_
     assert remove_committed_delivery_quote(database, rejected.id) is None
 
 
-def test_committed_order_total_is_used_for_online_payment_creation(client, database, fake_routing) -> None:
+def test_committed_order_total_is_used_for_online_payment_creation(client, database, fake_routing, monkeypatch) -> None:
     result = pricing_fixture(database, retailer_count=1)
     configure_routes(result, fake_routing, ["5"])
     order = create_order(
@@ -801,6 +802,18 @@ def test_committed_order_total_is_used_for_online_payment_creation(client, datab
         "payment-total-key",
     )
     database.commit()
+
+    class FakeMomoProvider:
+        name = "TEST_MTN_MOMO"
+
+        def initiate(self, request):
+            assert request.amount_ugx == order.total_ugx == 14_000
+            return PaymentInitiation(provider_reference="test-provider-reference")
+
+        def verify_webhook(self, raw_body, signature):
+            return True
+
+    monkeypatch.setitem(payment_providers._providers, "MTN_MOMO", FakeMomoProvider())
 
     response = client.post(
         f"/api/v1/orders/{order.id}/payments",
