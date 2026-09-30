@@ -134,7 +134,7 @@ def resolve_route_distances(
             )
         origin_coordinate = _coordinate_for_retailer(db, provider, retailer, destination)
         try:
-            route = provider.route_distance(origin_coordinate, destination_coordinate)
+            route = provider.route_distance(\n                origin_coordinate,\n                destination_coordinate,\n                origin_place_id=(db.get(DeliveryPoint, retailer.location_id).google_place_id if retailer.location_id and db.get(DeliveryPoint, retailer.location_id) else None),\n                destination_place_id=destination.google_place_id,\n            )
         except RoutingProviderError as exc:
             raise _unavailable(
                 "WEWE could not calculate a road route for this delivery. Please try again or choose pickup."
