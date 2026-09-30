@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     payment_callback_url: str = "http://localhost:8000/api/v1/payments/webhooks"
     payment_webhook_secret: SecretStr | None = None
     payment_mode: Literal["DISABLED", "SIMULATED", "EXTERNAL"] = "DISABLED"
+    rate_limit_storage_uri: str = "memory://"
     email_from: str = "no-reply@example.invalid"
     smtp_host: str | None = None
     smtp_port: int = 587
@@ -88,6 +89,10 @@ class Settings(BaseSettings):
             raise ValueError("Wildcard CORS origins are forbidden in production")
         if self.app_env == "production" and not self.smtp_host:
             raise ValueError("SMTP_HOST must be configured in production for account recovery")
+        if self.app_env == "production" and not self.database_url.lower().startswith(("postgresql://", "postgresql+psycopg://")):
+            raise ValueError("DATABASE_URL must use PostgreSQL in production")
+        if self.app_env == "production" and not self.rate_limit_storage_uri.lower().startswith(("redis://", "rediss://")):
+            raise ValueError("RATE_LIMIT_STORAGE_URI must use Redis in production")
         if self.app_env == "production" and self.payment_mode == "SIMULATED":
             raise ValueError("PAYMENT_MODE=SIMULATED is forbidden in production")
         if self.app_env == "production" and self.payment_mode == "EXTERNAL" and not self.payment_webhook_secret:
