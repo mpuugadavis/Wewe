@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 from uuid import uuid4
 
 from app.config import get_settings
-from app.services.payments import PaymentInitiation, PaymentProvider, PaymentRequest
+from app.services.payments import PaymentInitiation, PaymentRequest
 
 
 class SimulatedMobileMoneyProvider:
