@@ -134,6 +134,8 @@ class DeliveryPoint(TimestampMixin, Base):
     #: uses them directly; otherwise the address is geocoded (COM-FEE-004).
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
+    #: Optional Google Place ID for authoritative routing/access-point resolution.
+    google_place_id: Mapped[str | None] = mapped_column(String(300))
     is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
