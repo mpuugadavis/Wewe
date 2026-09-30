@@ -1,9 +1,10 @@
 import os
 
-os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["SECRET_KEY"] = "test-only-secret-key-not-for-any-deployment-000000"
-os.environ["PAYMENT_WEBHOOK_SECRET"] = "test-webhook-secret-key-not-for-deployment"
+os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("DATABASE_URL", "sqlite://")
+os.environ.setdefault("SECRET_KEY", "test-only-secret-key-not-for-any-deployment-000000")
+os.environ.setdefault("PAYMENT_WEBHOOK_SECRET", "test-webhook-secret-key-not-for-deployment")
+os.environ.setdefault("PAYMENT_MODE", "DISABLED")
 
 from collections.abc import Generator
 from decimal import Decimal
