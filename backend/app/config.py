@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5500,http://127.0.0.1:5500"
     payment_callback_url: str = "http://localhost:8000/api/v1/payments/webhooks"
     payment_webhook_secret: SecretStr | None = None
+    payment_mode: Literal["DISABLED", "SIMULATED", "EXTERNAL"] = "SIMULATED"
     email_from: str = "no-reply@example.invalid"
     smtp_host: str | None = None
     smtp_port: int = 587
@@ -87,7 +88,9 @@ class Settings(BaseSettings):
             raise ValueError("Wildcard CORS origins are forbidden in production")
         if self.app_env == "production" and not self.smtp_host:
             raise ValueError("SMTP_HOST must be configured in production for account recovery")
-        if self.app_env == "production" and not self.payment_webhook_secret:
+        if self.app_env == "production" and self.payment_mode == "SIMULATED":
+            raise ValueError("PAYMENT_MODE=SIMULATED is forbidden in production")
+        if self.app_env == "production" and self.payment_mode == "EXTERNAL" and not self.payment_webhook_secret:
             raise ValueError("PAYMENT_WEBHOOK_SECRET must be configured in production")
         if self.payment_webhook_secret:
             webhook_secret = self.payment_webhook_secret.get_secret_value()
