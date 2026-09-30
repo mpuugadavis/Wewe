@@ -727,7 +727,8 @@
         method: form.elements.payment_method.value,
         phone: form.elements.phone.value.trim()
       };
-      payment = await apiFetch(`/orders/${encodeURIComponent(order.id)}/payments`, { method: "POST", body: JSON.stringify(paymentBody) });
+      form.dataset.paymentIdempotencyKey ||= crypto.randomUUID();
+      payment = await apiFetch(`/orders/${encodeURIComponent(order.id)}/payments`, { method: "POST", headers: { "Idempotency-Key": form.dataset.paymentIdempotencyKey }, body: JSON.stringify(paymentBody) });
     } catch (error) {
       const method = form.elements.payment_method.value;
       const phone = form.elements.phone.value.trim();
@@ -738,14 +739,51 @@
     state.cart = { items: [] };
     syncCartBadge();
     const checkoutUrl = safeImage(payment?.checkout_url);
-    $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Order placed</div><h2>${escapeHtml(order.order_number)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>The server calculated these totals:</p><div class="checkout-totals"><p>Subtotal <b>${money(order.subtotal_ugx)}</b></p><p>Delivery <b>${money(order.delivery_fee_ugx)}</b></p><p>Total <b>${money(order.total_ugx)}</b></p><p>Status ${statusBadge(order.status)} · Payment ${statusBadge(payment?.status || order.payment_status)}</p></div>${checkoutUrl ? `<p><a href="${escapeHtml(checkoutUrl)}" target="_blank" rel="noopener noreferrer">Continue mobile payment</a></p>` : ""}<button class="button-primary" data-action="close-modal">Continue shopping</button>`;
+    $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Order placed</div><h2>${escapeHtml(order.order_number)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>The server calculated these totals:</p><div class="checkout-totals"><p>Subtotal <b>${money(order.subtotal_ugx)}</b></p><p>Delivery <b>${money(order.delivery_fee_ugx)}</b></p><p>Total <b>${money(order.total_ugx)}</b></p><p>Status ${statusBadge(order.status)} · Payment ${statusBadge(payment?.status || order.payment_status)}</p></div>${checkoutUrl ? `<p><a href="${escapeHtml(checkoutUrl)}" target="_blank" rel="noopener noreferrer">Continue mobile payment</a></p>` : ""}<p id="paymentProgress" class="api-state">Waiting for mobile-money confirmation…</p><button class="button-primary" data-action="close-modal">Continue shopping</button>`;
+    watchPaymentStatus(payment.id);
+  }
+
+  async function watchPaymentStatus(paymentId) {
+    const progress = $("#paymentProgress");
+    if (!progress) return;
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      try {
+        const payment = await apiFetch(`/payments/${encodeURIComponent(paymentId)}`);
+        const current = $("#paymentProgress");
+        if (!current) return;
+        if (payment.status === "SUCCESSFUL") {
+          current.className = "api-state api-success";
+          current.textContent = "Payment confirmed. Your order is being processed.";
+          return;
+        }
+        if (payment.status === "FAILED") {
+          current.className = "api-state api-error";
+          current.textContent = "Payment failed. You can start a new payment attempt.";
+          return;
+        }
+        if (payment.status === "UNKNOWN") {
+          current.className = "api-state api-error";
+          current.textContent = "Payment status is being reconciled. Please do not retry yet.";
+          return;
+        }
+        current.textContent = "Waiting for mobile-money confirmation…";
+      } catch {
+        // A transient polling failure must not change the payment state or create a retry.
+      }
+    }
+    const current = $("#paymentProgress");
+    if (current) current.textContent = "Still waiting for confirmation. You can close this window; the payment status remains on the order.";
   }
 
   async function retryOnlinePayment(orderId, method, phone) {
     if (!["MTN_MOMO", "AIRTEL_MONEY"].includes(method)) throw new Error("Choose an online mobile-money payment method.");
     if (!phone) throw new Error("Enter the mobile-money phone number.");
+    const idempotencyKey = crypto.randomUUID();
     const payment = await apiFetch(`/orders/${encodeURIComponent(orderId)}/payments`, {
       method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
       body: JSON.stringify({ method, phone })
     });
     const checkoutUrl = safeImage(payment?.checkout_url);
