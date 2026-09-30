@@ -294,7 +294,7 @@
     $("#cartContents").innerHTML = items.length ? `<div class="cart-lines">${items.map(item => `<div class="cart-line">
       <div><b>${escapeHtml(item.product_name)}</b><small>${escapeHtml(item.retailer_name)} · ${money(item.unit_price_ugx)} each</small></div>
       <div class="cart-line-controls"><button data-action="cart-quantity" data-item-id="${escapeHtml(item.id)}" data-quantity="${Number(item.quantity) - 1}" ${Number(item.quantity) <= 1 ? "disabled" : ""} aria-label="Decrease quantity">−</button><span>${Number(item.quantity)}</span><button data-action="cart-quantity" data-item-id="${escapeHtml(item.id)}" data-quantity="${Number(item.quantity) + 1}" aria-label="Increase quantity">+</button><button data-action="remove-cart" data-item-id="${escapeHtml(item.id)}" aria-label="Remove item">Remove</button></div>
-      <b>${money(item.line_total_ugx)}</b></div>`).join("")}</div><div class="cart-summary"><p>Subtotal <b>${money(cart.subtotal_ugx)}</b></p><p>Delivery fee <span>Calculated by checkout</span></p><button class="button-primary" data-action="checkout">Continue to checkout</button></div>` : '<div class="api-state"><p>Your cart is empty.</p><button class="button-outline" data-action="close-modal">Continue shopping</button></div>';
+      <b>${money(item.line_total_ugx)}</b></div>`).join("")}</div><div class="cart-summary"><p>Subtotal <b>${money(cart.subtotal_ugx)}</b></p><p>Delivery fee <span>Calculated securely at checkout</span></p><button class="button-primary" data-action="checkout">Continue to checkout</button></div>` : '<div class="api-state"><p>Your cart is empty.</p><button class="button-outline" data-action="close-modal">Continue shopping</button></div>';
   }
 
   async function addToCart(listingId, quantity = 1) {
