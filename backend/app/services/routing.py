@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 #: Distances are stored with millimetre precision (three decimals of a kilometre).
 ROUTE_DISTANCE_QUANTUM = Decimal("0.001")
 
-GOOGLE_DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json"
+GOOGLE_ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 GOOGLE_GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 OSRM_ROUTE_PATH = "/route/v1/driving"
 NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
@@ -104,7 +104,7 @@ class RoutingProvider(Protocol):
 
     def geocode(self, address: str) -> GeoCoordinate | None: ...
 
-    def route_distance(self, origin: GeoCoordinate, destination: GeoCoordinate) -> RouteDistance: ...
+    def route_distance(self, origin: GeoCoordinate, destination: GeoCoordinate, *, origin_place_id: str | None = None, destination_place_id: str | None = None) -> RouteDistance: ...
 
 
 def metres_to_kilometres(metres: Any) -> Decimal:
@@ -145,23 +145,20 @@ def _get_json(url: str, *, timeout: float, user_agent: str) -> Any:
 
 
 class GoogleMapsRoutingProvider:
-    """Google Maps Directions + Geocoding implementation of the routing contract."""
+    """Google Maps Routes API + Geocoding implementation of the routing contract.
+
+    Routes API is authoritative for road distance. Stored Google Place IDs are
+    preferred when available because Google can resolve property access points;
+    coordinates remain the fallback for exact current-location destinations.
+    """
 
     name = "GOOGLE_MAPS"
-    source = GOOGLE_MAPS_DISTANCE_SOURCE
+    source = "GOOGLE_MAPS_ROUTES"
 
-    def __init__(
-        self,
-        api_key: str,
-        *,
-        directions_url: str = GOOGLE_DIRECTIONS_URL,
-        geocoding_url: str = GOOGLE_GEOCODING_URL,
-        timeout: float | None = None,
-        user_agent: str | None = None,
-    ) -> None:
+    def __init__(self, api_key: str, *, geocoding_url: str = GOOGLE_GEOCODING_URL, routes_url: str = GOOGLE_ROUTES_URL, timeout: float | None = None, user_agent: str | None = None) -> None:
         settings = get_settings()
         self._api_key = api_key
-        self._directions_url = directions_url
+        self._routes_url = routes_url
         self._geocoding_url = geocoding_url
         self._timeout = timeout if timeout is not None else settings.routing_timeout_seconds
         self._user_agent = user_agent or settings.routing_user_agent
@@ -180,38 +177,52 @@ class GoogleMapsRoutingProvider:
             return None
         return GeoCoordinate.from_values(location["lat"], location["lng"])
 
-    def route_distance(self, origin: GeoCoordinate, destination: GeoCoordinate) -> RouteDistance:
-        query = urlencode(
-            {
-                "origin": origin.as_text(),
-                "destination": destination.as_text(),
-                "mode": "driving",
-                "key": self._api_key,
-            }
+    @staticmethod
+    def _waypoint(coordinate: GeoCoordinate, place_id: str | None) -> dict[str, Any]:
+        if place_id:
+            return {"placeId": place_id}
+        return {"location": {"latLng": {"latitude": float(coordinate.latitude), "longitude": float(coordinate.longitude)}}}
+
+    def route_distance(self, origin: GeoCoordinate, destination: GeoCoordinate, *, origin_place_id: str | None = None, destination_place_id: str | None = None) -> RouteDistance:
+        payload = {
+            "origin": self._waypoint(origin, origin_place_id),
+            "destination": self._waypoint(destination, destination_place_id),
+            "travelMode": "DRIVE",
+            "routingPreference": "TRAFFIC_UNAWARE",
+        }
+        request = Request(
+            self._routes_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": self._api_key,
+                "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.routeLabels",
+                "User-Agent": self._user_agent,
+                "Accept": "application/json",
+            },
+            method="POST",
         )
-        data = _get_json(f"{self._directions_url}?{query}", timeout=self._timeout, user_agent=self._user_agent)
-        status = data.get("status") if isinstance(data, dict) else None
-        if status == "ZERO_RESULTS":
-            raise RoutingProviderError("no_route_found", "No road route connects those two locations.")
-        if status != "OK":
-            raise RoutingProviderError("routing_provider_error", f"Google Directions returned {status}.")
-        routes = data.get("routes") or []
+        try:
+            with urlopen(request, timeout=self._timeout) as response:
+                charset = response.headers.get_content_charset() or "utf-8"
+                data = json.loads(response.read().decode(charset))
+        except HTTPError as exc:
+            raise RoutingProviderError("routing_provider_error", f"Google Routes returned HTTP {exc.code}.") from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            raise RoutingProviderError("routing_provider_unreachable", "Google Routes could not be reached.") from exc
+        except json.JSONDecodeError as exc:
+            raise RoutingProviderError("routing_provider_invalid_response", "Google Routes returned invalid JSON.") from exc
+        routes = data.get("routes") if isinstance(data, dict) else None
         if not routes:
             raise RoutingProviderError("no_route_found", "No road route connects those two locations.")
-        legs = routes[0].get("legs") or []
-        metres = 0
-        for leg in legs:
-            distance = leg.get("distance") or {}
-            if "value" not in distance:
-                raise RoutingProviderError(
-                    "routing_provider_invalid_response", "Google Directions did not return a route distance."
-                )
-            metres += int(distance["value"])
+        metres = routes[0].get("distanceMeters")
+        if metres is None:
+            raise RoutingProviderError("routing_provider_invalid_response", "Google Routes did not return a route distance.")
         return RouteDistance(
             distance_km=metres_to_kilometres(metres),
             source=self.source,
             provider=self.name,
-            reference=routes[0].get("summary") or None,
+            reference=(routes[0].get("routeLabels") or [None])[0],
         )
 
 
@@ -245,7 +256,7 @@ class OsrmRoutingProvider:
             return None
         return GeoCoordinate.from_values(match["lat"], match["lon"])
 
-    def route_distance(self, origin: GeoCoordinate, destination: GeoCoordinate) -> RouteDistance:
+    def route_distance(self, origin: GeoCoordinate, destination: GeoCoordinate, *, origin_place_id: str | None = None, destination_place_id: str | None = None) -> RouteDistance:
         # OSRM takes longitude first, then latitude.
         coordinates = f"{origin.longitude},{origin.latitude};{destination.longitude},{destination.latitude}"
         url = (
