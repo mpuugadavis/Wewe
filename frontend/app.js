@@ -737,7 +737,10 @@
 
   async function showOrder(orderId) {
     const order = await apiFetch(`/orders/${encodeURIComponent(orderId)}`);
-    setModal(`<div class="modal-head"><div><div class="section-kicker">Order</div><h2>${escapeHtml(order.order_number)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${statusBadge(order.status)} ${statusBadge(order.payment_status)}</p>${(order.items || []).map(item => `<div class="listing-row"><span>${escapeHtml(item.product_name)} × ${Number(item.quantity)}</span><b>${money(item.line_total_ugx)}</b></div>`).join("")}<div class="checkout-totals"><p>Subtotal <b>${money(order.subtotal_ugx)}</b></p><p>Delivery <b>${money(order.delivery_fee_ugx)}</b></p><p>Total <b>${money(order.total_ugx)}</b></p></div>`);
+    const stages = ["PENDING", "CONFIRMED", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"];
+    const currentStage = stages.indexOf(order.status);
+    const tracking = stages.map((stage, index) => `<div class="tracking-step ${index <= currentStage ? "done" : ""} ${stage === order.status ? "current" : ""}"><span>${index <= currentStage ? "✓" : index + 1}</span><div><b>${escapeHtml(stage.replaceAll("_", " "))}</b><small>${stage === order.status ? "Current status" : index < currentStage ? "Completed" : "Waiting"}</small></div></div>`).join("");
+    setModal(`<div class="modal-head"><div><div class="section-kicker">Order</div><h2>${escapeHtml(order.order_number)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${statusBadge(order.status)} ${statusBadge(order.payment_status)}</p><div class="tracking-timeline">${tracking}</div>${(order.items || []).map(item => `<div class="listing-row"><span>${escapeHtml(item.product_name)} × ${Number(item.quantity)}</span><b>${money(item.line_total_ugx)}</b></div>`).join("")}<div class="checkout-totals"><p>Subtotal <b>${money(order.subtotal_ugx)}</b></p><p>Delivery <b>${money(order.delivery_fee_ugx)}</b></p><p>Total <b>${money(order.total_ugx)}</b></p></div>`);
   }
 
   async function newProduct() {
