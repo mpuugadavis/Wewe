@@ -30,6 +30,7 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["postgres: PostgreSQL-specific concurrency verification"]
 
 [tool.ruff]
 line-length = 100

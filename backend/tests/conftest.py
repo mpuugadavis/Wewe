@@ -1,9 +1,10 @@
 import os
 
-os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["SECRET_KEY"] = "test-only-secret-key-not-for-any-deployment-000000"
-os.environ["PAYMENT_WEBHOOK_SECRET"] = "test-webhook-secret-key-not-for-deployment"
+os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("DATABASE_URL", "sqlite://")
+os.environ.setdefault("SECRET_KEY", "test-only-secret-key-not-for-any-deployment-000000")
+os.environ.setdefault("PAYMENT_WEBHOOK_SECRET", "test-webhook-secret-key-not-for-deployment")
+os.environ.setdefault("PAYMENT_MODE", "DISABLED")
 
 from collections.abc import Generator
 from decimal import Decimal
@@ -63,7 +64,14 @@ class FakeRoutingProvider:
             return None
         return self.geocodes.get(address, self.fallback_coordinate)
 
-    def route_distance(self, origin: GeoCoordinate, destination: GeoCoordinate) -> RouteDistance:
+    def route_distance(
+        self,
+        origin: GeoCoordinate,
+        destination: GeoCoordinate,
+        *,
+        origin_place_id: str | None = None,
+        destination_place_id: str | None = None,
+    ) -> RouteDistance:
         self.route_calls.append((origin, destination))
         if self.route_error is not None:
             raise self.route_error

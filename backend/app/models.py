@@ -473,6 +473,7 @@ class Payment(TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint("amount_ugx > 0 AND currency = 'UGX'", name="ck_payment_amount_currency"),
         CheckConstraint("status IN ('PENDING','UNKNOWN','SUCCESSFUL','FAILED','REFUNDED')", name="ck_payment_status"),
+        CheckConstraint("method IN ('MTN_MOMO','AIRTEL_MONEY')", name="ck_payment_method_online_only"),
         UniqueConstraint("attempt_reference", name="uq_payment_attempt_reference"),
         UniqueConstraint("idempotency_key", name="uq_payment_idempotency_key"),
     )

@@ -1,0 +1,57 @@
+name: Phase 4B verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: wewe_test
+          POSTGRES_USER: wewe
+          POSTGRES_PASSWORD: wewe_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wewe -d wewe_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://wewe:wewe_test_password@localhost:5432/wewe_test
+      SECRET_KEY: test-only-secret-key-not-for-any-deployment-000000
+      PAYMENT_WEBHOOK_SECRET: test-webhook-secret-key-not-for-deployment
+      PAYMENT_MODE: DISABLED
+      RUN_POSTGRES_CONCURRENCY: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend and test dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[test]"
+
+      - name: Apply migrations
+        run: alembic upgrade head
+
+      - name: Run complete backend test suite
+        run: pytest

@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5500,http://127.0.0.1:5500"
     payment_callback_url: str = "http://localhost:8000/api/v1/payments/webhooks"
     payment_webhook_secret: SecretStr | None = None
-    payment_mode: Literal["DISABLED", "SIMULATED", "EXTERNAL"] = "SIMULATED"
+    payment_mode: Literal["DISABLED", "SIMULATED", "EXTERNAL"] = "DISABLED"
     email_from: str = "no-reply@example.invalid"
     smtp_host: str | None = None
     smtp_port: int = 587
