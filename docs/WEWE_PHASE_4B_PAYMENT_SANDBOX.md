@@ -64,13 +64,13 @@ The simulator must not be mistaken for provider certification.
 
 ### MTN MoMo
 
-MTN's official sandbox requires a developer account, a subscribed product, sandbox API user/API key provisioning, and a subscription key. Request-to-Pay is asynchronous: initiation returns an accepted response, the customer authorizes the payment, and the provider sends a final callback. MTN also recommends status polling because callbacks are sent only once. citeturn4search1turn8search0
+MTN's official sandbox requires a developer account, a subscribed product, sandbox API user/API key provisioning, and a subscription key. Request-to-Pay is asynchronous: initiation returns an accepted response, the customer authorizes the payment, and the provider sends a final callback. MTN also recommends status polling because callbacks are sent only once.
 
-MTN's published sandbox documentation currently describes EUR as the sandbox test currency. Therefore WEWE must **not** silently convert UGX order totals into EUR merely to make a sandbox call succeed. A Uganda-specific MTN sandbox configuration must be verified before an external MTN adapter is enabled. citeturn4search5
+MTN's published sandbox documentation currently describes EUR as the sandbox test currency. Therefore WEWE must **not** silently convert UGX order totals into EUR merely to make a sandbox call succeed. A Uganda-specific MTN sandbox configuration must be verified before an external MTN adapter is enabled.
 
 ### Airtel Money
 
-Airtel Africa provides a developer portal with Uganda selected as an available operating country. Provider credentials and the exact collection/callback capabilities must be verified in the Airtel portal before enabling the external adapter. citeturn2search0
+Airtel Africa provides a developer portal with Uganda selected as an available operating country. Provider credentials and the exact collection/callback capabilities must be verified in the Airtel portal before enabling the external adapter.
 
 ## Production gate
 
