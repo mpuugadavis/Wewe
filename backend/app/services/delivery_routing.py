@@ -133,8 +133,18 @@ def resolve_route_distances(
                 "retailer_location_unresolved", "One of the retailers in this order could not be found."
             )
         origin_coordinate = _coordinate_for_retailer(db, provider, retailer, destination)
+        origin_place_id = None
+        if retailer.location_id:
+            retailer_location = db.get(DeliveryPoint, retailer.location_id)
+            if retailer_location is not None:
+                origin_place_id = retailer_location.google_place_id
         try:
-            route = provider.route_distance(\n                origin_coordinate,\n                destination_coordinate,\n                origin_place_id=(db.get(DeliveryPoint, retailer.location_id).google_place_id if retailer.location_id and db.get(DeliveryPoint, retailer.location_id) else None),\n                destination_place_id=destination.google_place_id,\n            )
+            route = provider.route_distance(
+                origin_coordinate,
+                destination_coordinate,
+                origin_place_id=origin_place_id,
+                destination_place_id=destination.google_place_id,
+            )
         except RoutingProviderError as exc:
             raise _unavailable(
                 "WEWE could not calculate a road route for this delivery. Please try again or choose pickup."
