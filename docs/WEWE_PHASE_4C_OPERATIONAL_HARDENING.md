@@ -21,11 +21,11 @@ Phase 4C strengthens the production boundary around the Phase 4B payment core. I
 
 ## Remaining Phase 4C work
 
-1. Reliable notification/outbox processing for channels beyond the existing in-app notification records.
+1. External notification channels (email/SMS/push) and their provider-specific adapters.
 2. Production logging/observability and alerting.
 3. Backup/restore verification and database operational checks.
 4. Storage/upload hardening for product media.
 5. Deployment configuration and infrastructure validation.
 6. Final production-readiness regression suite.
 
-Provider-specific onboarding remains a later phase.
+The durable outbox worker is now implemented; provider-specific onboarding remains a later phase.
