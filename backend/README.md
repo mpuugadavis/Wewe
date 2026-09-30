@@ -9,7 +9,7 @@ A standalone FastAPI service for the WEWE campus marketplace. The frontend must 
 - SQLAlchemy 2 and Alembic for relational persistence and schema changes
 - PostgreSQL 16 for deployed environments; SQLite is supported for isolated tests and local experiments
 - Argon2 password hashing, short-lived signed access tokens, and rotating opaque refresh tokens
-- SlowAPI per-process rate limits on registration, login, password reset, verification requests, and delivery status updates
+- SlowAPI rate limits with configurable storage; production requires shared Redis so limits remain consistent across API workers
 
 The API is mounted at `/api/v1`. OpenAPI docs are at `/docs` outside production mode.
 
@@ -165,7 +165,7 @@ All success responses are JSON resources; errors use `{"error":{"code":"...","me
 3. The transaction reserves stock and creates one fulfillment per retailer. Retailers confirm/reject, then move confirmed work through preparing and ready.
 4. A delivery order becomes available to verified, available agents once its retailer fulfillment is ready. Exact destination information is omitted from open jobs and exposed only after that agent accepts. The customer's `ORDER_PLACED` notification includes `delivery_confirmation_codes`, keyed by fulfillment ID; an assigned agent must provide the matching `confirmation_code` when reporting `DELIVERED`. Agents report pickup, out-for-delivery, and delivery; every transition is recorded.
 5. A customer confirms retailer pickup with `/orders/{id}/pickup-confirm`. Completed purchases become reviewable.
-6. `CASH` payments are recorded as pending and reconciled as successful at delivery/pickup. Mobile-money methods use `PaymentProviderRegistry`; no MTN/Airtel provider is registered by default, so requests return `503` until a reviewed adapter and credentials are supplied. The selected adapter verifies provider signatures; the normalized callback then checks reference, amount, currency, and event idempotency. A verified callback can record provider refunds, and an admin can record a full external refund at `POST /admin/payments/{payment_id}/confirm-refund` before a retailer changes an already-paid order.
+6. Customer payments are online-only: only MTN Mobile Money and Airtel Money are accepted. No customer cash-payment path exists. Mobile-money methods use `PaymentProviderRegistry`; no MTN/Airtel provider is registered by default, so requests return `503` until a reviewed adapter and credentials are supplied. The selected adapter verifies provider signatures; the normalized callback then checks reference, amount, currency, and event idempotency. A verified callback can record provider refunds, and an admin can record a full external refund at `POST /admin/payments/{payment_id}/confirm-refund` before a retailer changes an already-paid order.
 
 Delivery fees default to UGX 3,500 per retailer fulfilment and can be changed through the audited admin `delivery_fee_ugx` setting. Confirm the pricing and courier payout policy with the business before production; the current delivery earnings ledger allocates the per-fulfilment fee to the completing agent and records it as pending payout.
 
@@ -174,8 +174,8 @@ Delivery fees default to UGX 3,500 per retailer fulfilment and can be changed th
 - Argon2 hashes; no plaintext passwords or card data.
 - JWT issuer, audience, expiry and session-family validation. Opaque refresh tokens and reset/verification tokens are stored as SHA-256 digests.
 - SQLAlchemy bound statements, Pydantic validation, unique/check/foreign-key constraints, request IDs, generic production errors, no request-body logging, strict CORS allow-list, security headers, and sanitized unique-constraint conflicts.
-- Authentication and delivery-status limits are per process. Use a shared Redis-backed limiter before deploying multiple API workers.
-- Set distinct production secrets through a managed secret store. Configure TLS at the proxy, SMTP, provider-specific webhook verification, object storage, SMS/push adapters, backups, database monitoring, and an outbox worker before launch.
+- Authentication, payment, webhook, and delivery-status endpoints are rate-limited. Local development defaults to in-memory limits; production rejects non-Redis rate-limit storage so multiple API workers cannot silently diverge.
+- Production requires PostgreSQL and shared Redis rate-limit storage. Set distinct production secrets through a managed secret store. Configure TLS at the proxy, SMTP, provider-specific webhook verification, object storage, SMS/push adapters, backups, database monitoring, and an outbox worker before launch.
 - Product image URLs are stored as catalog data; the API does not proxy uploads yet. Connect an authenticated object-storage upload flow before accepting user files.
 
 The root `index.html` is an independent visual prototype using local mock state. It is not wired to this API; integrate it by replacing mock data/actions with requests to the versioned API, while keeping all authorization and pricing decisions on this service.
