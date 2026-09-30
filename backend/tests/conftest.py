@@ -64,7 +64,14 @@ class FakeRoutingProvider:
             return None
         return self.geocodes.get(address, self.fallback_coordinate)
 
-    def route_distance(self, origin: GeoCoordinate, destination: GeoCoordinate) -> RouteDistance:
+    def route_distance(
+        self,
+        origin: GeoCoordinate,
+        destination: GeoCoordinate,
+        *,
+        origin_place_id: str | None = None,
+        destination_place_id: str | None = None,
+    ) -> RouteDistance:
         self.route_calls.append((origin, destination))
         if self.route_error is not None:
             raise self.route_error
