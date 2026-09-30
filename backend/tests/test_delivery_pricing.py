@@ -745,7 +745,7 @@ def test_checkout_without_caller_supplied_distances_uses_routing(database, fake_
 
 
 
-def test_rejected_fulfillment_removes_only_its_own_committed_fee(database) -> None:
+def test_rejected_fulfillment_removes_only_its_own_committed_fee(database, fake_routing) -> None:
     result = pricing_fixture(database, retailer_count=2)
     configure_routes(result, fake_routing, ["2", "5"])
     order = create_order(
