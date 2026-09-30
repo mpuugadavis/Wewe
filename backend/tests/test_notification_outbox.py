@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from app.models import NotificationOutbox, User, utcnow
+from sqlalchemy.orm import sessionmaker\n\nfrom app.models import NotificationOutbox, User, utcnow
 from app.services.notification_outbox import (
     NotificationDispatcher,
     claim_notifications,
@@ -32,7 +32,7 @@ def test_in_app_notification_is_processed_once(database):
     database.add(notification)
     database.commit()
 
-    processed = process_outbox_batch(lambda: database)
+    processed = process_outbox_batch(session_factory)
 
     assert processed == 1
     database.refresh(notification)
