@@ -33,6 +33,7 @@ def test_in_app_notification_is_processed_once(database):
     )
     database.add(notification)
     database.commit()
+    session_factory = sessionmaker(bind=database.get_bind(), autoflush=False, expire_on_commit=False)
 
     processed = process_outbox_batch(session_factory)
 
@@ -54,10 +55,11 @@ def test_failed_notification_retries_then_dead_letters(database):
     )
     database.add(notification)
     database.commit()
+    session_factory = sessionmaker(bind=database.get_bind(), autoflush=False, expire_on_commit=False)
 
     dispatcher = NotificationDispatcher()
     processed = process_outbox_batch(
-        lambda: database,
+        session_factory,
         dispatcher=dispatcher,
         max_attempts=1,
     )
