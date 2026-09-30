@@ -151,7 +151,8 @@ def login(request: Request, payload: LoginIn, db: Session = Depends(get_db)) -> 
 
 
 @router.post("/refresh", response_model=TokenPair)
-def refresh(payload: RefreshIn, db: Session = Depends(get_db)) -> TokenPair:
+@limiter.limit("20/minute")
+def refresh(request: Request, payload: RefreshIn, db: Session = Depends(get_db)) -> TokenPair:
     token = db.scalar(
         select(RefreshToken).where(RefreshToken.token_hash == hash_token(payload.refresh_token)).with_for_update()
     )
@@ -284,7 +285,8 @@ def request_verification(
 
 
 @router.post("/verification/confirm", status_code=status.HTTP_204_NO_CONTENT)
-def confirm_verification(
+@limiter.limit("10/minute")
+def confirm_verification(request: Request, 
     payload: VerificationConfirmIn,
     principal: Principal = Depends(get_principal),
     db: Session = Depends(get_db),
