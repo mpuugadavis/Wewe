@@ -397,6 +397,7 @@ class LocationCreate(BaseModel):
     #: the road route (COM-FEE-004).
     latitude: Decimal | None = Field(default=None, ge=-90, le=90)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180)
+    google_place_id: str | None = Field(default=None, max_length=300)
     is_private: bool = False
 
     @model_validator(mode="after")
@@ -416,6 +417,7 @@ class LocationOut(ORMModel):
     directions: str | None
     latitude: float | None = None
     longitude: float | None = None
+    google_place_id: str | None = None
     is_private: bool
     is_active: bool
 
