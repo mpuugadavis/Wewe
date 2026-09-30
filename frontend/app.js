@@ -18,7 +18,12 @@
     availability: "all",
     dashboardSection: "overview",
     campuses: null,
+    checkoutPoints: [],
     addressForCheckout: false,
+    mapsApiKey: null,
+    checkoutMap: null,
+    checkoutMarker: null,
+    checkoutAutocomplete: null,
     refreshPromise: null
   };
 
@@ -466,40 +471,202 @@
     $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Campus retailer</div><h2>${escapeHtml(retailer.business_name)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${escapeHtml(retailer.description || "")}</p><p>${escapeHtml(retailer.phone || "")}</p><div class="retailer-products">${products.map(item => `<article class="listing-row"><span><b>${escapeHtml(item.name || item.product_name)}</b><small>${escapeHtml(item.category_name || "")}</small></span><b>${money(item.price_ugx)}</b></article>`).join("") || '<p>No active products are listed.</p>'}</div>`;
   }
 
+  async function loadGoogleMaps() {
+    if (window.google?.maps) return true;
+    if (state.mapsApiKey === null) {
+      try {
+        const config = await apiFetch("/locations/maps-config");
+        state.mapsApiKey = config.google_maps_api_key || "";
+      } catch {
+        state.mapsApiKey = "";
+      }
+    }
+    if (!state.mapsApiKey) return false;
+    await new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-wewe-google-maps]');
+      if (existing) {
+        existing.addEventListener("load", resolve, { once: true });
+        existing.addEventListener("error", reject, { once: true });
+        if (window.google?.maps) resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(state.mapsApiKey) + "&v=weekly";
+      script.async = true;
+      script.defer = true;
+      script.dataset.weweGoogleMaps = "true";
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("Google Maps could not be loaded."));
+      document.head.appendChild(script);
+    });
+    return Boolean(window.google?.maps);
+  }
+
+  async function initializeCheckoutMap(points) {
+    const mapElement = $("#checkoutMap");
+    if (!mapElement) return;
+    try {
+      const loaded = await loadGoogleMaps();
+      if (!loaded) {
+        mapElement.innerHTML = '<div class="map-unavailable"><b>Google Maps preview</b><span>Configure the restricted Maps browser key to enable the live map.</span></div>';
+        return;
+      }
+      const { Map } = await google.maps.importLibrary("maps");
+      const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+      const defaultCenter = { lat: 0.3350, lng: 32.5700 };
+      state.checkoutMap = new Map(mapElement, {
+        center: defaultCenter,
+        zoom: 15,
+        mapId: "WEWE_DELIVERY_MAP",
+        disableDefaultUI: false,
+        streetViewControl: false,
+        fullscreenControl: true
+      });
+      const usable = points.filter(point => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)));
+      usable.forEach(point => {
+        const marker = new AdvancedMarkerElement({
+          map: state.checkoutMap,
+          position: { lat: Number(point.latitude), lng: Number(point.longitude) },
+          title: point.name
+        });
+        marker.addListener("click", () => selectCheckoutPoint(point.id));
+      });
+      if (usable[0]) {
+        state.checkoutMap.setCenter({ lat: Number(usable[0].latitude), lng: Number(usable[0].longitude) });
+      }
+      try {
+        const { PlaceAutocompleteElement } = await google.maps.importLibrary("places");
+        const host = $("#checkoutAutocomplete");
+        if (host) {
+          state.checkoutAutocomplete = new PlaceAutocompleteElement({ placeholder: "Search a hostel, hall or address" });
+          state.checkoutAutocomplete.setAttribute("included-region-codes", "ug");
+          host.replaceChildren(state.checkoutAutocomplete);
+          state.checkoutAutocomplete.addEventListener("gmp-select", async ({ placePrediction }) => {
+            const place = placePrediction.toPlace();
+            await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "id"] });
+            if (!place.location) return;
+            const point = {
+              id: "",
+              name: place.displayName || "Selected location",
+              directions: place.formattedAddress || "",
+              latitude: place.location.lat(),
+              longitude: place.location.lng(),
+              google_place_id: place.id || null,
+              campus_id: state.campuses?.find(item => item.slug === "main-campus")?.id || state.campuses?.[0]?.id
+            };
+            state.checkoutMap.setCenter({ lat: point.latitude, lng: point.longitude });
+            state.checkoutMap.setZoom(17);
+            state.checkoutSelectedExternal = point;
+            const label = $("#selectedDeliveryLocation");
+            if (label) label.textContent = point.name + (point.directions ? " · " + point.directions : "");
+          });
+        }
+      } catch {
+        // The map remains fully usable without Places autocomplete.
+      }
+    } catch (error) {
+      mapElement.innerHTML = '<div class="map-unavailable"><b>Map unavailable</b><span>' + escapeHtml(error.message) + '</span></div>';
+    }
+  }
+
+  function selectCheckoutPoint(pointId) {
+    const form = $('form[data-form="checkout"]');
+    const point = state.checkoutPoints.find(item => item.id === pointId);
+    if (!form || !point) return;
+    const select = form.elements.delivery_point_id;
+    select.value = point.id;
+    state.checkoutSelectedExternal = null;
+    const label = $("#selectedDeliveryLocation");
+    if (label) label.textContent = point.name + (point.directions ? " · " + point.directions : "");
+    if (state.checkoutMap && point.latitude && point.longitude) {
+      state.checkoutMap.setCenter({ lat: Number(point.latitude), lng: Number(point.longitude) });
+      state.checkoutMap.setZoom(17);
+    }
+    updateCheckoutQuote().catch(error => showToast(error.message));
+  }
+
+  async function useCurrentLocation() {
+    if (!navigator.geolocation) throw new Error("Your browser does not provide location services.");
+    const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 30000
+    }));
+    const latitude = Number(position.coords.latitude);
+    const longitude = Number(position.coords.longitude);
+    const campuses = state.campuses || await apiFetch("/locations/campuses");
+    const campus = campuses.find(item => item.slug === "main-campus") || campuses[0];
+    if (!campus) throw new Error("No WEWE campus is configured.");
+    const point = await apiFetch("/locations/me/delivery-points", {
+      method: "POST",
+      body: JSON.stringify({
+        campus_id: campus.id,
+        kind: "OTHER",
+        name: "My current location",
+        directions: "Browser GPS location",
+        latitude,
+        longitude,
+        google_place_id: null,
+        is_private: true
+      })
+    });
+    state.checkoutPoints = [...state.checkoutPoints.filter(item => item.id !== point.id), point];
+    const select = $('form[data-form="checkout"]')?.elements.delivery_point_id;
+    if (select) {
+      const option = document.createElement("option");
+      option.value = point.id;
+      option.textContent = "My current location";
+      select.appendChild(option);
+      select.value = point.id;
+    }
+    state.checkoutSelectedExternal = null;
+    const label = $("#selectedDeliveryLocation");
+    if (label) label.textContent = "My current location · GPS coordinates";
+    if (state.checkoutMap) {
+      state.checkoutMap.setCenter({ lat: latitude, lng: longitude });
+      state.checkoutMap.setZoom(17);
+      if (window.google?.maps) {
+        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+        state.checkoutMarker = new AdvancedMarkerElement({ map: state.checkoutMap, position: { lat: latitude, lng: longitude }, title: "My current location" });
+      }
+    }
+    await updateCheckoutQuote();
+  }
+
   async function showCheckout() {
     if (!state.user) return showAuth();
     const cart = await ensureCart();
     if (!cart.items?.length) return showToast("Add at least one item before checkout.");
     setModal('<div class="modal-head"><div><div class="section-kicker">Secure checkout</div><h2>Choose delivery</h2></div><button class="close-modal" data-action="close-modal">×</button></div><div id="checkoutContents"><p class="api-state">Loading campus locations…</p></div>', true);
-    let saved, campuses, pickupPoints;
+    let saved, campuses, pickupPoints, publicPoints;
     try {
       [saved, campuses, pickupPoints] = await Promise.all([
         apiFetch("/locations/me/delivery-points"),
         apiFetch("/locations/campuses"),
         apiFetch("/locations/pickup-points")
       ]);
+      const mainCampus = campuses.find(item => item.slug === "main-campus") || campuses[0];
+      publicPoints = mainCampus ? await apiFetch("/locations/delivery-points?campus_id=" + encodeURIComponent(mainCampus.id)) : [];
     } catch (error) {
-      $("#checkoutContents").innerHTML = `<div class="api-state api-error">${escapeHtml(error.message)}<p><button class="button-outline" data-action="checkout">Try again</button></p></div>`;
+      $("#checkoutContents").innerHTML = '<div class="api-state api-error">' + escapeHtml(error.message) + '<p><button class="button-outline" data-action="checkout">Try again</button></p></div>';
       throw error;
     }
     state.campuses = campuses;
+    state.checkoutPoints = [...new Map([...publicPoints, ...saved].map(point => [point.id, point])).values()];
     const profile = await apiFetch("/users/me/profile");
-    $("#checkoutContents").innerHTML = `<form data-form="checkout" class="api-form">
-      <label class="field">Fulfilment<select name="delivery_method"><option value="DELIVERY">Campus delivery</option><option value="PICKUP">Pickup</option></select></label>
-      <div data-checkout-delivery><label class="field">Saved delivery point<select name="delivery_point_id">${saved.map(point => `<option value="${escapeHtml(point.id)}">${escapeHtml(point.name)}${point.directions ? ` — ${escapeHtml(point.directions)}` : ""}</option>`).join("")}</select></label>
-        <button type="button" class="text-link" data-action="new-address">Add a delivery point</button></div>
-      <div data-checkout-pickup class="hidden"><label class="field">Pickup point<select name="pickup_point_id">${pickupPoints.map(point => `<option value="${escapeHtml(point.id)}">${escapeHtml(point.name)}${point.directions ? ` — ${escapeHtml(point.directions)}` : ""}</option>`).join("")}</select></label></div>
-      <div class="field"><span>Payment method</span><div class="payment-options"><label class="payment-option selected"><input type="radio" name="payment_method" value="MTN_MOMO" checked> <b>MTN Mobile Money</b><small>Pay securely from your MTN line.</small></label><label class="payment-option"><input type="radio" name="payment_method" value="AIRTEL_MONEY"> <b>Airtel Money</b><small>Pay securely from your Airtel line.</small></label></div></div>
-      <label class="field" data-payment-phone>Mobile money phone<input name="phone" type="tel" placeholder="+256700000000" required autocomplete="tel"></label>
-      <div id="checkoutQuote" class="checkout-quote"><p class="api-state">Calculating delivery route…</p></div>
-      <p class="form-message" aria-live="polite"></p><button class="button-primary">Place order</button>
-    </form>`;
-    if (!saved.length) {
-      $("[data-checkout-delivery]").innerHTML = '<p class="api-state">Add a campus delivery point to continue with delivery.</p><button type="button" class="button-outline" data-action="new-address">Add a delivery point</button>';
-    } else if (profile.preferred_delivery_point_id) {
+    $("#checkoutContents").innerHTML = '<form data-form="checkout" class="api-form">' +
+      '<div class="delivery-map-shell"><div class="map-toolbar"><div><b>Where should we deliver?</b><small>Choose a Makerere hall/hostel, search Google Maps, or use your current location.</small></div><button type="button" class="button-outline" data-action="use-current-location">Use my current location</button></div><div id="checkoutAutocomplete" class="checkout-autocomplete"></div><div id="checkoutMap" class="checkout-map"></div><p id="selectedDeliveryLocation" class="selected-location">Choose a delivery point</p></div>' +
+      '<label class="field">Fulfilment<select name="delivery_method"><option value="DELIVERY">Campus delivery</option><option value="PICKUP">Pickup</option></select></label>' +
+      '<div data-checkout-delivery><label class="field">Delivery point<select name="delivery_point_id"><option value="">Choose a hall, hostel or saved point</option>' + state.checkoutPoints.map(point => '<option value="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : "") + '</option>').join("") + '</select></label><div class="quick-location-grid">' + state.checkoutPoints.slice(0, 12).map(point => '<button type="button" class="location-chip" data-action="select-delivery-point" data-id="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + '</button>').join("") + '</div><button type="button" class="text-link" data-action="new-address">Add a delivery point</button></div>' +
+      '<div data-checkout-pickup class="hidden"><label class="field">Pickup point<select name="pickup_point_id">' + pickupPoints.map(point => '<option value="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : "") + '</option>').join("") + '</select></label></div>' +
+      '<div class="field"><span>Payment method</span><div class="payment-options"><label class="payment-option selected"><input type="radio" name="payment_method" value="MTN_MOMO" checked> <b>MTN Mobile Money</b><small>Pay securely from your MTN line.</small></label><label class="payment-option"><input type="radio" name="payment_method" value="AIRTEL_MONEY"> <b>Airtel Money</b><small>Pay securely from your Airtel line.</small></label></div></div>' +
+      '<label class="field" data-payment-phone>Mobile money phone<input name="phone" type="tel" placeholder="+256700000000" required autocomplete="tel"></label>' +
+      '<div id="checkoutQuote" class="checkout-quote"><p class="api-state">Calculating delivery route…</p></div><p class="form-message" aria-live="polite"></p><button class="button-primary">Place order</button></form>';
+    if (profile.preferred_delivery_point_id && $('select[name="delivery_point_id"]')) {
       $('select[name="delivery_point_id"]').value = profile.preferred_delivery_point_id;
     }
     toggleCheckoutFields();
+    initializeCheckoutMap(state.checkoutPoints);
   }
 
   function toggleCheckoutFields() {
@@ -522,7 +689,8 @@
     box.textContent = "Calculating delivery…";
     const payload = { delivery_method: method, ...(method === "PICKUP" ? { pickup_point_id: destination } : { delivery_point_id: destination }) };
     const quote = await apiFetch("/orders/delivery-quote", { method: "POST", body: JSON.stringify(payload) });
-    box.innerHTML = "<div class=\"checkout-totals\"><p>Subtotal <b>" + money(quote.subtotal_ugx) + "</b></p><p>Delivery fee <b>" + money(quote.delivery_fee_ugx) + "</b></p><p class=\"checkout-total\"><span>Total</span><b>" + money(quote.total_ugx) + "</b></p><small class=\"route-note\">" + (quote.routing_provider ? "Priced from the actual road route." : "Pickup has no delivery fee.") + "</small></div>";
+    const routeRows = (quote.fulfillments || []).map(item => '<p><span>' + escapeHtml(item.retailer_name || "Retailer") + ' · ' + Number(item.route_distance_km || 0).toFixed(1) + ' km</span><b>' + money(item.delivery_fee_ugx) + '</b></p>').join("");
+    box.innerHTML = '<div class="checkout-totals"><p>Subtotal <b>' + money(quote.subtotal_ugx) + '</b></p>' + routeRows + '<p>Delivery fee <b>' + money(quote.delivery_fee_ugx) + '</b></p><p class="checkout-total"><span>Total</span><b>' + money(quote.total_ugx) + '</b></p><small class="route-note">' + (quote.routing_provider ? 'Google/road routing is used when configured; WEWE applies its own UGX pricing formula.' : 'Pickup has no delivery fee.') + '</small></div>';
     form.dataset.quoteTotal = String(quote.total_ugx);
   }
 
@@ -856,6 +1024,8 @@
     if (action === "cart-quantity") return cartQuantity(button.dataset.itemId, Number(button.dataset.quantity));
     if (action === "remove-cart") return removeCartItem(button.dataset.itemId);
     if (action === "checkout") return showCheckout();
+    if (action === "use-current-location") return useCurrentLocation();
+    if (action === "select-delivery-point") return selectCheckoutPoint(button.dataset.id);
     if (action === "new-address") return showNewAddress();
     if (action === "retailer-details") return showRetailer(button.dataset.retailerSlug);
     if (action === "retry-online-payment") return retryOnlinePayment(button.dataset.orderId, button.dataset.method, button.dataset.phone);
