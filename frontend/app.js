@@ -297,7 +297,7 @@
       <b>${money(item.line_total_ugx)}</b></div>`).join("")}</div><div class="cart-summary"><p>Subtotal <b>${money(cart.subtotal_ugx)}</b></p><p>Delivery fee <span>Calculated by checkout</span></p><button class="button-primary" data-action="checkout">Continue to checkout</button></div>` : '<div class="api-state"><p>Your cart is empty.</p><button class="button-outline" data-action="close-modal">Continue shopping</button></div>';
   }
 
-  async function addToCart(listingId) {
+  async function addToCart(listingId, quantity = 1) {
     if (!state.user) return showAuth();
     if (state.user.role !== "CUSTOMER") return showToast("Sign in with a customer account to add items.");
     state.cart = await apiFetch("/cart/items", { method: "POST", body: JSON.stringify({ retailer_product_id: listingId, quantity: 1 }) });
