@@ -3,6 +3,7 @@ name: Phase 4B verification
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   backend:
