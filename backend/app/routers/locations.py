@@ -12,6 +12,13 @@ from app.schemas import LocationCreate, LocationOut
 router = APIRouter(prefix="/locations", tags=["locations"])
 
 
+@router.get("/maps-config")
+def maps_config() -> dict:
+    """Return only the browser-restricted Maps key; never expose the server routing key."""
+    from app.config import get_settings
+    return {"google_maps_api_key": get_settings().google_maps_browser_api_key}
+
+
 @router.get("/universities")
 def universities(db: Session = Depends(get_db)) -> list[dict]:
     return [dict(id=row.id, name=row.name, slug=row.slug, country_code=row.country_code) for row in db.scalars(select(University).where(University.is_active.is_(True)).order_by(University.name)).all()]
@@ -101,6 +108,7 @@ def create_my_delivery_point(
         directions=payload.directions,
         latitude=payload.latitude,
         longitude=payload.longitude,
+        google_place_id=payload.google_place_id,
         is_private=True,
     )
     db.add(point)
