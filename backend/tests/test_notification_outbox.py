@@ -1,6 +1,8 @@
 from datetime import timedelta
 
-from sqlalchemy.orm import sessionmaker\n\nfrom app.models import NotificationOutbox, User, utcnow
+from sqlalchemy.orm import sessionmaker
+
+from app.models import NotificationOutbox, User, utcnow
 from app.services.notification_outbox import (
     NotificationDispatcher,
     claim_notifications,
