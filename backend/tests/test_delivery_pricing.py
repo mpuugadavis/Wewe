@@ -725,8 +725,9 @@ def test_pickup_checkout_records_zero_delivery_quotes(database) -> None:
     assert {quote.route_distance_km for quote in quotes} == {None}
 
 
-def test_checkout_without_supplied_distances_keeps_the_configured_flat_fee(database) -> None:
+def test_checkout_without_caller_supplied_distances_uses_routing(database, fake_routing) -> None:
     result = pricing_fixture(database, retailer_count=2)
+    configure_routes(result, fake_routing, ["2", "5"])
     order = create_order(
         database,
         result["customer"],
@@ -735,10 +736,10 @@ def test_checkout_without_supplied_distances_keeps_the_configured_flat_fee(datab
     )
     database.commit()
 
-    # Pre-Phase-4B.3 behavior is preserved when no road-route distance is supplied.
-    assert order.delivery_fee_ugx == 7000
-    assert order.total_ugx == order.subtotal_ugx + 7000
-    assert database.scalars(select(DeliveryQuote)).all() == []
+    # The caller never supplies distances; checkout obtains one road route per retailer.
+    assert order.delivery_fee_ugx == 6500
+    assert order.total_ugx == order.subtotal_ugx + 6500
+    assert len(database.scalars(select(DeliveryQuote)).all()) == 2
 
     assert total_delivery_fee([]) == 0
 
@@ -746,6 +747,7 @@ def test_checkout_without_supplied_distances_keeps_the_configured_flat_fee(datab
 
 def test_rejected_fulfillment_removes_only_its_own_committed_fee(database) -> None:
     result = pricing_fixture(database, retailer_count=2)
+    configure_routes(result, fake_routing, ["2", "5"])
     order = create_order(
         database,
         result["customer"],
@@ -785,8 +787,9 @@ def test_rejected_fulfillment_removes_only_its_own_committed_fee(database) -> No
     assert remove_committed_delivery_quote(database, rejected.id) is None
 
 
-def test_committed_order_total_is_used_for_payment_creation(client, database) -> None:
+def test_committed_order_total_is_used_for_online_payment_creation(client, database, fake_routing) -> None:
     result = pricing_fixture(database, retailer_count=1)
+    configure_routes(result, fake_routing, ["5"])
     order = create_order(
         database,
         result["customer"],
@@ -802,7 +805,7 @@ def test_committed_order_total_is_used_for_payment_creation(client, database) ->
     response = client.post(
         f"/api/v1/orders/{order.id}/payments",
         headers=_authorization(database, result["customer"]),
-        json={"method": "CASH"},
+        json={"method": "MTN_MOMO"},
     )
 
     assert response.status_code == 201
