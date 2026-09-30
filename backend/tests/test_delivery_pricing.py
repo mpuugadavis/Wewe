@@ -818,7 +818,7 @@ def test_committed_order_total_is_used_for_online_payment_creation(client, datab
     response = client.post(
         f"/api/v1/orders/{order.id}/payments",
         headers=_authorization(database, result["customer"]),
-        json={"method": "MTN_MOMO"},
+        json={"method": "MTN_MOMO", "phone": "+256700000001"},
     )
 
     assert response.status_code == 201
