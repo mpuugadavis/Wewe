@@ -25,6 +25,7 @@ from app.models import (
     Category,
     CustomerProfile,
     DeliveryPoint,
+    Order,
     DeliveryQuote,
     Inventory,
     PickupPoint,
