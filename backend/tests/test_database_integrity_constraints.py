@@ -139,8 +139,8 @@ def _create_integrity_fixture(database: Session) -> dict[str, object]:
         customer_id=customer.id,
         amount_ugx=1000,
         currency="UGX",
-        method="CASH",
-        provider="CASH",
+        method="MTN_MOMO",
+        provider="MTN_MOMO",
         status="PENDING",
     )
     database.add_all([order_item, fulfillment, payment])
