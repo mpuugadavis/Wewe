@@ -99,6 +99,22 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{
 @media(max-width:390px){.product-image{height:145px}.hero h1{font-size:47px}.categories{grid-template-columns:repeat(4,minmax(0,1fr))}.category{font-size:10px}.product-info{padding:10px}}
 .mobile-store-nav{display:none}
 @media(max-width:780px){.mobile-store-nav{position:fixed;display:grid;grid-template-columns:repeat(4,1fr);left:12px;right:12px;bottom:12px;z-index:45;background:rgba(255,255,255,.96);backdrop-filter:blur(18px);border:1px solid #e3ddec;border-radius:18px;box-shadow:0 15px 40px rgba(39,20,75,.16);padding:7px 4px}.mobile-store-nav a,.mobile-store-nav button{position:relative;border:0;background:transparent;color:#746b80;display:grid;place-items:center;gap:1px;padding:5px}.mobile-store-nav span{font-size:18px;line-height:1.1}.mobile-store-nav small{font-size:9px;font-weight:800}.mobile-store-nav a:hover,.mobile-store-nav button:hover{color:var(--brand)}.mobile-store-nav b{position:absolute;top:1px;right:22%;background:var(--brand);color:#fff;border-radius:99px;font-size:8px;padding:2px 5px}}
+
+<style>
+/* Phase 2 storefront polish */
+.header-divider{height:1px;background:linear-gradient(90deg,transparent,#ddd4ee,transparent)}
+.hero-copy .hero-proof{display:flex;align-items:center;gap:10px;margin-top:24px;color:#7a7186;font-size:11px;font-weight:700}.hero-proof .proof-dot{width:7px;height:7px;border-radius:50%;background:#27a875;box-shadow:0 0 0 5px #e5f6ee}
+.searchbox svg,.icon-button svg,.location svg{width:18px;height:18px;flex:none}.icon-button svg{width:20px;height:20px}
+.category .cat-icon svg{width:21px;height:21px}
+.product-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;min-height:18px}.stock-pill{font-size:9px;font-weight:900;padding:4px 7px;border-radius:99px;background:#e5f6ee;color:#17704e}.stock-pill.low{background:#fff2db;color:#9b6515}.stock-pill.out{background:#f9e7eb;color:#ad3d4b}
+.product-price-row{display:flex;align-items:end;justify-content:space-between;gap:10px;margin-top:13px}.product-price-row strong{font-size:16px;color:var(--deep)}
+.skeleton-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}.skeleton{height:330px;border-radius:17px;background:linear-gradient(100deg,#eeeaf4 20%,#f8f6fb 35%,#eeeaf4 50%);background-size:200% 100%;animation:shimmer 1.25s infinite}.skeleton.small{height:116px}.skeleton-line{height:12px;border-radius:6px;background:#eeeaf4;margin-top:12px}
+.empty-state{grid-column:1/-1;text-align:center;padding:58px 20px;border:1px dashed #d7cee7;border-radius:18px;background:#fff}.empty-state .empty-icon{width:54px;height:54px;margin:0 auto 15px;border-radius:17px;background:#f0ebfc;color:var(--brand);display:grid;place-items:center}.empty-state svg{width:25px;height:25px}.empty-state h3{margin:0 0 5px;font-size:16px}.empty-state p{margin:0 auto 16px;color:var(--muted);max-width:390px;font-size:12px}
+.section-count{font-size:11px;color:var(--muted);font-weight:700;margin-top:6px}
+.product-image .quick-add{position:absolute;left:12px;right:12px;bottom:12px;opacity:0;transform:translateY(8px);transition:.2s;background:#fff;color:var(--brand-dark);border:0;border-radius:10px;padding:9px;font-weight:900;font-size:11px;box-shadow:0 8px 20px rgba(30,15,60,.16)}.product-card:hover .quick-add{opacity:1;transform:translateY(0)}
+@keyframes shimmer{to{background-position:-200% 0}}
+@media(max-width:1150px){.skeleton-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:780px){.skeleton-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.skeleton{height:290px}.product-image .quick-add{display:none}}
 </style>
 </head>
 <body>
@@ -107,9 +123,9 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{
       <a class="logo" href="#home" aria-label="WEWE home"><span class="logo-mark" aria-hidden="true">W</span><span>WEWE</span></a>
       <nav class="nav-links" aria-label="Main navigation"><a class="active" href="#home">Discover</a><a href="#products">Shop</a><a href="#retailers">Retailers</a></nav>
       <div class="nav-spacer"></div>
-      <button class="location" id="locationButton" aria-label="Choose delivery location"><span>⌖</span><span><small>Delivery location</small><br>Choose at checkout ▾</span></button>
-      <label class="searchbox"><span>⌕</span><input id="searchInput" type="search" placeholder="Search what you need…" aria-label="Search products"></label>
-      <button class="icon-button" id="cartButton" aria-label="Open cart">♧<span class="cart-count" id="cartCount">0</span></button>
+      <button class="location" id="locationButton" aria-label="Choose delivery location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg><span><small>Delivery location</small><br>Choose at checkout ▾</span></button>
+      <label class="searchbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input id="searchInput" type="search" placeholder="Search what you need…" aria-label="Search products"></label>
+      <button class="icon-button" id="cartButton" aria-label="Open cart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8h12l1 12H5L6 8Z"></path><path d="M9 8a3 3 0 0 1 6 0"></path></svg><span class="cart-count" id="cartCount">0</span></button>
       <button class="account" id="accountButton">Sign in</button>
       <button class="icon-button mobile-menu" aria-label="Account menu" id="mobileAccount">☰</button>
     </div>
@@ -121,7 +137,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{
     </section>
     <div class="trustbar"><div class="shell trust-inner"><div class="trust-item"><b>●</b> Campus-verified retailers</div><div class="trust-item"><b>↗</b> Quick campus delivery</div><div class="trust-item"><b>UGX</b> Prices you can trust</div><div class="trust-item"><b>♡</b> Local spend, shared growth</div></div></div>
     <section class="section shell" id="categoriesSection"><div class="section-head"><div><div class="section-kicker">A little bit of everything</div><h2>What are you after?</h2></div><button class="text-link" id="allCategories">Browse all categories →</button></div><div class="categories" id="categoryList"></div></section>
-    <section class="products-section" id="products"><div class="shell section"><div class="section-head"><div><div class="section-kicker">Picked for campus life</div><h2 id="productHeading">Good finds, close by</h2></div><div class="filters"><select class="filter-select" id="availabilityFilter" aria-label="Filter availability"><option value="all">All availability</option><option value="in-stock">In stock</option><option value="nearby" disabled>Near me (unavailable)</option></select><select class="filter-select" id="sortFilter" aria-label="Sort products"><option value="featured">Sort: Featured</option><option value="price-low">Price: Low to high</option><option value="price-high">Price: High to low</option></select></div></div><div class="product-grid" id="productGrid"></div></div></section>
+    <section class="products-section" id="products"><div class="shell section"><div class="section-head"><div><div class="section-kicker">Picked for campus life</div><h2 id="productHeading">Good finds, close by</h2><div class="section-count" id="productCount"></div></div><div class="filters"><select class="filter-select" id="availabilityFilter" aria-label="Filter availability"><option value="all">All availability</option><option value="in-stock">In stock</option><option value="nearby" disabled>Near me (unavailable)</option></select><select class="filter-select" id="sortFilter" aria-label="Sort products"><option value="featured">Sort: Featured</option><option value="price-low">Price: Low to high</option><option value="price-high">Price: High to low</option></select></div></div><div class="product-grid" id="productGrid"></div></div></section>
     <section class="shell section" id="nearby"><div class="near-strip"><div class="near-copy"><div class="section-kicker">Close enough to wave</div><h3>Support the shops<br>around your corner.</h3><p>Find campus favourites, student-run brands and trusted neighbourhood shops. The best things are already nearby.</p><button class="text-link" id="nearbyButton">Explore nearby shops →</button></div><div class="near-photo" role="img" aria-label="Students sharing time together on campus"></div></div></section>
     <section class="shell section" id="retailers"><div class="section-head"><div><div class="section-kicker">Community favourites</div><h2>Good people, good shops.</h2></div><button class="text-link" id="retailerMore">Meet the retailers →</button></div><div class="seller-row" id="sellerRow"></div></section>
   </main>
@@ -129,7 +145,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{
   <nav class="mobile-store-nav" aria-label="Quick navigation">
     <a href="#home"><span>⌂</span><small>Home</small></a>
     <a href="#products"><span>⌕</span><small>Shop</small></a>
-    <button type="button" id="mobileCartNav"><span>♧</span><small>Cart</small><b id="mobileCartCount">0</b></button>
+    <button type="button" id="mobileCartNav"><span>▱</span><small>Cart</small><b id="mobileCartCount">0</b></button>
     <button type="button" id="mobileAccountNav"><span>◯</span><small>Account</small></button>
   </nav>
   <footer class="footer" id="footer"><div class="shell footer-inner"><div><a class="logo" href="#home"><span class="logo-mark">W</span>WEWE</a><p>Good things happen around WEWE. Built for campus life in Makerere, Kampala.</p></div><div class="footer-links"><a href="#retailers">Become a retailer</a><a href="#nearby">Delivery info</a><a href="#home">Help & support</a><span>© 2026 WEWE</span></div></div></footer>
