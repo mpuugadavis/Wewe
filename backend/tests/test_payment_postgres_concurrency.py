@@ -4,7 +4,7 @@ import time
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import Campus, DeliveryPoint, Order, Payment, University, User
@@ -172,8 +172,8 @@ def test_order_row_lock_allows_only_one_active_payment_attempt(postgres_engine) 
         cleanup_order = cleanup.get(Order, order_id)
         assert cleanup_order is not None
         cleanup.delete(cleanup_order)
-        cleanup.delete(point)
-        cleanup.delete(campus)
+        cleanup.execute(delete(DeliveryPoint).where(DeliveryPoint.id == point.id))
+        cleanup.execute(delete(Campus).where(Campus.id == campus.id))
         cleanup.delete(owner)
         cleanup.delete(university)
         cleanup.commit()
