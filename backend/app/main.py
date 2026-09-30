@@ -15,11 +15,8 @@ from app.config import get_settings
 from app.db import engine
 from app.limiter import limiter
 from app.routers import accounts, admin, auth, catalog, commerce, locations, operations, payments
-from app.services.payment_sandbox import configure_simulated_providers
 
 settings = get_settings()
-if settings.payment_mode == "SIMULATED":
-    configure_simulated_providers()
 logging.basicConfig(level=logging.INFO if settings.app_env != "production" else logging.WARNING)
 logger = logging.getLogger("wewe.api")
 
