@@ -184,6 +184,8 @@
     const count = (state.cart?.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     const badge = $("#cartCount");
     if (badge) badge.textContent = String(count);
+    const mobileBadge = $("#mobileCartCount");
+    if (mobileBadge) mobileBadge.textContent = String(count);
   }
 
   async function loadCatalog() {
@@ -895,15 +897,12 @@
   }
 
   function installStyles() {
-    const style = document.createElement("style");
-    style.textContent = `
-      .api-state{padding:22px;color:#68756c;text-align:center}.api-error{color:#9e352e}.image-placeholder,.product-modal-image{display:grid;place-items:center;background:#eff3ee;color:#778379;font-weight:700}.product-image img,.seller-avatar img,.product-modal-image img{width:100%;height:100%;object-fit:cover}.product-title{display:block;border:0;background:none;padding:0;text-align:left;font:inherit;font-weight:600;color:inherit;cursor:pointer}.add-button{width:auto;min-width:42px;height:auto;padding:7px 9px;font-size:12px;line-height:1.2;border-radius:3px;white-space:nowrap}.add-button:disabled{opacity:.5;cursor:not-allowed}.api-form{display:grid;gap:14px;margin:16px 0}.api-form .field{display:grid;gap:6px;font-size:13px}.api-form input,.api-form select,.api-form textarea{width:100%;padding:11px 12px;border:1px solid #dce2dc;border-radius:8px;font:inherit;background:#fff}.api-form textarea{min-height:75px}.api-form input[type=checkbox]{width:auto}.form-message{color:#9e352e;min-height:1em}.modal-wide{max-width:850px}.modal-open{overflow:hidden}.cart-lines,.dashboard-panel,.order-card,.notification-row{display:grid;gap:12px}.cart-line,.listing-row,.panel-head,.admin-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid #e8ece8}.cart-line small,.admin-row small,.listing-row small{display:block;color:#78837a;margin-top:4px}.cart-line-controls,.row-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.cart-line-controls button,.row-actions button,.admin-row button,.notification-row button,.order-card button{border:1px solid #dce2dc;background:white;border-radius:7px;padding:7px 10px;cursor:pointer}.cart-summary,.checkout-totals{margin-top:18px;padding-top:12px;border-top:1px solid #e8ece8}.cart-summary p,.checkout-totals p{display:flex;justify-content:space-between;gap:15px}.notification-row,.order-card{padding:14px;border:1px solid #e6ebe6;border-radius:10px;margin:12px 0}.review-row{display:grid;gap:5px;padding:12px 0;border-bottom:1px solid #e8ece8}.review-row small{color:#78837a}.inline-form{display:flex;gap:8px}.inline-form input{min-width:0;width:150px;padding:8px;border:1px solid #dce2dc;border-radius:7px}.muted{color:#78837a;font-size:12px}.hidden{display:none!important}.category{min-width:0;overflow-wrap:anywhere}.category.active{border-color:var(--green);background:#f2f6e8}.product-modal-image{min-height:300px}.dashboard-panel pre{white-space:pre-wrap;overflow:auto;font:12px/1.5 monospace;background:#f5f7f4;padding:12px;border-radius:8px}.modal-head{display:flex;justify-content:space-between;gap:15px;align-items:start}.modal-head h2{margin-top:4px}.seller-card{cursor:pointer}.admin-table{display:grid}.api-form .button-primary{justify-self:start}
-      @media(max-width:600px){.cart-line{align-items:flex-start;flex-direction:column}.cart-line-controls{width:100%}.modal-wide{max-width:100%}.inline-form{width:100%}.inline-form input{flex:1}.product-modal-image{min-height:180px}}
-      @media(max-width:390px){.categories{grid-template-columns:repeat(4,minmax(0,1fr))}.category{padding-left:3px;padding-right:3px;font-size:10px}}
-    `;
-    document.head.append(style);
     const account = $("#accountButton");
     if (account) account.classList.remove("hidden");
+    const mobileCart = $("#mobileCartNav");
+    const mobileAccount = $("#mobileAccountNav");
+    if (mobileCart) mobileCart.addEventListener("click", showCart);
+    if (mobileAccount) mobileAccount.addEventListener("click", () => state.user ? showDashboard(true) : showAuth());
   }
 
   function bindEvents() {
