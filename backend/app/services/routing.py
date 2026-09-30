@@ -7,7 +7,7 @@ the backend that talks to a mapping/routing service.
 Supported providers:
 
 ``GOOGLE_MAPS``
-    Google Maps Directions API for the route and the Google Geocoding API for
+    Google Maps Routes API for the route and the Google Geocoding API for
     addresses that have no stored coordinates. Requires ``GOOGLE_MAPS_API_KEY``.
 
 ``OSRM``
