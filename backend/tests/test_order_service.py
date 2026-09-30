@@ -101,7 +101,7 @@ def test_checkout_reserves_stock_and_snapshots_price(database) -> None:
     assert database.get(OrderItem, line.id).unit_price_ugx == 12_000
 
 
-def test_customer_can_create_cash_payment_for_open_order(client, database) -> None:
+def test_customer_cannot_create_cash_payment_for_open_order(client, database) -> None:
     customer, point, _listing, _inventory = marketplace_fixture(database)
     order = create_order(
         database,
@@ -117,12 +117,10 @@ def test_customer_can_create_cash_payment_for_open_order(client, database) -> No
         json={"method": "CASH"},
     )
 
-    assert response.status_code == 201
-    assert response.json()["method"] == "CASH"
-    assert response.json()["status"] == "PENDING"
-    assert response.json()["amount_ugx"] == order.total_ugx
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
     database.refresh(order)
-    assert order.payment_status == "PENDING"
+    assert order.payment_status == "UNPAID"
 
 
 def test_checkout_rejects_overselling(database) -> None:
@@ -381,7 +379,7 @@ def test_customer_can_cancel_while_mobile_payment_is_pending(client, database) -
     assert inventory.reserved_quantity == 0
 
 
-def test_cancelling_cash_order_marks_pending_payment_failed(client, database) -> None:
+def test_legacy_cash_payment_rows_are_not_created_by_checkout(client, database) -> None:
     customer, point, _listing, _inventory = marketplace_fixture(database)
     order = create_order(
         database,
@@ -389,27 +387,16 @@ def test_cancelling_cash_order_marks_pending_payment_failed(client, database) ->
         CheckoutIn(delivery_method="DELIVERY", delivery_point_id=point.id),
         "pending-cash-cancel",
     )
-    payment = Payment(
-        order_id=order.id,
-        customer_id=customer.id,
-        amount_ugx=order.total_ugx,
-        currency="UGX",
-        method="CASH",
-        provider="CASH",
-        status="PENDING",
-    )
-    order.payment_status = "PENDING"
-    database.add(payment)
     database.commit()
 
     response = client.post(
-        f"/api/v1/orders/{order.id}/cancel",
+        f"/api/v1/orders/{order.id}/payments",
         headers=_authorization(database, customer),
+        json={"method": "CASH"},
     )
 
-    assert response.status_code == 200
-    assert database.get(Order, order.id).payment_status == "FAILED"
-    assert database.get(Payment, payment.id).status == "FAILED"
+    assert response.status_code == 422
+    assert database.scalar(select(Payment.id).where(Payment.order_id == order.id)) is None
 
 
 def test_admin_cannot_cancel_order_with_pending_mobile_payment(client, database) -> None:
