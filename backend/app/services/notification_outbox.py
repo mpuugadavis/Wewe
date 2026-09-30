@@ -80,9 +80,9 @@ def claim_notifications(
     query = (
         select(NotificationOutbox)
         .where(
-            NotificationOutbox.attempts < max_attempts,
             or_(
                 and_(
+                    NotificationOutbox.attempts < max_attempts,
                     NotificationOutbox.status.in_({"PENDING", "FAILED"}),
                     NotificationOutbox.available_at <= now,
                 ),
@@ -98,13 +98,20 @@ def claim_notifications(
         .with_for_update(skip_locked=True)
     )
     rows = db.scalars(query).all()
+    claimed_ids: list[UUID] = []
     for row in rows:
+        if row.status == "PROCESSING" and row.attempts >= max_attempts:
+            row.status = "DEAD"
+            row.locked_at = None
+            row.available_at = now
+            continue
         row.status = "PROCESSING"
         row.locked_at = now
         row.attempts += 1
         row.last_error = None
+        claimed_ids.append(row.id)
     db.commit()
-    return [row.id for row in rows]
+    return claimed_ids
 
 
 def _retry_delay_seconds(attempts: int) -> int:
