@@ -109,3 +109,26 @@ def test_future_failed_job_is_not_claimed(database):
     database.refresh(notification)
     assert notification.status == "FAILED"
     assert notification.attempts == 1
+
+
+def test_stale_job_at_attempt_limit_is_dead_lettered(database):
+    user = make_user(database)
+    notification = NotificationOutbox(
+        user_id=user.id,
+        event_type="ORDER_READY",
+        channel="IN_APP",
+        payload={},
+        status="PROCESSING",
+        attempts=8,
+        locked_at=utcnow() - timedelta(minutes=10),
+        available_at=utcnow() - timedelta(minutes=10),
+    )
+    database.add(notification)
+    database.commit()
+
+    claimed = claim_notifications(database, batch_size=10, stale_after_seconds=300, max_attempts=8)
+
+    assert claimed == []
+    database.refresh(notification)
+    assert notification.status == "DEAD"
+    assert notification.locked_at is None
