@@ -70,6 +70,8 @@ def test_order_row_lock_allows_only_one_active_payment_attempt(postgres_engine) 
     )
     owner_session.add(order)
     owner_session.commit()
+    order_id = order.id
+    owner_session.close()
 
     first_locked = threading.Event()
     release_first = threading.Event()
@@ -82,7 +84,7 @@ def test_order_row_lock_allows_only_one_active_payment_attempt(postgres_engine) 
         session = SessionLocal()
         try:
             locked = session.scalar(
-                select(Order).where(Order.id == order.id).with_for_update()
+                select(Order).where(Order.id == order_id).with_for_update()
             )
             assert locked is not None
             existing = session.scalar(
@@ -165,9 +167,11 @@ def test_order_row_lock_allows_only_one_active_payment_attempt(postgres_engine) 
     cleanup = SessionLocal()
     try:
         cleanup.execute(
-            Payment.__table__.delete().where(Payment.order_id == order.id)
+            Payment.__table__.delete().where(Payment.order_id == order_id)
         )
-        cleanup.delete(order)
+        cleanup_order = cleanup.get(Order, order_id)
+        assert cleanup_order is not None
+        cleanup.delete(cleanup_order)
         cleanup.delete(point)
         cleanup.delete(campus)
         cleanup.delete(owner)
