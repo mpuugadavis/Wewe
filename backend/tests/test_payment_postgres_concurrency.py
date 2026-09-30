@@ -71,6 +71,7 @@ def test_order_row_lock_allows_only_one_active_payment_attempt(postgres_engine) 
     owner_session.add(order)
     owner_session.commit()
     order_id = order.id
+    campus_id = campus.id
     owner_session.close()
 
     first_locked = threading.Event()
@@ -173,7 +174,7 @@ def test_order_row_lock_allows_only_one_active_payment_attempt(postgres_engine) 
         assert cleanup_order is not None
         cleanup.delete(cleanup_order)
         cleanup.execute(delete(DeliveryPoint).where(DeliveryPoint.id == point.id))
-        cleanup.execute(delete(Campus).where(Campus.id == campus.id))
+        cleanup.execute(delete(Campus).where(Campus.id == campus_id))
         cleanup.delete(owner)
         cleanup.delete(university)
         cleanup.commit()
