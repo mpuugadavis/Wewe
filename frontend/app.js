@@ -509,6 +509,7 @@
     $("[data-checkout-delivery]", form).classList.toggle("hidden", pickup);
     $("[data-checkout-pickup]", form).classList.toggle("hidden", !pickup);
     $("[data-payment-phone]", form).classList.remove("hidden");
+    updateCheckoutQuote().catch(error => showToast(error.message));
   }
 
   async function updateCheckoutQuote() {
