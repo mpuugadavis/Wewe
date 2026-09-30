@@ -3,7 +3,7 @@ import logging
 import secrets
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.dependencies import Principal, require_roles
+from app.limiter import limiter
 from app.models import (
     Cart,
     CartItem,
@@ -642,7 +643,9 @@ def _consume_fulfillment_inventory(db: Session, fulfillment: RetailerFulfillment
 
 
 @router.post("/orders/{order_id}/payments", response_model=PaymentOut, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 def create_payment(
+    request: Request,
     order_id: UUID,
     payload: PaymentCreate,
     idempotency_key: str | None = Header(
