@@ -511,6 +511,20 @@
     $("[data-payment-phone]", form).classList.remove("hidden");
   }
 
+  async function updateCheckoutQuote() {
+    const form = $('form[data-form="checkout"]');
+    const box = $("#checkoutQuote");
+    if (!form || !box) return;
+    const method = form.elements.delivery_method.value;
+    const destination = method === "PICKUP" ? form.elements.pickup_point_id.value : form.elements.delivery_point_id.value;
+    if (!destination) { box.textContent = "Choose a destination to calculate delivery."; return; }
+    box.textContent = "Calculating delivery…";
+    const payload = { delivery_method: method, ...(method === "PICKUP" ? { pickup_point_id: destination } : { delivery_point_id: destination }) };
+    const quote = await apiFetch("/orders/delivery-quote", { method: "POST", body: JSON.stringify(payload) });
+    box.innerHTML = "<div class=\"checkout-totals\"><p>Subtotal <b>" + money(quote.subtotal_ugx) + "</b></p><p>Delivery fee <b>" + money(quote.delivery_fee_ugx) + "</b></p><p class=\"checkout-total\"><span>Total</span><b>" + money(quote.total_ugx) + "</b></p><small class=\"route-note\">" + (quote.routing_provider ? "Priced from the actual road route." : "Pickup has no delivery fee.") + "</small></div>";
+    form.dataset.quoteTotal = String(quote.total_ugx);
+  }
+
   async function placeOrder(form) {
     const method = form.elements.delivery_method.value;
     const delivery = {
