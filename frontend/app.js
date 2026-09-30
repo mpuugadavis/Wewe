@@ -476,8 +476,8 @@
       <div data-checkout-delivery><label class="field">Saved delivery point<select name="delivery_point_id">${saved.map(point => `<option value="${escapeHtml(point.id)}">${escapeHtml(point.name)}${point.directions ? ` — ${escapeHtml(point.directions)}` : ""}</option>`).join("")}</select></label>
         <button type="button" class="text-link" data-action="new-address">Add a delivery point</button></div>
       <div data-checkout-pickup class="hidden"><label class="field">Pickup point<select name="pickup_point_id">${pickupPoints.map(point => `<option value="${escapeHtml(point.id)}">${escapeHtml(point.name)}${point.directions ? ` — ${escapeHtml(point.directions)}` : ""}</option>`).join("")}</select></label></div>
-      <label class="field">Payment method<select name="payment_method"><option value="CASH">Cash on delivery/pickup</option><option value="MTN_MOMO">MTN Mobile Money</option><option value="AIRTEL_MONEY">Airtel Money</option></select></label>
-      <label class="field hidden" data-payment-phone>Mobile money phone<input name="phone" type="tel" placeholder="+256700000000"></label>
+      <div class="field"><span>Payment method</span><div class="payment-options"><label class="payment-option selected"><input type="radio" name="payment_method" value="MTN_MOMO" checked> <b>MTN Mobile Money</b><small>Pay securely from your MTN line.</small></label><label class="payment-option"><input type="radio" name="payment_method" value="AIRTEL_MONEY"> <b>Airtel Money</b><small>Pay securely from your Airtel line.</small></label></div></div>
+      <label class="field" data-payment-phone>Mobile money phone<input name="phone" type="tel" placeholder="+256700000000" required autocomplete="tel"></label>
       <div class="checkout-totals"><p>Subtotal <b>${money(cart.subtotal_ugx)}</b></p><p>Delivery fee <span>Calculated by WEWE</span></p><p class="muted">The server calculates the final fee and total when placing the order.</p></div>
       <p class="form-message" aria-live="polite"></p><button class="button-primary">Place order</button>
     </form>`;
@@ -495,7 +495,7 @@
     const pickup = form.elements.delivery_method.value === "PICKUP";
     $("[data-checkout-delivery]", form).classList.toggle("hidden", pickup);
     $("[data-checkout-pickup]", form).classList.toggle("hidden", !pickup);
-    $("[data-payment-phone]", form).classList.toggle("hidden", form.elements.payment_method.value === "CASH");
+    $("[data-payment-phone]", form).classList.remove("hidden");
   }
 
   async function placeOrder(form) {
@@ -518,7 +518,9 @@
       };
       payment = await apiFetch(`/orders/${encodeURIComponent(order.id)}/payments`, { method: "POST", body: JSON.stringify(paymentBody) });
     } catch (error) {
-      $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Order placed</div><h2>${escapeHtml(order.order_number)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>Your order was created and the server calculated its totals.</p><div class="checkout-totals"><p>Subtotal <b>${money(order.subtotal_ugx)}</b></p><p>Delivery <b>${money(order.delivery_fee_ugx)}</b></p><p>Total <b>${money(order.total_ugx)}</b></p></div><p class="api-error">Payment could not be started: ${escapeHtml(error.message)}</p><button class="button-primary" data-action="retry-cash-payment" data-order-id="${escapeHtml(order.id)}">Try cash payment</button>`;
+      const method = form.elements.payment_method.value;
+      const phone = form.elements.phone.value.trim();
+      $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Order created</div><h2>${escapeHtml(order.order_number)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>Your order was created and the server calculated its totals, but the online payment could not be started.</p><div class="checkout-totals"><p>Subtotal <b>${money(order.subtotal_ugx)}</b></p><p>Delivery <b>${money(order.delivery_fee_ugx)}</b></p><p>Total <b>${money(order.total_ugx)}</b></p></div><p class="api-error">Payment error: ${escapeHtml(error.message)}</p><button class="button-primary" data-action="retry-online-payment" data-order-id="${escapeHtml(order.id)}" data-method="${escapeHtml(method)}" data-phone="${escapeHtml(phone)}">Retry online payment</button>`;
       await ensureCart();
       return;
     }
@@ -528,11 +530,17 @@
     $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Order placed</div><h2>${escapeHtml(order.order_number)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>The server calculated these totals:</p><div class="checkout-totals"><p>Subtotal <b>${money(order.subtotal_ugx)}</b></p><p>Delivery <b>${money(order.delivery_fee_ugx)}</b></p><p>Total <b>${money(order.total_ugx)}</b></p><p>Status ${statusBadge(order.status)} · Payment ${statusBadge(payment?.status || order.payment_status)}</p></div>${checkoutUrl ? `<p><a href="${escapeHtml(checkoutUrl)}" target="_blank" rel="noopener noreferrer">Continue mobile payment</a></p>` : ""}<button class="button-primary" data-action="close-modal">Continue shopping</button>`;
   }
 
-  async function retryCashPayment(orderId) {
-    await apiFetch(`/orders/${encodeURIComponent(orderId)}/payments`, { method: "POST", body: JSON.stringify({ method: "CASH" }) });
-    showToast("Cash payment was recorded.");
-    closeModal();
+  async function retryOnlinePayment(orderId, method, phone) {
+    if (!["MTN_MOMO", "AIRTEL_MONEY"].includes(method)) throw new Error("Choose an online mobile-money payment method.");
+    if (!phone) throw new Error("Enter the mobile-money phone number.");
+    const payment = await apiFetch(`/orders/${encodeURIComponent(orderId)}/payments`, {
+      method: "POST",
+      body: JSON.stringify({ method, phone })
+    });
+    const checkoutUrl = safeImage(payment?.checkout_url);
+    $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Payment retry</div><h2>Continue payment</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${escapeHtml(payment?.status || "Payment initiated")}</p>${checkoutUrl ? `<p><a class="button-primary" href="${escapeHtml(checkoutUrl)}" target="_blank" rel="noopener noreferrer">Continue mobile payment</a></p>` : ""}<button class="button-outline" data-action="close-modal">Close</button>`;
   }
+
 
   async function showNewAddress() {
     const campuses = state.campuses || await apiFetch("/locations/campuses");
@@ -817,7 +825,7 @@
     if (action === "checkout") return showCheckout();
     if (action === "new-address") return showNewAddress();
     if (action === "retailer-details") return showRetailer(button.dataset.retailerSlug);
-    if (action === "retry-cash-payment") return retryCashPayment(button.dataset.orderId);
+    if (action === "retry-online-payment") return retryOnlinePayment(button.dataset.orderId, button.dataset.method, button.dataset.phone);
     if (action === "order-details") return showOrder(button.dataset.id);
     if (action === "cancel-order") {
       await apiFetch(`/orders/${encodeURIComponent(button.dataset.id)}/cancel`, { method: "POST", body: JSON.stringify({}) });
