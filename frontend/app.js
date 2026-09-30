@@ -517,7 +517,7 @@
       state.checkoutMap = new Map(mapElement, {
         center: defaultCenter,
         zoom: 15,
-        mapId: "WEWE_DELIVERY_MAP",
+        mapId: "DEMO_MAP_ID",
         disableDefaultUI: false,
         streetViewControl: false,
         fullscreenControl: true
