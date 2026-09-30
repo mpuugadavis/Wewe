@@ -844,7 +844,8 @@
     }
     if (action === "product-details") return showProduct(button.dataset.productId);
     if (action === "add-cart") {
-      await addToCart(button.dataset.listingId);
+      const detailQuantity = $("#detailQuantity")?.value;
+      await addToCart(button.dataset.listingId, detailQuantity || button.dataset.quantity || 1);
       if ($("#cartContents")) await renderCartContents();
       return;
     }
