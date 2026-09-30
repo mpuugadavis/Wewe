@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     #: Directions/Geocoding APIs and requires ``GOOGLE_MAPS_API_KEY``; ``OSRM``
     #: uses the OpenStreetMap OSRM road service plus the Nominatim geocoder and
     #: needs no key. Either way the distance comes from a real road route.
-    routing_provider: Literal["GOOGLE_MAPS", "OSRM"] = "OSRM"
+    routing_provider: Literal["GOOGLE_MAPS", "OSRM"] = "GOOGLE_MAPS"
     google_maps_api_key: SecretStr | None = None
     #: Browser-restricted key used only by the Maps JavaScript API in the WEWE frontend.
     google_maps_browser_api_key: str | None = None
