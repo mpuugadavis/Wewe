@@ -545,20 +545,35 @@
             const place = placePrediction.toPlace();
             await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "id"] });
             if (!place.location) return;
-            const point = {
-              id: "",
-              name: place.displayName || "Selected location",
-              directions: place.formattedAddress || "",
-              latitude: place.location.lat(),
-              longitude: place.location.lng(),
-              google_place_id: place.id || null,
-              campus_id: state.campuses?.find(item => item.slug === "main-campus")?.id || state.campuses?.[0]?.id
-            };
-            state.checkoutMap.setCenter({ lat: point.latitude, lng: point.longitude });
+            const campusId = state.campuses?.find(item => item.slug === "main-campus")?.id || state.campuses?.[0]?.id;
+            if (!campusId) throw new Error("No WEWE campus is configured.");
+            const point = await apiFetch("/locations/me/delivery-points", {
+              method: "POST",
+              body: JSON.stringify({
+                campus_id: campusId,
+                kind: "OTHER",
+                name: place.displayName || "Selected Google Maps location",
+                directions: place.formattedAddress || "",
+                latitude: place.location.lat(),
+                longitude: place.location.lng(),
+                google_place_id: place.id || null,
+                is_private: true
+              })
+            });
+            state.checkoutPoints = [...state.checkoutPoints.filter(item => item.id !== point.id), point];
+            const select = $('form[data-form="checkout"]')?.elements.delivery_point_id;
+            if (select) {
+              const option = document.createElement("option");
+              option.value = point.id;
+              option.textContent = point.name;
+              select.appendChild(option);
+              select.value = point.id;
+            }
+            state.checkoutMap.setCenter({ lat: Number(point.latitude), lng: Number(point.longitude) });
             state.checkoutMap.setZoom(17);
-            state.checkoutSelectedExternal = point;
             const label = $("#selectedDeliveryLocation");
             if (label) label.textContent = point.name + (point.directions ? " · " + point.directions : "");
+            await updateCheckoutQuote();
           });
         }
       } catch {
