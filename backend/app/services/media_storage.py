@@ -8,7 +8,6 @@ provide a safe seam for a future authenticated object-storage adapter.
 from __future__ import annotations
 
 import hashlib
-import re
 from pathlib import PurePosixPath
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -18,7 +17,6 @@ MAX_PRODUCT_IMAGES = 12
 MAX_MEDIA_URL_LENGTH = 1000
 ALLOWED_IMAGE_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 ALLOWED_IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "webp"})
-_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _CONTROL_CHARS = set(chr(i) for i in range(32)) | {chr(127)}
 
 
@@ -38,7 +36,8 @@ class MediaStorage(Protocol):
 
 def validate_product_image_url(value: str, *, allowed_hosts: set[str] | None = None) -> str:
     """Validate a catalog image URL without fetching or trusting remote content."""
-    value = value.strip()
+    if value != value.strip():
+        raise MediaValidationError("Product image URL must not have leading or trailing whitespace.")
     if not value or len(value) > MAX_MEDIA_URL_LENGTH:
         raise MediaValidationError(f"Product image URL must be 1-{MAX_MEDIA_URL_LENGTH} characters.")
     if any(char in _CONTROL_CHARS for char in value) or any(char.isspace() for char in value):
@@ -74,9 +73,9 @@ def build_product_object_key(product_id: UUID, content: bytes, extension: str) -
 
 def validate_uploaded_image_metadata(content_type: str, size_bytes: int, *, max_size_bytes: int) -> None:
     """Validate metadata before an object-storage adapter accepts uploaded bytes."""
+    if max_size_bytes <= 0:
+        raise ValueError("max_size_bytes must be positive")
     if content_type.lower() not in ALLOWED_IMAGE_CONTENT_TYPES:
         raise MediaValidationError("Only JPEG, PNG, and WebP product images are supported.")
     if size_bytes <= 0 or size_bytes > max_size_bytes:
         raise MediaValidationError("Product image size is outside the configured limit.")
-    if max_size_bytes <= 0:
-        raise ValueError("max_size_bytes must be positive")
