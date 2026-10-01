@@ -24,7 +24,7 @@ services:
     volumes:
       - wewe_minio:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -43,9 +43,9 @@ services:
     command:
       - |
         set -eu
-        mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
-        mc mb --ignore-existing "local/$STORAGE_BUCKET"
-        mc anonymous set download "local/$STORAGE_BUCKET"
+        mc alias set local http://minio:9000 "wewe-local" "wewe-local-storage-password"
+        mc mb --ignore-existing "local/wewe-media"
+        mc anonymous set download "local/wewe-media"
 
   api:
     build: .
