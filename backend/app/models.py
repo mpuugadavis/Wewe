@@ -221,6 +221,11 @@ class ProductImage(TimestampMixin, Base):
     url: Mapped[str] = mapped_column(String(1000), nullable=False)
     alt_text: Mapped[str | None] = mapped_column(String(250))
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    storage_key: Mapped[str | None] = mapped_column(String(500), unique=True)
+    content_type: Mapped[str | None] = mapped_column(String(50))
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
 
 
 class ProductVariant(TimestampMixin, Base):
