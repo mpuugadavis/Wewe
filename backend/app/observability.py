@@ -53,5 +53,9 @@ def configure_logging(level: str | None = None) -> None:
     logger = logging.getLogger("wewe")
     logger.handlers.clear()
     logger.addHandler(handler)
-    logger.setLevel(_level_from_environment())
+    resolved_level = _level_from_environment(level)
+    logger.setLevel(resolved_level)
     logger.propagate = False
+
+    logging.getLogger("wewe.api").setLevel(resolved_level)
+    logging.getLogger("wewe.notification_worker").setLevel(resolved_level)
