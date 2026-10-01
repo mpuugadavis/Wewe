@@ -147,6 +147,8 @@
     return payload;
   }
 
+  window.weweApiFetch = apiFetch;
+
   function showToast(message) {
     const toast = $("#toast");
     if (!toast) return;

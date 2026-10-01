@@ -7,13 +7,13 @@
   const MAX_BYTES = 5 * 1024 * 1024;
   const ACCEPTED = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-  function token() {
-    return localStorage.getItem(ACCESS_KEY);
-  }
-
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, c => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", """: "&quot;", "'": "&#39;"
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
     }[c]));
   }
 
@@ -54,24 +54,17 @@
   async function uploadFile(listingId, file, altText) {
     if (!ACCEPTED.has(file.type)) throw new Error("Only JPEG, PNG, and WebP images are allowed.");
     if (file.size <= 0 || file.size > MAX_BYTES) throw new Error("Each image must be between 1 byte and 5 MiB.");
-    const access = token();
-    if (!access) throw new Error("Your session has expired. Please sign in again.");
 
     const form = new FormData();
     form.append("file", file, file.name);
     if (altText.trim()) form.append("alt_text", altText.trim());
 
-    const response = await fetch(`${API_BASE}/retailers/me/products/${encodeURIComponent(listingId)}/images`, {
+    const request = window.weweApiFetch;
+    if (typeof request !== "function") throw new Error("WEWE is still loading. Please try again.");
+    return request(`/retailers/me/products/${encodeURIComponent(listingId)}/images`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${access}` },
       body: form
     });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) {
-      const message = payload?.error?.message || payload?.detail?.message || payload?.detail || `Image upload failed (${response.status}).`;
-      throw new Error(String(message));
-    }
-    return payload;
   }
 
   function openUpload(listingId, productName) {
