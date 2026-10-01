@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     media_allowed_hosts: str = ""
     #: Future authenticated upload adapters must enforce this byte limit before storage.
     media_max_upload_bytes: int = 5_242_880
+    #: Short-lived object-storage read URLs used by the signed-media delivery adapter.
+    media_signed_url_ttl_seconds: int = 300
 
     @field_validator("secret_key")
     @classmethod
@@ -77,6 +79,13 @@ class Settings(BaseSettings):
     def validate_positive_routing_timeout(cls, value: float) -> float:
         if value <= 0:
             raise ValueError("ROUTING_TIMEOUT_SECONDS must be positive")
+        return value
+
+    @field_validator("media_signed_url_ttl_seconds")
+    @classmethod
+    def validate_media_signed_url_ttl(cls, value: int) -> int:
+        if value <= 0 or value > 3600:
+            raise ValueError("MEDIA_SIGNED_URL_TTL_SECONDS must be between 1 and 3600")
         return value
 
     @field_validator("media_max_upload_bytes")
