@@ -11,6 +11,7 @@ class FakeS3Client:
         self.uploads = []
         self.deletes = []
         self.objects = {}
+        self.listed_objects = []
 
     def upload_fileobj(self, content, bucket, key, ExtraArgs):
         payload = content.read()
@@ -28,6 +29,20 @@ class FakeS3Client:
 
     def generate_presigned_url(self, operation, Params, ExpiresIn):
         return f"https://signed.test/{Params['Key']}?expires={ExpiresIn}"
+
+    def get_paginator(self, operation):
+        assert operation == "list_objects_v2"
+        fake = self
+
+        class Paginator:
+            def paginate(self, Bucket, Prefix):
+                yield {"Contents": [
+                    {"Key": key, "LastModified": modified}
+                    for key, modified in fake.listed_objects
+                    if key.startswith(Prefix)
+                ]}
+
+        return Paginator()
 
     def delete_object(self, Bucket, Key):
         self.deletes.append((Bucket, Key))
