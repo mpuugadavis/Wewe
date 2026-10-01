@@ -186,14 +186,6 @@ def list_products(
     return _serialize_products(db, products)
 
 
-@router.get("/products/{product_id}", response_model=ProductOut)
-def get_product(product_id: UUID, db: Session = Depends(get_db)) -> dict:
-    product = db.scalar(select(Product).where(Product.id == product_id, Product.status == "ACTIVE"))
-    if product is None:
-        raise HTTPException(status_code=404, detail={"code": "product_not_found", "message": "Product was not found."})
-    return _serialize_products(db, [product])[0]
-
-
 @router.get("/products/images/{image_id}")
 def read_product_image(
     image_id: UUID,
@@ -248,6 +240,14 @@ def read_product_image(
     if size_bytes is not None:
         headers["Content-Length"] = str(size_bytes)
     return StreamingResponse(body, media_type=content_type or image.content_type or "application/octet-stream", headers=headers, background=background_tasks)
+
+
+@router.get("/products/{product_id}", response_model=ProductOut)
+def get_product(product_id: UUID, db: Session = Depends(get_db)) -> dict:
+    product = db.scalar(select(Product).where(Product.id == product_id, Product.status == "ACTIVE"))
+    if product is None:
+        raise HTTPException(status_code=404, detail={"code": "product_not_found", "message": "Product was not found."})
+    return _serialize_products(db, [product])[0]
 
 
 @router.get("/retailers/me/products", response_model=list[dict])
