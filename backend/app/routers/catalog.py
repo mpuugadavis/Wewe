@@ -245,7 +245,7 @@ def read_product_image(
 
     filename_match = re.search(r"([0-9a-f]{64})\\.(?:jpg|jpeg|png|webp)$", image.storage_key.lower())
     etag = f'"{filename_match.group(1)}"' if filename_match else None
-    if etag and if_none_match:
+    if if_none_match:
         requested_tags = {tag.strip() for tag in if_none_match.split(",")}
         if etag in requested_tags or "*" in requested_tags:
             body.close()
@@ -263,7 +263,7 @@ def read_product_image(
     background_tasks.add_task(body.close)
     headers = {
         "Cache-Control": "public, max-age=31536000, immutable",
-        "ETag": etag or f'"{image.id}"',
+        "ETag": etag,
         "X-Content-Type-Options": "nosniff",
         "Cross-Origin-Resource-Policy": "cross-origin",
         "Content-Disposition": "inline",
