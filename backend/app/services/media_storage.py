@@ -158,18 +158,19 @@ def sanitize_image(content: bytes, *, declared_content_type: str, max_size_bytes
     validate_uploaded_image_metadata(declared_content_type, len(content), max_size_bytes=max_size_bytes)
     Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
     try:
-        warnings.simplefilter("error", Image.DecompressionBombWarning)
-        with Image.open(io.BytesIO(content)) as image:
-            actual_format = (image.format or "").upper()
-            expected_format = {
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(content)) as image:
+                actual_format = (image.format or "").upper()
+                expected_format = {
                 "image/jpeg": "JPEG",
                 "image/png": "PNG",
-                "image/webp": "WEBP",
-            }[declared_content_type.lower()]
-            if actual_format != expected_format:
-                raise MediaValidationError("Uploaded bytes do not match the declared image content type.")
-            image.verify()
-        with Image.open(io.BytesIO(content)) as image:
+                    "image/webp": "WEBP",
+                }[declared_content_type.lower()]
+                if actual_format != expected_format:
+                    raise MediaValidationError("Uploaded bytes do not match the declared image content type.")
+                image.verify()
+            with Image.open(io.BytesIO(content)) as image:
             if image.width <= 0 or image.height <= 0 or image.width > MAX_IMAGE_DIMENSION or image.height > MAX_IMAGE_DIMENSION:
                 raise MediaValidationError("Image dimensions are outside the supported range.")
             image = ImageOps.exif_transpose(image)
