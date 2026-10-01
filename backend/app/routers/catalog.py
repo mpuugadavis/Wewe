@@ -1,8 +1,9 @@
 import io
+import re
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -190,6 +191,7 @@ def list_products(
 def read_product_image(
     image_id: UUID,
     background_tasks: BackgroundTasks,
+    if_none_match: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     """Serve stored product media without exposing object-storage credentials."""
@@ -232,14 +234,43 @@ def read_product_image(
             detail={"code": "media_storage_error", "message": "Product image storage is temporarily unavailable."},
         ) from exc
 
+    resolved_content_type = (content_type or image.content_type or "").lower()
+    allowed_content_types = {"image/jpeg", "image/png", "image/webp"}
+    if resolved_content_type not in allowed_content_types:
+        body.close()
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "invalid_media_metadata", "message": "Stored product image metadata is invalid."},
+        )
+
+    filename_match = re.search(r"([0-9a-f]{64})\.(?:jpg|jpeg|png|webp)$", image.storage_key.lower())
+    etag = f'"{filename_match.group(1)}"' if filename_match else None
+    if if_none_match:
+        requested_tags = {tag.strip() for tag in if_none_match.split(",")}
+        if etag in requested_tags or "*" in requested_tags:
+            body.close()
+            return Response(
+                status_code=304,
+                headers={
+                    "Cache-Control": "public, max-age=31536000, immutable",
+                    "ETag": etag,
+                    "X-Content-Type-Options": "nosniff",
+                    "Cross-Origin-Resource-Policy": "cross-origin",
+                },
+                background=background_tasks,
+            )
+
     background_tasks.add_task(body.close)
     headers = {
         "Cache-Control": "public, max-age=31536000, immutable",
+        "ETag": etag,
         "X-Content-Type-Options": "nosniff",
+        "Cross-Origin-Resource-Policy": "cross-origin",
+        "Content-Disposition": "inline",
     }
     if size_bytes is not None:
         headers["Content-Length"] = str(size_bytes)
-    return StreamingResponse(body, media_type=content_type or image.content_type or "application/octet-stream", headers=headers, background=background_tasks)
+    return StreamingResponse(body, media_type=resolved_content_type, headers=headers, background=background_tasks)
 
 
 @router.get("/products/{product_id}", response_model=ProductOut)

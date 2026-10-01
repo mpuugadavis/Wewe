@@ -99,3 +99,109 @@ def test_s3_adapter_reports_missing_object(monkeypatch):
 
     with pytest.raises(media_storage.MediaStorageNotFoundError):
         storage.get(key="missing.webp")
+
+
+def test_product_media_read_serves_cached_image(client, database, monkeypatch):
+    from io import BytesIO
+    from uuid import uuid4
+
+    from app.models import Category, Product, ProductImage
+    from app.routers import catalog
+
+    category = Category(id=uuid4(), name="Test", slug=f"test-{uuid4()}", is_active=True)
+    product = Product(id=uuid4(), category_id=category.id, name="Test image", status="ACTIVE")
+    image = ProductImage(
+        id=uuid4(),
+        product_id=product.id,
+        url="http://localhost:9000/wewe-media/products/test/image.webp",
+        storage_key="products/test/" + "a" * 64 + ".webp",
+        content_type="image/webp",
+        size_bytes=11,
+    )
+    database.add_all([category, product, image])
+    database.commit()
+
+    class FakeStorage:
+        def get(self, *, key):
+            assert key == image.storage_key
+            return BytesIO(b"image-bytes"), "image/webp", 11
+
+    monkeypatch.setattr(catalog, "build_media_storage", lambda: FakeStorage())
+
+    response = client.get(f"/api/v1/products/images/{image.id}")
+
+    assert response.status_code == 200
+    assert response.content == b"image-bytes"
+    assert response.headers["content-type"] == "image/webp"
+    assert response.headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert response.headers["etag"] == '"' + "a" * 64 + '"'
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["cross-origin-resource-policy"] == "cross-origin"
+
+
+def test_product_media_read_honors_etag(client, database, monkeypatch):
+    from io import BytesIO
+    from uuid import uuid4
+
+    from app.models import Category, Product, ProductImage
+    from app.routers import catalog
+
+    category = Category(id=uuid4(), name="Test", slug=f"test-{uuid4()}", is_active=True)
+    product = Product(id=uuid4(), category_id=category.id, name="Test image", status="ACTIVE")
+    image = ProductImage(
+        id=uuid4(),
+        product_id=product.id,
+        url="http://localhost:9000/wewe-media/products/test/image.webp",
+        storage_key="products/test/" + "b" * 64 + ".webp",
+        content_type="image/webp",
+        size_bytes=11,
+    )
+    database.add_all([category, product, image])
+    database.commit()
+
+    class FakeStorage:
+        def get(self, *, key):
+            return BytesIO(b"image-bytes"), "image/webp", 11
+
+    monkeypatch.setattr(catalog, "build_media_storage", lambda: FakeStorage())
+
+    response = client.get(
+        f"/api/v1/products/images/{image.id}",
+        headers={"If-None-Match": '"' + "b" * 64 + '"'},
+    )
+
+    assert response.status_code == 304
+    assert response.content == b""
+    assert response.headers["etag"] == '"' + "b" * 64 + '"'
+
+
+def test_product_media_read_rejects_invalid_stored_content_type(client, database, monkeypatch):
+    from io import BytesIO
+    from uuid import uuid4
+
+    from app.models import Category, Product, ProductImage
+    from app.routers import catalog
+
+    category = Category(id=uuid4(), name="Test", slug=f"test-{uuid4()}", is_active=True)
+    product = Product(id=uuid4(), category_id=category.id, name="Test image", status="ACTIVE")
+    image = ProductImage(
+        id=uuid4(),
+        product_id=product.id,
+        url="http://localhost:9000/wewe-media/products/test/image.webp",
+        storage_key="products/test/" + "c" * 64 + ".webp",
+        content_type="text/html",
+        size_bytes=11,
+    )
+    database.add_all([category, product, image])
+    database.commit()
+
+    class FakeStorage:
+        def get(self, *, key):
+            return BytesIO(b"<html></html>"), "text/html", 11
+
+    monkeypatch.setattr(catalog, "build_media_storage", lambda: FakeStorage())
+
+    response = client.get(f"/api/v1/products/images/{image.id}")
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "invalid_media_metadata"
