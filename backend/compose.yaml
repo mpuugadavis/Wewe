@@ -14,7 +14,7 @@ services:
       retries: 10
 
   minio:
-    image: docker.io/openvidu/minio:RELEASE.2026-05-04T00-27-21Z-r0
+    image: minio/minio:latest
     environment:
       MINIO_ROOT_USER: wewe-local
       MINIO_ROOT_PASSWORD: wewe-local-storage-password
