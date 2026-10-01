@@ -40,6 +40,9 @@ class MediaStorage(Protocol):
     def put(self, *, key: str, content: BinaryIO, content_type: str, size_bytes: int) -> str:
         """Persist a stream and return its stable read URL."""
 
+    def get(self, *, key: str) -> tuple[BinaryIO, str | None, int | None]:
+        """Read an object and return its body, content type, and size."""
+
     def delete(self, *, key: str) -> None:
         """Delete an object by storage key."""
 
@@ -83,6 +86,13 @@ class S3CompatibleMediaStorage:
         if self.public_base_url:
             return f"{self.public_base_url}/{key}"
         return f"https://{self.bucket}.s3.amazonaws.com/{key}"
+
+    def get(self, *, key: str) -> tuple[BinaryIO, str | None, int | None]:
+        try:
+            response = self.client.get_object(Bucket=self.bucket, Key=key)
+            return response["Body"], response.get("ContentType"), response.get("ContentLength")
+        except (BotoCoreError, ClientError) as exc:
+            raise MediaStorageError("Object storage read failed.") from exc
 
     def delete(self, *, key: str) -> None:
         try:
