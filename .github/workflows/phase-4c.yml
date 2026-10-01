@@ -48,13 +48,6 @@ jobs:
       PAYMENT_MODE: DISABLED
       RATE_LIMIT_STORAGE_URI: redis://localhost:6379/0
       RUN_POSTGRES_CONCURRENCY: "1"
-      STORAGE_INTEGRATION: "1"
-      STORAGE_PROVIDER: S3
-      STORAGE_BUCKET: wewe-test-media
-      STORAGE_ENDPOINT: http://localhost:9000
-      STORAGE_PUBLIC_BASE_URL: http://localhost:9000/wewe-test-media
-      STORAGE_ACCESS_KEY: wewe-test
-      STORAGE_SECRET_KEY: wewe-test-storage-password
 
     steps:
       - name: Check out repository
@@ -77,6 +70,14 @@ jobs:
         run: pytest
 
       - name: Verify S3-compatible media storage
+        env:
+          STORAGE_INTEGRATION: "1"
+          STORAGE_PROVIDER: S3
+          STORAGE_BUCKET: wewe-test-media
+          STORAGE_ENDPOINT: http://127.0.0.1:9000
+          STORAGE_PUBLIC_BASE_URL: http://127.0.0.1:9000/wewe-test-media
+          STORAGE_ACCESS_KEY: wewe-test
+          STORAGE_SECRET_KEY: wewe-test-storage-password
         run: |
           set -euo pipefail
           docker run -d --rm --name wewe-minio \
