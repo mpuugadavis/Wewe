@@ -14,7 +14,7 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     environment:
       MINIO_ROOT_USER: wewe-local
       MINIO_ROOT_PASSWORD: wewe-local-storage-password
@@ -23,18 +23,13 @@ services:
       - "9001:9001"
     volumes:
       - wewe_minio:/data
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9000/minio/health/live"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
     command: ["server", "/data", "--console-address", ":9001"]
 
   minio-init:
-    image: minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     depends_on:
       minio:
-        condition: service_healthy
+        condition: service_started
     environment:
       MINIO_ROOT_USER: wewe-local
       MINIO_ROOT_PASSWORD: wewe-local-storage-password
@@ -43,7 +38,7 @@ services:
     command:
       - |
         set -eu
-        mc alias set local http://minio:9000 "wewe-local" "wewe-local-storage-password"
+        until mc alias set local http://minio:9000 "wewe-local" "wewe-local-storage-password"; do sleep 2; done
         mc mb --ignore-existing "local/wewe-media"
         mc anonymous set download "local/wewe-media"
 
