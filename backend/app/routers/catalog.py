@@ -1,7 +1,8 @@
 import io
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,7 @@ from app.schemas import CategoryOut, ProductCreate, ProductImageReorder, Product
 from app.services.media_storage import (
     MAX_PRODUCT_IMAGES,
     MediaStorageError,
+    MediaStorageNotFoundError,
     MediaValidationError,
     build_product_object_key,
     read_upload_with_limit,
@@ -90,7 +92,11 @@ def _serialize_products(db: Session, products: list[Product]) -> list[dict]:
             "category_id": product.category_id,
             "name": product.name,
             "description": product.description,
-            "images": images_by_product.get(product.id, []),
+            "images": [
+                image.url if not image.storage_key else f"/api/v1/products/images/{image.id}"
+                for image in images
+                if image.storage_key or image.url
+            ],
             "listings": listings.get(product.id, []),
         }
         for product in products
@@ -178,6 +184,62 @@ def list_products(
         statement = statement.order_by(Product.created_at.desc())
     products = list(db.scalars(statement.offset(offset).limit(limit)).all())
     return _serialize_products(db, products)
+
+
+@router.get("/products/images/{image_id}")
+def read_product_image(
+    image_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Serve stored product media without exposing object-storage credentials."""
+    image = db.scalar(
+        select(ProductImage)
+        .join(Product, Product.id == ProductImage.product_id)
+        .where(
+            ProductImage.id == image_id,
+            Product.status == "ACTIVE",
+        )
+    )
+    if image is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "product_image_not_found", "message": "Product image was not found."},
+        )
+    if not image.storage_key:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "stored_media_not_available", "message": "Stored product media is not available."},
+        )
+
+    storage = build_media_storage()
+    if storage is None:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "media_storage_unavailable", "message": "Product image storage is not configured."},
+        )
+
+    try:
+        body, content_type, size_bytes = storage.get(key=image.storage_key)
+    except MediaStorageNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "product_image_not_found", "message": "Product image was not found."},
+        ) from exc
+    except MediaStorageError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "media_storage_error", "message": "Product image storage is temporarily unavailable."},
+        ) from exc
+
+    background_tasks.add_task(body.close)
+    headers = {
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "X-Content-Type-Options": "nosniff",
+    }
+    if size_bytes is not None:
+        headers["Content-Length"] = str(size_bytes)
+    return StreamingResponse(body, media_type=content_type or image.content_type or "application/octet-stream", headers=headers, background=background_tasks)
 
 
 @router.get("/products/{product_id}", response_model=ProductOut)
