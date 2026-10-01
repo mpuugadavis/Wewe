@@ -34,14 +34,6 @@ jobs:
           --health-timeout 3s
           --health-retries 20
 
-      minio:
-        image: minio/minio:latest
-        env:
-          MINIO_ROOT_USER: wewe-test
-          MINIO_ROOT_PASSWORD: wewe-test-storage-password
-        ports:
-          - 9000:9000
-          - 9001:9001
 
 
     defaults:
@@ -87,11 +79,16 @@ jobs:
       - name: Verify S3-compatible media storage
         run: |
           set -euo pipefail
+          docker run -d --rm --name wewe-minio \
+            -p 9000:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=wewe-test \
+            -e MINIO_ROOT_PASSWORD=wewe-test-storage-password \
+            minio/minio:latest server /data --console-address ":9001"
           python - <<'PY'
           import time
           import urllib.request
 
-          url = "http://localhost:9000/minio/health/live"
+          url = "http://127.0.0.1:9000/minio/health/live"
           deadline = time.time() + 60
           while time.time() < deadline:
               try:
@@ -105,6 +102,7 @@ jobs:
               raise SystemExit("MinIO did not become healthy within 60 seconds")
           PY
           pytest tests/test_media_storage_integration.py
+          docker stop wewe-minio
 
       - name: Verify PostgreSQL backup and restore
         env:
