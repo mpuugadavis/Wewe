@@ -134,7 +134,7 @@ def test_product_media_read_serves_cached_image(client, database, monkeypatch):
     assert response.content == b"image-bytes"
     assert response.headers["content-type"] == "image/webp"
     assert response.headers["cache-control"] == "public, max-age=31536000, immutable"
-    assert response.headers["etag"] == '"' + str(image.id) + '"'
+    assert response.headers["etag"] == '"' + "a" * 64 + '"'
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["cross-origin-resource-policy"] == "cross-origin"
 
@@ -167,12 +167,12 @@ def test_product_media_read_honors_etag(client, database, monkeypatch):
 
     response = client.get(
         f"/api/v1/products/images/{image.id}",
-        headers={"If-None-Match": '"' + str(image.id) + '"'},
+        headers={"If-None-Match": '"' + "b" * 64 + '"'},
     )
 
     assert response.status_code == 304
     assert response.content == b""
-    assert response.headers["etag"] == '"' + str(image.id) + '"'
+    assert response.headers["etag"] == '"' + "b" * 64 + '"'
 
 
 def test_product_media_read_rejects_invalid_stored_content_type(client, database, monkeypatch):
