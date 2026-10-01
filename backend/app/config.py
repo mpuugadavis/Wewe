@@ -46,8 +46,10 @@ class Settings(BaseSettings):
     routing_base_url: str | None = None
     routing_timeout_seconds: float = 5.0
     routing_user_agent: str = "WEWE-campus-delivery/1.0"
+    storage_provider: Literal["DISABLED", "S3"] = "DISABLED"
     storage_bucket: str | None = None
     storage_endpoint: str | None = None
+    storage_public_base_url: str | None = None
     storage_access_key: SecretStr | None = None
     storage_secret_key: SecretStr | None = None
     #: Optional exact host allow-list for catalog image URLs. Empty means any HTTPS host.
@@ -117,6 +119,11 @@ class Settings(BaseSettings):
             raise ValueError("PAYMENT_CALLBACK_URL must use HTTPS in production")
         if self.routing_provider == "GOOGLE_MAPS" and not self.google_maps_api_key:
             raise ValueError("GOOGLE_MAPS_API_KEY is required when ROUTING_PROVIDER is GOOGLE_MAPS")
+        if self.app_env == "production" and self.storage_provider != "S3":
+            raise ValueError("STORAGE_PROVIDER=S3 is required in production")
+        if self.storage_provider == "S3":
+            if not self.storage_bucket or not self.storage_access_key or not self.storage_secret_key:
+                raise ValueError("S3 storage requires STORAGE_BUCKET, STORAGE_ACCESS_KEY and STORAGE_SECRET_KEY")
         return self
 
 

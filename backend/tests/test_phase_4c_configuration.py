@@ -15,6 +15,10 @@ def production_settings(**overrides):
         "rate_limit_storage_uri": "redis://localhost:6379/0",
         "smtp_host": "smtp.example.com",
         "payment_callback_url": "https://api.example.com/api/v1/payments/webhooks",
+        "storage_provider": "S3",
+        "storage_bucket": "wewe-media",
+        "storage_access_key": SecretStr("test-access"),
+        "storage_secret_key": SecretStr("test-secret"),
         **overrides,
     }
     return Settings(**values)

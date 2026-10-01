@@ -1,4 +1,7 @@
+from io import BytesIO
 from uuid import uuid4
+
+from PIL import Image
 
 import pytest
 
@@ -6,6 +9,8 @@ from app.services.media_storage import (
     MediaValidationError,
     build_product_object_key,
     validate_product_image_url,
+    read_upload_with_limit,
+    sanitize_image,
     validate_uploaded_image_metadata,
 )
 
@@ -70,3 +75,50 @@ def test_uploaded_image_metadata_is_allow_listed_and_size_limited() -> None:
 def test_invalid_storage_configuration_limit_is_rejected() -> None:
     with pytest.raises(ValueError):
         validate_uploaded_image_metadata("image/png", 1, max_size_bytes=0)
+
+
+def _jpeg_bytes(*, width: int = 32, height: int = 24, with_exif: bool = False) -> bytes:
+    image = Image.new("RGB", (width, height), (120, 80, 40))
+    output = BytesIO()
+    if with_exif:
+        exif = Image.Exif()
+        exif[274] = 6
+        image.save(output, format="JPEG", exif=exif)
+    else:
+        image.save(output, format="JPEG")
+    return output.getvalue()
+
+
+def test_upload_reader_rejects_oversized_stream_incrementally() -> None:
+    with pytest.raises(MediaValidationError):
+        read_upload_with_limit(BytesIO(b"x" * 11), max_size_bytes=10)
+
+
+def test_sanitize_image_checks_real_format_and_strips_metadata() -> None:
+    content = _jpeg_bytes(with_exif=True)
+    sanitized, content_type, extension, width, height = sanitize_image(
+        content,
+        declared_content_type="image/jpeg",
+        max_size_bytes=1024 * 1024,
+    )
+
+    assert content_type == "image/jpeg"
+    assert extension == "jpg"
+    assert (width, height) == (24, 32)
+    with Image.open(BytesIO(sanitized)) as image:
+        assert image.getexif() == {}
+
+
+def test_sanitize_image_rejects_content_type_spoofing() -> None:
+    with pytest.raises(MediaValidationError):
+        sanitize_image(
+            _jpeg_bytes(),
+            declared_content_type="image/png",
+            max_size_bytes=1024 * 1024,
+        )
+
+
+def test_sanitize_image_rejects_oversized_dimensions() -> None:
+    content = _jpeg_bytes(width=8001, height=2)
+    with pytest.raises(MediaValidationError):
+        sanitize_image(content, declared_content_type="image/jpeg", max_size_bytes=5 * 1024 * 1024)
