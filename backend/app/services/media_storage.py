@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import warnings
 from pathlib import PurePosixPath
 from typing import BinaryIO, Protocol
 from urllib.parse import urlsplit
@@ -157,6 +158,7 @@ def sanitize_image(content: bytes, *, declared_content_type: str, max_size_bytes
     validate_uploaded_image_metadata(declared_content_type, len(content), max_size_bytes=max_size_bytes)
     Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
     try:
+        warnings.simplefilter("error", Image.DecompressionBombWarning)
         with Image.open(io.BytesIO(content)) as image:
             actual_format = (image.format or "").upper()
             expected_format = {
@@ -189,7 +191,7 @@ def sanitize_image(content: bytes, *, declared_content_type: str, max_size_bytes
             output = io.BytesIO()
             image.save(output, **save_kwargs)
             sanitized = output.getvalue()
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+    except (UnidentifiedImageError, Image.DecompressionBombWarning, Image.DecompressionBombError, OSError, ValueError) as exc:
         if isinstance(exc, MediaValidationError):
             raise
         raise MediaValidationError("Uploaded file is not a valid supported image.") from exc
