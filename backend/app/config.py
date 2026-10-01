@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     media_max_upload_bytes: int = 5_242_880
     #: Short-lived object-storage read URLs used by the signed-media delivery adapter.
     media_signed_url_ttl_seconds: int = 300
+    #: Minimum age before an unreferenced object can be collected.
+    media_cleanup_grace_seconds: int = 86_400
 
     @field_validator("secret_key")
     @classmethod
@@ -79,6 +81,13 @@ class Settings(BaseSettings):
     def validate_positive_routing_timeout(cls, value: float) -> float:
         if value <= 0:
             raise ValueError("ROUTING_TIMEOUT_SECONDS must be positive")
+        return value
+
+    @field_validator("media_cleanup_grace_seconds")
+    @classmethod
+    def validate_media_cleanup_grace(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("MEDIA_CLEANUP_GRACE_SECONDS must be positive")
         return value
 
     @field_validator("media_signed_url_ttl_seconds")
