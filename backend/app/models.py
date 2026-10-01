@@ -213,7 +213,10 @@ class ProductImage(TimestampMixin, Base):
     __tablename__ = "product_images"
     __table_args__ = (
         CheckConstraint("sort_order >= 0", name="ck_product_images_sort_order_nonnegative"),
-        CheckConstraint("url LIKE 'https://%'", name="ck_product_images_https_url"),
+        CheckConstraint(
+            "url LIKE 'https://%' OR url LIKE 'http://localhost:%' OR url LIKE 'http://127.0.0.1:%'",
+            name="ck_product_images_https_url",
+        ),
         UniqueConstraint("product_id", "url", name="uq_product_image_product_url"),
     )
     product_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), index=True)
