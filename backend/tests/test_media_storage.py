@@ -82,7 +82,7 @@ def _jpeg_bytes(*, width: int = 32, height: int = 24, with_exif: bool = False) -
     output = BytesIO()
     if with_exif:
         exif = Image.Exif()
-        exif[Image.ExifTags.Base.Orientation if hasattr(Image, "ExifTags") else 274] = 6
+        exif[274] = 6
         image.save(output, format="JPEG", exif=exif)
     else:
         image.save(output, format="JPEG")
