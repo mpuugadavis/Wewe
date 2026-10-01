@@ -15,6 +15,7 @@ Phase 4C strengthens the production boundary around the Phase 4B payment core. I
 - Redis is included in the Phase 4C CI environment so the rate-limit path is exercised against the same shared-storage technology expected in multi-worker deployments.
 - Documentation is aligned with the online-payment-only rule; customer cash payment is not supported.
 - Structured application logging, request correlation, request timing/status telemetry and operational error logging are implemented.
+- PostgreSQL backup archives, safe restore tooling, and CI restore verification are implemented.
 
 ## Safety boundary
 
@@ -23,10 +24,9 @@ Phase 4C strengthens the production boundary around the Phase 4B payment core. I
 ## Remaining Phase 4C work
 
 1. External notification channels (email/SMS/push) and their provider-specific adapters.
-2. Production logging/observability and alerting.
-3. Backup/restore verification and database operational checks.
-4. Storage/upload hardening for product media.
-5. Deployment configuration and infrastructure validation.
-6. Final production-readiness regression suite.
+3. Storage/upload hardening for product media.
+4. Deployment configuration and infrastructure validation.
+5. Final production-readiness regression suite.
 
-The durable outbox worker is now implemented; provider-specific onboarding remains a later phase.
+
+The durable outbox worker and backup/restore verification are now implemented; provider-specific onboarding remains a later phase.

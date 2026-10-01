@@ -117,6 +117,19 @@ docker compose exec -e DATABASE_URL="postgresql+psycopg://USER:PASSWORD@postgres
 docker compose exec postgres psql -U $env:POSTGRES_USER -d postgres -c "DROP DATABASE wewe_migration_check"
 ```
 
+Back up and restore the development database using the repository scripts:
+
+```bash
+export DATABASE_URL='postgresql+psycopg://USER:PASSWORD@HOST:5432/DB'
+./scripts/backup_database.sh ./backups/wewe-$(date -u +%Y%m%dT%H%M%SZ).dump
+
+export RESTORE_DATABASE_URL='postgresql+psycopg://USER:PASSWORD@HOST:5432/EMPTY_RESTORE_DB'
+export RESTORE_CONFIRM=YES
+./scripts/restore_database.sh ./backups/wewe-YYYYMMDDTHHMMSSZ.dump
+```
+
+The restore target must be a new/empty disposable database. The restore script never drops a database and requires explicit confirmation. Backup archives contain application data and must be protected as secrets.
+
 Back up and restore the development database:
 
 ```powershell
