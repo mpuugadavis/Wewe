@@ -1,9 +1,11 @@
+import io
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
 from app.dependencies import Principal, require_roles
 from app.models import (
@@ -16,6 +18,15 @@ from app.models import (
     User,
 )
 from app.schemas import CategoryOut, ProductCreate, ProductOut, ProductUpdate
+from app.services.media_storage import (
+    MAX_PRODUCT_IMAGES,
+    MediaStorageError,
+    MediaValidationError,
+    build_product_object_key,
+    read_upload_with_limit,
+    sanitize_image,
+)
+from app.services.media_uploads import build_media_storage
 
 router = APIRouter(tags=["catalog"])
 
@@ -234,6 +245,96 @@ def create_product(
     )
     db.commit()
     db.refresh(product)
+    return _serialize_products(db, [product])[0]
+
+
+@router.post("/retailers/me/products/{listing_id}/images", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
+def upload_product_image(
+    listing_id: UUID,
+    file: UploadFile = File(...),
+    alt_text: str | None = Form(default=None, max_length=250),
+    principal: Principal = Depends(require_roles("RETAILER")),
+    db: Session = Depends(get_db),
+) -> dict:
+    retailer = _owned_retailer(db, principal.user.id)
+    listing = db.scalar(
+        select(RetailerProduct)
+        .where(RetailerProduct.id == listing_id, RetailerProduct.retailer_id == retailer.id)
+    )
+    if listing is None:
+        raise HTTPException(status_code=404, detail={"code": "listing_not_found", "message": "Product listing was not found."})
+
+    image_count = db.scalar(
+        select(func.count(ProductImage.id)).where(ProductImage.product_id == listing.product_id)
+    ) or 0
+    if image_count >= MAX_PRODUCT_IMAGES:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "product_image_limit", "message": f"A product can have at most {MAX_PRODUCT_IMAGES} images."},
+        )
+
+    storage = build_media_storage()
+    if storage is None:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "media_storage_unavailable", "message": "Product image uploads are not configured."},
+        )
+
+    settings = get_settings()
+    try:
+        raw = read_upload_with_limit(file.file, max_size_bytes=settings.media_max_upload_bytes)
+        sanitized, content_type, extension, width, height = sanitize_image(
+            raw,
+            declared_content_type=(file.content_type or "").lower(),
+            max_size_bytes=settings.media_max_upload_bytes,
+        )
+        key = build_product_object_key(listing.product_id, sanitized, extension)
+    except MediaValidationError as exc:
+        raise HTTPException(status_code=422, detail={"code": "invalid_product_image", "message": str(exc)}) from exc
+    finally:
+        file.file.close()
+
+    if db.scalar(select(ProductImage.id).where(ProductImage.storage_key == key)) is not None:
+        raise HTTPException(status_code=409, detail={"code": "duplicate_product_image", "message": "This image is already attached to the product."})
+
+    next_sort = db.scalar(
+        select(func.max(ProductImage.sort_order)).where(ProductImage.product_id == listing.product_id)
+    )
+    sort_order = (next_sort + 1) if next_sort is not None else 0
+
+    try:
+        url = storage.put(
+            key=key,
+            content=io.BytesIO(sanitized),
+            content_type=content_type,
+            size_bytes=len(sanitized),
+        )
+    except MediaStorageError as exc:
+        raise HTTPException(status_code=503, detail={"code": "media_storage_error", "message": "Product image storage is temporarily unavailable."}) from exc
+
+    image = ProductImage(
+        product_id=listing.product_id,
+        url=url,
+        alt_text=alt_text.strip() if alt_text else None,
+        sort_order=sort_order,
+        storage_key=key,
+        content_type=content_type,
+        size_bytes=len(sanitized),
+        width=width,
+        height=height,
+    )
+    db.add(image)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            storage.delete(key=key)
+        except MediaStorageError:
+            pass
+        raise
+
+    product = db.get(Product, listing.product_id)
     return _serialize_products(db, [product])[0]
 
 
