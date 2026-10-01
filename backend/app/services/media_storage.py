@@ -11,6 +11,7 @@ import hashlib
 import io
 import warnings
 from pathlib import PurePosixPath
+from datetime import datetime
 from typing import BinaryIO, Protocol
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -49,6 +50,9 @@ class MediaStorage(Protocol):
 
     def presign_get(self, *, key: str, expires_in: int) -> str:
         """Create a short-lived signed URL for reading an object."""
+
+    def list_objects(self, *, prefix: str) -> list[tuple[str, datetime | None]]:
+        """List object keys and modification times under a storage prefix."""
 
     def delete(self, *, key: str) -> None:
         """Delete an object by storage key."""
@@ -117,6 +121,19 @@ class S3CompatibleMediaStorage:
             )
         except (BotoCoreError, ClientError) as exc:
             raise MediaStorageError("Object storage signed URL generation failed.") from exc
+
+    def list_objects(self, *, prefix: str) -> list[tuple[str, datetime | None]]:
+        try:
+            paginator = self.client.get_paginator("list_objects_v2")
+            objects: list[tuple[str, datetime | None]] = []
+            for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+                for item in page.get("Contents", []):
+                    key = item.get("Key")
+                    if key:
+                        objects.append((key, item.get("LastModified")))
+            return objects
+        except (BotoCoreError, ClientError) as exc:
+            raise MediaStorageError("Object storage listing failed.") from exc
 
     def delete(self, *, key: str) -> None:
         try:
