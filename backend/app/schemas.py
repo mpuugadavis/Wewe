@@ -6,6 +6,7 @@ from email_validator import EmailNotValidError, validate_email
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.config import get_settings
+from app.services.media_storage import MAX_PRODUCT_IMAGES, MediaValidationError, validate_product_image_url
 
 Role = Literal["CUSTOMER", "RETAILER", "DELIVERY_AGENT", "ADMIN"]
 PublicRole = Literal["CUSTOMER", "RETAILER", "DELIVERY_AGENT"]
@@ -135,18 +136,25 @@ class ProductCreate(BaseModel):
     sku: str | None = Field(default=None, max_length=100)
     price_ugx: int = Field(gt=0, le=2_000_000_000)
     stock_quantity: int = Field(ge=0, le=2_000_000)
-    image_urls: list[str] = Field(default_factory=list, max_length=12)
+    image_urls: list[str] = Field(default_factory=list, max_length=MAX_PRODUCT_IMAGES)
 
     @field_validator("image_urls")
     @classmethod
     def validate_image_urls(cls, values: list[str]) -> list[str]:
-        from urllib.parse import urlsplit
-
+        allowed_hosts = {
+            host.strip().lower()
+            for host in get_settings().media_allowed_hosts.split(",")
+            if host.strip()
+        }
+        normalized: list[str] = []
         for value in values:
-            parsed = urlsplit(value)
-            if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-                raise ValueError("Product images must use an HTTPS URL")
-        return values
+            try:
+                normalized.append(validate_product_image_url(value, allowed_hosts=allowed_hosts or None))
+            except MediaValidationError as exc:
+                raise ValueError(str(exc)) from exc
+        if len({value.lower() for value in normalized}) != len(normalized):
+            raise ValueError("Duplicate product image URLs are not allowed.")
+        return normalized
 
 
 class ProductUpdate(BaseModel):

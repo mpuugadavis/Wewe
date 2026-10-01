@@ -24,9 +24,13 @@ Phase 4C strengthens the production boundary around the Phase 4B payment core. I
 ## Remaining Phase 4C work
 
 1. External notification channels (email/SMS/push) and their provider-specific adapters.
-2. Storage/upload hardening for product media.
-3. Deployment configuration and infrastructure validation.
-4. Final production-readiness regression suite.
+2. Deployment configuration and infrastructure validation.
+3. Final production-readiness regression suite.
 
 
 The durable outbox worker and backup/restore verification are now implemented; provider-specific onboarding remains a later phase.
+
+
+## Product media/storage hardening — completed
+
+See `docs/WEWE_PHASE_4C_MEDIA_STORAGE.md`. The current catalog remains URL-only; product image URLs are HTTPS-only and bounded, database invariants are enforced, and a provider-neutral storage contract is ready for the later authenticated object-storage implementation. No cloud provider or sandbox adapter was added.

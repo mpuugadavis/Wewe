@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     storage_endpoint: str | None = None
     storage_access_key: SecretStr | None = None
     storage_secret_key: SecretStr | None = None
+    #: Optional exact host allow-list for catalog image URLs. Empty means any HTTPS host.
+    media_allowed_hosts: str = ""
+    #: Future authenticated upload adapters must enforce this byte limit before storage.
+    media_max_upload_bytes: int = 5_242_880
 
     @field_validator("secret_key")
     @classmethod
@@ -71,6 +75,13 @@ class Settings(BaseSettings):
     def validate_positive_routing_timeout(cls, value: float) -> float:
         if value <= 0:
             raise ValueError("ROUTING_TIMEOUT_SECONDS must be positive")
+        return value
+
+    @field_validator("media_max_upload_bytes")
+    @classmethod
+    def validate_positive_media_limit(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("MEDIA_MAX_UPLOAD_BYTES must be positive")
         return value
 
     @field_validator("google_maps_api_key")
