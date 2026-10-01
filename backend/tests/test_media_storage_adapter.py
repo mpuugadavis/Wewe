@@ -282,7 +282,7 @@ def test_product_media_cleanup_dry_run_only_selects_old_unreferenced_objects(dat
             self.objects = [
                 ("products/referenced.webp", datetime(2026, 1, 1, tzinfo=timezone.utc)),
                 ("products/orphan-old.webp", datetime(2026, 1, 1, tzinfo=timezone.utc)),
-                ("products/orphan-new.webp", datetime(2026, 9, 30, tzinfo=timezone.utc)),
+                ("products/orphan-new.webp", datetime(2026, 10, 1, 23, 0, tzinfo=timezone.utc)),
                 ("products/no-date.webp", None),
             ]
 
