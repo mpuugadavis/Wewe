@@ -1,4 +1,5 @@
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 
@@ -14,10 +15,11 @@ from sqlalchemy.exc import IntegrityError
 from app.config import get_settings
 from app.db import engine
 from app.limiter import limiter
+from app.observability import configure_logging
 from app.routers import accounts, admin, auth, catalog, commerce, locations, operations, payments
 
 settings = get_settings()
-logging.basicConfig(level=logging.INFO if settings.app_env != "production" else logging.WARNING)
+configure_logging(settings.log_level)
 logger = logging.getLogger("wewe.api")
 
 
@@ -25,7 +27,9 @@ logger = logging.getLogger("wewe.api")
 async def lifespan(_app: FastAPI):
     with engine.connect() as connection:
         connection.execute(text("SELECT 1"))
+    logger.info("API startup complete", extra={"environment": settings.app_env})
     yield
+    logger.info("API shutdown complete", extra={"environment": settings.app_env})
 
 
 app = FastAPI(
@@ -53,14 +57,45 @@ app.add_middleware(
 async def request_id_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = request_id
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
-    if settings.app_env == "production":
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    return response
+    started = time.perf_counter()
+    response = None
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    except Exception:
+        logger.exception(
+            "Unhandled request exception",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": 500,
+                "environment": settings.app_env,
+            },
+        )
+        raise
+    finally:
+        duration_ms = round((time.perf_counter() - started) * 1000, 2)
+        logger.info(
+            "HTTP request completed",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": status_code,
+                "duration_ms": duration_ms,
+                "environment": settings.app_env,
+            },
+        )
+        if response is not None:
+            response.headers["X-Request-ID"] = request_id
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
+            if settings.app_env == "production":
+                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
 
 def error_response(status_code: int, code: str, message: str, request_id: str | None = None, headers: dict | None = None) -> JSONResponse:
@@ -96,7 +131,13 @@ async def integrity_error_handler(request: Request, _exc: IntegrityError):
 @app.exception_handler(Exception)
 async def unexpected_error_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", None)
-    logger.error("Unhandled API exception request_id=%s type=%s", request_id, type(exc).__name__)
+    logger.error(
+        "Unhandled API exception request_id=%s type=%s",
+        request_id,
+        type(exc).__name__,
+        extra={"request_id": request_id, "environment": settings.app_env},
+        exc_info=exc,
+    )
     return error_response(500, "internal_error", "An unexpected error occurred.", request_id)
 
 
@@ -111,6 +152,7 @@ def readiness() -> dict:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
     except Exception:
+        logger.exception("Readiness check failed", extra={"environment": settings.app_env})
         return JSONResponse(status_code=503, content={"status": "unavailable"})
     return {"status": "ready"}
 
