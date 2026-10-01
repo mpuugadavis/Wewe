@@ -75,7 +75,6 @@ class S3CompatibleMediaStorage:
                 key,
                 ExtraArgs={
                     "ContentType": content_type,
-                    "ContentLength": size_bytes,
                     "CacheControl": "public,max-age=31536000,immutable",
                 },
             )
