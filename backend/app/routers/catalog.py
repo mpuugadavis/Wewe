@@ -3,7 +3,7 @@ import re
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -249,8 +249,7 @@ def read_product_image(
         requested_tags = {tag.strip() for tag in if_none_match.split(",")}
         if etag in requested_tags or "*" in requested_tags:
             body.close()
-            return StreamingResponse(
-                io.BytesIO(b""),
+            return Response(
                 status_code=304,
                 headers={
                     "Cache-Control": "public, max-age=31536000, immutable",
