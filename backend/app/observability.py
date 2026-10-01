@@ -37,15 +37,15 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
-def _level_from_environment() -> int:
-    value = os.getenv("LOG_LEVEL", "INFO").upper()
+def _level_from_environment(value: str | None = None) -> int:
+    value = (value or os.getenv("LOG_LEVEL", "INFO")).upper()
     level = getattr(logging, value, None)
     if not isinstance(level, int):
         raise ValueError("LOG_LEVEL must be a valid Python logging level")
     return level
 
 
-def configure_logging() -> None:
+def configure_logging(level: str | None = None) -> None:
     """Configure WEWE application logs for container-friendly structured output."""
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
