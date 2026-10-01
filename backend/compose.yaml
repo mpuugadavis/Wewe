@@ -13,17 +13,60 @@ services:
       timeout: 5s
       retries: 10
 
+  minio:
+    image: docker.io/openvidu/minio:RELEASE.2026-05-04T00-27-21Z-r0
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-wewe-local}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-wewe-local-storage-password}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - wewe_minio:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    command: ["server", "/data", "--console-address", ":9001"]
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-wewe-local}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-wewe-local-storage-password}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-wewe-media}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$STORAGE_BUCKET"
+        mc anonymous set download "local/$STORAGE_BUCKET"
+
   api:
     build: .
     env_file: .env
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to use host postgres}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-S3}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-wewe-media}
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://minio:9000}
+      STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL:-http://localhost:9000/wewe-media}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-wewe-local}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-wewe-local-storage-password}
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
 
 volumes:
   wewe_postgres:
+  wewe_minio:
