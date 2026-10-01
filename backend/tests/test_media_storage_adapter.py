@@ -26,6 +26,9 @@ class FakeS3Client:
             raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
         return self.objects[(Bucket, Key)]
 
+    def generate_presigned_url(self, operation, Params, ExpiresIn):
+        return f"https://signed.test/{Params['Key']}?expires={ExpiresIn}"
+
     def delete_object(self, Bucket, Key):
         self.deletes.append((Bucket, Key))
 
@@ -61,6 +64,37 @@ def test_s3_adapter_upload_and_delete(monkeypatch):
         )
     ]
     assert fake.deletes == [("media-bucket", key)]
+
+
+def test_s3_adapter_generates_short_lived_signed_read_url(monkeypatch):
+    fake = FakeS3Client()
+    monkeypatch.setattr(media_storage.boto3, "client", lambda *args, **kwargs: fake)
+    storage = media_storage.S3CompatibleMediaStorage(
+        bucket="media-bucket",
+        access_key="access",
+        secret_key="secret",
+        endpoint="http://storage.test",
+        public_base_url="https://cdn.test/media",
+    )
+
+    url = storage.presign_get(key="products/test/image.webp", expires_in=300)
+
+    assert url == "https://signed.test/products/test/image.webp?expires=300"
+
+
+def test_s3_adapter_rejects_excessive_signed_url_lifetime(monkeypatch):
+    fake = FakeS3Client()
+    monkeypatch.setattr(media_storage.boto3, "client", lambda *args, **kwargs: fake)
+    storage = media_storage.S3CompatibleMediaStorage(
+        bucket="media-bucket",
+        access_key="access",
+        secret_key="secret",
+        endpoint="http://storage.test",
+        public_base_url="https://cdn.test/media",
+    )
+
+    with pytest.raises(ValueError):
+        storage.presign_get(key="products/test/image.webp", expires_in=3601)
 
 
 def test_s3_adapter_reads_object_and_metadata(monkeypatch):

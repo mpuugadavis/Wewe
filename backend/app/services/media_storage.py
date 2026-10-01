@@ -47,6 +47,9 @@ class MediaStorage(Protocol):
     def get(self, *, key: str) -> tuple[BinaryIO, str | None, int | None]:
         """Read an object and return its body, content type, and size."""
 
+    def presign_get(self, *, key: str, expires_in: int) -> str:
+        """Create a short-lived signed URL for reading an object."""
+
     def delete(self, *, key: str) -> None:
         """Delete an object by storage key."""
 
@@ -102,6 +105,18 @@ class S3CompatibleMediaStorage:
             raise MediaStorageError("Object storage read failed.") from exc
         except BotoCoreError as exc:
             raise MediaStorageError("Object storage read failed.") from exc
+
+    def presign_get(self, *, key: str, expires_in: int) -> str:
+        if expires_in <= 0 or expires_in > 3600:
+            raise ValueError("expires_in must be between 1 and 3600 seconds")
+        try:
+            return self.client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self.bucket, "Key": key},
+                ExpiresIn=expires_in,
+            )
+        except (BotoCoreError, ClientError) as exc:
+            raise MediaStorageError("Object storage signed URL generation failed.") from exc
 
     def delete(self, *, key: str) -> None:
         try:
