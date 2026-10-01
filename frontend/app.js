@@ -49,7 +49,11 @@
   function safeImage(value) {
     try {
       const url = new URL(value, location.href);
-      return url.protocol === "https:" && !url.username && !url.password ? url.href : "";
+      const isHttps = url.protocol === "https:";
+      const isLocalMinio = url.protocol === "http:" &&
+        (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
+        url.port === "9000";
+      return (isHttps || isLocalMinio) && !url.username && !url.password ? url.href : "";
     } catch {
       return "";
     }
