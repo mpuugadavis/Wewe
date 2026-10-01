@@ -34,3 +34,8 @@ The durable outbox worker and backup/restore verification are now implemented; p
 ## Product media/storage hardening — completed
 
 See `docs/WEWE_PHASE_4C_MEDIA_STORAGE.md`. The current catalog remains URL-only; product image URLs are HTTPS-only and bounded, database invariants are enforced, and a provider-neutral storage contract is ready for the later authenticated object-storage implementation. No cloud provider or sandbox adapter was added.
+
+
+## Authenticated product image uploads — implemented
+
+See `docs/WEWE_PHASE_4C_AUTHENTICATED_MEDIA_UPLOAD.md`. Retailers can now upload validated JPEG/PNG/WebP images through an authenticated listing-owned endpoint when an S3-compatible storage provider is configured. Local development keeps storage disabled by default.
