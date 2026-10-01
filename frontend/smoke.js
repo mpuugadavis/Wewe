@@ -7,7 +7,7 @@ const html = fs.readFileSync("frontend/index.html", "utf8");
 const required = [
   ["frontend/app.js", app, "window.weweApiFetch = apiFetch;"],
   ["frontend/retailer-media.js", media, "/retailers/me/products/"],
-  ["frontend/retailer-media.js", media, "multipart"],
+  ["frontend/retailer-media.js", media, "new FormData()"],
   ["frontend/index.html", html, '<script src="app.js"></script>'],
   ["frontend/index.html", html, '<script src="retailer-media.js"></script>'],
 ];
