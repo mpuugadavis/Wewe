@@ -66,3 +66,33 @@ jobs:
 
       - name: Run complete backend test suite
         run: pytest
+
+      - name: Verify PostgreSQL backup and restore
+        env:
+          PGPASSWORD: wewe_test_password
+        run: |
+          set -euo pipefail
+          chmod +x scripts/backup_database.sh scripts/restore_database.sh
+          psql "postgresql://wewe:wewe_test_password@localhost:5432/wewe_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE TABLE IF NOT EXISTS backup_restore_sentinel (id integer PRIMARY KEY, marker text NOT NULL);"
+          psql "postgresql://wewe:wewe_test_password@localhost:5432/wewe_test" \
+            -v ON_ERROR_STOP=1 \
+            -c "INSERT INTO backup_restore_sentinel(id, marker) VALUES (1, 'phase-4c-backup-ok') ON CONFLICT (id) DO UPDATE SET marker = EXCLUDED.marker;"
+          export DATABASE_URL="postgresql://wewe:wewe_test_password@localhost:5432/wewe_test"
+          ./scripts/backup_database.sh /tmp/wewe-backup.dump
+          psql "postgresql://wewe:wewe_test_password@localhost:5432/postgres" \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE DATABASE wewe_restore_test OWNER wewe;"
+          export RESTORE_DATABASE_URL="postgresql://wewe:wewe_test_password@localhost:5432/wewe_restore_test"
+          export RESTORE_CONFIRM=YES
+          ./scripts/restore_database.sh /tmp/wewe-backup.dump
+          psql "$RESTORE_DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -c "SELECT 1 FROM backup_restore_sentinel WHERE id = 1 AND marker = 'phase-4c-backup-ok';"
+          psql "$RESTORE_DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -c "SELECT version_num FROM alembic_version;"
+          psql "postgresql://wewe:wewe_test_password@localhost:5432/postgres" \
+            -v ON_ERROR_STOP=1 \
+            -c "DROP DATABASE wewe_restore_test;"
