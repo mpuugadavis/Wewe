@@ -11,10 +11,14 @@ import argparse
 import logging
 import time
 
+from app.config import get_settings
 from app.db import SessionLocal
+from app.observability import configure_logging
 from app.services.notification_outbox import process_outbox_batch
 
 
+settings = get_settings()
+configure_logging(settings.log_level)
 logger = logging.getLogger("wewe.notification_worker")
 
 
