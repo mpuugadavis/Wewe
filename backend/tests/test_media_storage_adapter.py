@@ -266,13 +266,13 @@ def test_product_media_cleanup_dry_run_only_selects_old_unreferenced_objects(dat
     database.add(category)
     database.flush()
     product = Product(category_id=category.id, name="Cleanup product", status="ACTIVE")
+    database.add(product)
+    database.flush()
     referenced = ProductImage(
         product_id=product.id,
         url="https://cdn.test/referenced.webp",
         storage_key="products/referenced.webp",
     )
-    database.add_all([category, product])
-    database.flush()
     database.add(referenced)
     database.commit()
 
