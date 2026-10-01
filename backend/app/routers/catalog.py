@@ -243,7 +243,7 @@ def read_product_image(
             detail={"code": "invalid_media_metadata", "message": "Stored product image metadata is invalid."},
         )
 
-    filename_match = re.search(r"([0-9a-f]{64})\\.(?:jpg|jpeg|png|webp)$", image.storage_key.lower())
+    filename_match = re.search(r"([0-9a-f]{64})\.(?:jpg|jpeg|png|webp)$", image.storage_key.lower())
     etag = f'"{filename_match.group(1)}"' if filename_match else None
     if if_none_match:
         requested_tags = {tag.strip() for tag in if_none_match.split(",")}
