@@ -36,6 +36,10 @@ class MediaStorageError(RuntimeError):
     """Raised when object storage cannot complete an operation."""
 
 
+class MediaStorageNotFoundError(MediaStorageError):
+    """Raised when an object does not exist in object storage."""
+
+
 class MediaStorage(Protocol):
     def put(self, *, key: str, content: BinaryIO, content_type: str, size_bytes: int) -> str:
         """Persist a stream and return its stable read URL."""
@@ -91,7 +95,12 @@ class S3CompatibleMediaStorage:
         try:
             response = self.client.get_object(Bucket=self.bucket, Key=key)
             return response["Body"], response.get("ContentType"), response.get("ContentLength")
-        except (BotoCoreError, ClientError) as exc:
+        except ClientError as exc:
+            code = str(exc.response.get("Error", {}).get("Code", ""))
+            if code in {"404", "NoSuchKey", "NotFound"}:
+                raise MediaStorageNotFoundError("Object was not found in object storage.") from exc
+            raise MediaStorageError("Object storage read failed.") from exc
+        except BotoCoreError as exc:
             raise MediaStorageError("Object storage read failed.") from exc
 
     def delete(self, *, key: str) -> None:
