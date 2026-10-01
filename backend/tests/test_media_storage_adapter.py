@@ -204,4 +204,4 @@ def test_product_media_read_rejects_invalid_stored_content_type(client, database
     response = client.get(f"/api/v1/products/images/{image.id}")
 
     assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "invalid_media_metadata"
+    assert response.json()["error"]["code"] == "invalid_media_metadata"
