@@ -11,6 +11,7 @@ class FakeS3Client:
         self.uploads = []
         self.deletes = []
         self.objects = {}
+        self.listed_objects = []
 
     def upload_fileobj(self, content, bucket, key, ExtraArgs):
         payload = content.read()
@@ -28,6 +29,20 @@ class FakeS3Client:
 
     def generate_presigned_url(self, operation, Params, ExpiresIn):
         return f"https://signed.test/{Params['Key']}?expires={ExpiresIn}"
+
+    def get_paginator(self, operation):
+        assert operation == "list_objects_v2"
+        fake = self
+
+        class Paginator:
+            def paginate(self, Bucket, Prefix):
+                yield {"Contents": [
+                    {"Key": key, "LastModified": modified}
+                    for key, modified in fake.listed_objects
+                    if key.startswith(Prefix)
+                ]}
+
+        return Paginator()
 
     def delete_object(self, Bucket, Key):
         self.deletes.append((Bucket, Key))
@@ -239,3 +254,84 @@ def test_product_media_read_rejects_invalid_stored_content_type(client, database
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "invalid_media_metadata"
+
+
+
+def test_product_media_cleanup_dry_run_only_selects_old_unreferenced_objects(database):
+    from datetime import datetime, timedelta, timezone
+    from app.models import Category, Product, ProductImage
+    from app.services.media_lifecycle import collect_orphaned_product_media
+
+    category = Category(name="Cleanup", slug=f"cleanup-{datetime.now().timestamp()}", is_active=True)
+    database.add(category)
+    database.flush()
+    product = Product(category_id=category.id, name="Cleanup product", status="ACTIVE")
+    database.add(product)
+    database.flush()
+    referenced = ProductImage(
+        product_id=product.id,
+        url="https://cdn.test/referenced.webp",
+        storage_key="products/referenced.webp",
+    )
+    database.add(referenced)
+    database.commit()
+
+    class FakeStorage:
+        def __init__(self):
+            self.deleted = []
+            self.objects = [
+                ("products/referenced.webp", datetime(2026, 1, 1, tzinfo=timezone.utc)),
+                ("products/orphan-old.webp", datetime(2026, 1, 1, tzinfo=timezone.utc)),
+                ("products/orphan-new.webp", datetime(2026, 10, 1, 23, 0, tzinfo=timezone.utc)),
+                ("products/no-date.webp", None),
+            ]
+
+        def list_objects(self, *, prefix):
+            return self.objects
+
+        def delete(self, *, key):
+            self.deleted.append(key)
+
+    storage = FakeStorage()
+    result = collect_orphaned_product_media(
+        database,
+        storage,
+        grace_period_seconds=86_400,
+        dry_run=True,
+        now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+    )
+
+    assert result.scanned == 4
+    assert result.candidates == 1
+    assert result.deleted == 0
+    assert result.failed == 0
+    assert result.keys == ("products/orphan-old.webp",)
+    assert storage.deleted == []
+
+
+def test_product_media_cleanup_rechecks_reference_before_delete(database):
+    from datetime import datetime, timezone
+    from app.services.media_lifecycle import collect_orphaned_product_media
+
+    class FakeStorage:
+        def __init__(self):
+            self.deleted = []
+
+        def list_objects(self, *, prefix):
+            return [("products/race.webp", datetime(2026, 1, 1, tzinfo=timezone.utc))]
+
+        def delete(self, *, key):
+            self.deleted.append(key)
+
+    storage = FakeStorage()
+    result = collect_orphaned_product_media(
+        database,
+        storage,
+        grace_period_seconds=86_400,
+        dry_run=False,
+        now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+    )
+
+    assert result.candidates == 1
+    assert result.deleted == 1
+    assert storage.deleted == ["products/race.webp"]
