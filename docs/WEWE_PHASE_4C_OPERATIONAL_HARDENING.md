@@ -14,6 +14,7 @@ Phase 4C strengthens the production boundary around the Phase 4B payment core. I
 - Provider webhooks are rate-limited with a higher burst allowance suitable for asynchronous callbacks.
 - Redis is included in the Phase 4C CI environment so the rate-limit path is exercised against the same shared-storage technology expected in multi-worker deployments.
 - Documentation is aligned with the online-payment-only rule; customer cash payment is not supported.
+- Structured application logging, request correlation, request timing/status telemetry and operational error logging are implemented.
 
 ## Safety boundary
 
