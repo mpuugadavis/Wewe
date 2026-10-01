@@ -263,7 +263,7 @@ def test_product_media_cleanup_dry_run_only_selects_old_unreferenced_objects(dat
     from app.services.media_lifecycle import collect_orphaned_product_media
 
     category = Category(name="Cleanup", slug=f"cleanup-{datetime.now().timestamp()}", is_active=True)
-    product = Product(category_id=category.id, name="Cleanup product", status="ACTIVE")
+    product = Product(category=category, name="Cleanup product", status="ACTIVE")
     referenced = ProductImage(
         product_id=product.id,
         url="https://cdn.test/referenced.webp",
