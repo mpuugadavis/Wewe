@@ -163,35 +163,41 @@ def sanitize_image(content: bytes, *, declared_content_type: str, max_size_bytes
             with Image.open(io.BytesIO(content)) as image:
                 actual_format = (image.format or "").upper()
                 expected_format = {
-                "image/jpeg": "JPEG",
-                "image/png": "PNG",
+                    "image/jpeg": "JPEG",
+                    "image/png": "PNG",
                     "image/webp": "WEBP",
                 }[declared_content_type.lower()]
                 if actual_format != expected_format:
                     raise MediaValidationError("Uploaded bytes do not match the declared image content type.")
                 image.verify()
+
             with Image.open(io.BytesIO(content)) as image:
-            if image.width <= 0 or image.height <= 0 or image.width > MAX_IMAGE_DIMENSION or image.height > MAX_IMAGE_DIMENSION:
-                raise MediaValidationError("Image dimensions are outside the supported range.")
-            image = ImageOps.exif_transpose(image)
-            image.load()
-            width, height = image.size
-            if actual_format == "JPEG":
-                if image.mode not in ("RGB", "L"):
-                    image = image.convert("RGB")
-                output_type, extension = "image/jpeg", "jpg"
-                save_kwargs = {"format": "JPEG", "quality": 90, "optimize": True}
-            elif actual_format == "PNG":
-                output_type, extension = "image/png", "png"
-                save_kwargs = {"format": "PNG", "optimize": True}
-            else:
-                if image.mode not in ("RGB", "RGBA"):
-                    image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
-                output_type, extension = "image/webp", "webp"
-                save_kwargs = {"format": "WEBP", "quality": 90, "method": 4}
-            output = io.BytesIO()
-            image.save(output, **save_kwargs)
-            sanitized = output.getvalue()
+                if (
+                    image.width <= 0
+                    or image.height <= 0
+                    or image.width > MAX_IMAGE_DIMENSION
+                    or image.height > MAX_IMAGE_DIMENSION
+                ):
+                    raise MediaValidationError("Image dimensions are outside the supported range.")
+                image = ImageOps.exif_transpose(image)
+                image.load()
+                width, height = image.size
+                if actual_format == "JPEG":
+                    if image.mode not in ("RGB", "L"):
+                        image = image.convert("RGB")
+                    output_type, extension = "image/jpeg", "jpg"
+                    save_kwargs = {"format": "JPEG", "quality": 90, "optimize": True}
+                elif actual_format == "PNG":
+                    output_type, extension = "image/png", "png"
+                    save_kwargs = {"format": "PNG", "optimize": True}
+                else:
+                    if image.mode not in ("RGB", "RGBA"):
+                        image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+                    output_type, extension = "image/webp", "webp"
+                    save_kwargs = {"format": "WEBP", "quality": 90, "method": 4}
+                output = io.BytesIO()
+                image.save(output, **save_kwargs)
+                sanitized = output.getvalue()
     except (UnidentifiedImageError, Image.DecompressionBombWarning, Image.DecompressionBombError, OSError, ValueError) as exc:
         if isinstance(exc, MediaValidationError):
             raise
