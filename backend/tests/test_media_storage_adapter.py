@@ -271,7 +271,9 @@ def test_product_media_cleanup_dry_run_only_selects_old_unreferenced_objects(dat
         url="https://cdn.test/referenced.webp",
         storage_key="products/referenced.webp",
     )
-    database.add_all([category, product, referenced])
+    database.add_all([category, product])
+    database.flush()
+    database.add(referenced)
     database.commit()
 
     class FakeStorage:
