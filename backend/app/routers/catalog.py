@@ -1,7 +1,7 @@
 import io
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,7 @@ from app.models import (
     RetailerProduct,
     User,
 )
-from app.schemas import CategoryOut, ProductCreate, ProductOut, ProductUpdate
+from app.schemas import CategoryOut, ProductCreate, ProductImageReorder, ProductOut, ProductUpdate
 from app.services.media_storage import (
     MAX_PRODUCT_IMAGES,
     MediaStorageError,
@@ -336,6 +336,135 @@ def upload_product_image(
 
     product = db.get(Product, listing.product_id)
     return _serialize_products(db, [product])[0]
+
+
+@router.get("/retailers/me/products/{listing_id}/images", response_model=list[dict])
+def list_product_images(
+    listing_id: UUID,
+    principal: Principal = Depends(require_roles("RETAILER")),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    retailer = _owned_retailer(db, principal.user.id)
+    listing = db.scalar(
+        select(RetailerProduct).where(
+            RetailerProduct.id == listing_id,
+            RetailerProduct.retailer_id == retailer.id,
+        )
+    )
+    if listing is None:
+        raise HTTPException(status_code=404, detail={"code": "listing_not_found", "message": "Product listing was not found."})
+    images = db.scalars(
+        select(ProductImage)
+        .where(ProductImage.product_id == listing.product_id)
+        .order_by(ProductImage.sort_order, ProductImage.created_at, ProductImage.id)
+    ).all()
+    return [
+        {
+            "id": image.id,
+            "url": image.url,
+            "alt_text": image.alt_text,
+            "sort_order": image.sort_order,
+            "content_type": image.content_type,
+            "size_bytes": image.size_bytes,
+            "width": image.width,
+            "height": image.height,
+        }
+        for image in images
+    ]
+
+
+@router.delete("/retailers/me/products/{listing_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_product_image(
+    listing_id: UUID,
+    image_id: UUID,
+    principal: Principal = Depends(require_roles("RETAILER")),
+    db: Session = Depends(get_db),
+) -> None:
+    retailer = _owned_retailer(db, principal.user.id)
+    listing = db.scalar(
+        select(RetailerProduct)
+        .where(RetailerProduct.id == listing_id, RetailerProduct.retailer_id == retailer.id)
+        .with_for_update()
+    )
+    if listing is None:
+        raise HTTPException(status_code=404, detail={"code": "listing_not_found", "message": "Product listing was not found."})
+    image = db.scalar(
+        select(ProductImage)
+        .where(ProductImage.id == image_id, ProductImage.product_id == listing.product_id)
+        .with_for_update()
+    )
+    if image is None:
+        raise HTTPException(status_code=404, detail={"code": "product_image_not_found", "message": "Product image was not found."})
+
+    storage = build_media_storage() if image.storage_key else None
+    storage_key = image.storage_key
+    db.delete(image)
+    db.flush()
+    remaining = db.scalars(
+        select(ProductImage)
+        .where(ProductImage.product_id == listing.product_id)
+        .order_by(ProductImage.sort_order, ProductImage.created_at, ProductImage.id)
+        .with_for_update()
+    ).all()
+    for index, remaining_image in enumerate(remaining):
+        remaining_image.sort_order = index
+    db.commit()
+
+    if storage is not None and storage_key:
+        try:
+            storage.delete(key=storage_key)
+        except MediaStorageError:
+            # The database no longer references the object. Cleanup is best-effort;
+            # orphan collection is handled by the storage lifecycle process.
+            pass
+
+
+@router.patch("/retailers/me/products/{listing_id}/images/order", response_model=list[dict])
+def reorder_product_images(
+    listing_id: UUID,
+    payload: ProductImageReorder,
+    principal: Principal = Depends(require_roles("RETAILER")),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    retailer = _owned_retailer(db, principal.user.id)
+    listing = db.scalar(
+        select(RetailerProduct)
+        .where(RetailerProduct.id == listing_id, RetailerProduct.retailer_id == retailer.id)
+        .with_for_update()
+    )
+    if listing is None:
+        raise HTTPException(status_code=404, detail={"code": "listing_not_found", "message": "Product listing was not found."})
+
+    images = db.scalars(
+        select(ProductImage)
+        .where(ProductImage.product_id == listing.product_id)
+        .order_by(ProductImage.sort_order, ProductImage.created_at, ProductImage.id)
+        .with_for_update()
+    ).all()
+    current_ids = {image.id for image in images}
+    requested_ids = payload.image_ids
+    if set(requested_ids) != current_ids:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "image_order_mismatch", "message": "image_ids must contain every current product image exactly once."},
+        )
+    by_id = {image.id: image for image in images}
+    for index, image_id in enumerate(requested_ids):
+        by_id[image_id].sort_order = index
+    db.commit()
+    return [
+        {
+            "id": image.id,
+            "url": image.url,
+            "alt_text": image.alt_text,
+            "sort_order": image.sort_order,
+            "content_type": image.content_type,
+            "size_bytes": image.size_bytes,
+            "width": image.width,
+            "height": image.height,
+        }
+        for image in sorted(images, key=lambda item: item.sort_order)
+    ]
 
 
 @router.patch("/retailers/me/products/{listing_id}", response_model=ProductOut)

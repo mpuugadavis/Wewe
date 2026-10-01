@@ -167,6 +167,17 @@ class ProductUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class ProductImageReorder(BaseModel):
+    image_ids: list[UUID] = Field(min_length=1, max_length=MAX_PRODUCT_IMAGES)
+
+    @field_validator("image_ids")
+    @classmethod
+    def validate_unique_image_ids(cls, value: list[UUID]) -> list[UUID]:
+        if len(set(value)) != len(value):
+            raise ValueError("Image IDs must be unique.")
+        return value
+
+
 class ProductModerationUpdate(BaseModel):
     status: Literal["ACTIVE", "INACTIVE", "REMOVED"]
 
