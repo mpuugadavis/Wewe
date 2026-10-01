@@ -1,0 +1,37 @@
+name: Phase 5 frontend verification
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/phase-5.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/phase-5.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Syntax check frontend JavaScript
+        run: |
+          node --check frontend/app.js
+          node --check frontend/retailer-media.js
+
+      - name: Run frontend smoke checks
+        run: node frontend/smoke.js
