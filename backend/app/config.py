@@ -70,11 +70,18 @@ class Settings(BaseSettings):
             raise ValueError("token expiry settings must be positive")
         return value
 
-    @field_validator("routing_timeout_seconds", "media_max_upload_bytes")
+    @field_validator("routing_timeout_seconds")
     @classmethod
     def validate_positive_routing_timeout(cls, value: float) -> float:
         if value <= 0:
-            raise ValueError("numeric limit must be positive")
+            raise ValueError("ROUTING_TIMEOUT_SECONDS must be positive")
+        return value
+
+    @field_validator("media_max_upload_bytes")
+    @classmethod
+    def validate_positive_media_limit(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("MEDIA_MAX_UPLOAD_BYTES must be positive")
         return value
 
     @field_validator("google_maps_api_key")
