@@ -948,7 +948,7 @@
     const rows = Array.isArray(data) ? data : data.items || [];
     return `<div class="dashboard-panel"><h2>${escapeHtml(section)}</h2>${rows.length ? `<div class="admin-table">${rows.map(row => {
       const name = row.name || row.business_name || row.order_number || row.key || row.id;
-      const id = row.user_id || row.id;
+      const id = row.id;
       let action = "";
       if (section === "users") action = `<button data-action="user-status" data-id="${escapeHtml(id)}" data-status="${row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE"}">${row.status === "ACTIVE" ? "Suspend" : "Activate"}</button>`;
       if (section === "retailers" && row.verification_status !== "VERIFIED") action = `<button data-action="verify-retailer" data-id="${escapeHtml(id)}">Verify</button>`;
