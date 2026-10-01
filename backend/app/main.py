@@ -64,18 +64,6 @@ async def request_id_middleware(request: Request, call_next):
         response = await call_next(request)
         status_code = response.status_code
         return response
-    except Exception:
-        logger.exception(
-            "Unhandled request exception",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": 500,
-                "environment": settings.app_env,
-            },
-        )
-        raise
     finally:
         duration_ms = round((time.perf_counter() - started) * 1000, 2)
         logger.info(
