@@ -1,5 +1,5 @@
 from datetime import timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
@@ -117,7 +117,7 @@ def _tracking_fixture(database, client: TestClient):
     order = Order(
         id=uuid4(),
         order_number=f"W{uuid4().hex[:12].upper()}",
-        customer_id=customer["id"],
+        customer_id=UUID(customer["id"]),
         delivery_point_id=dropoff.id,
         delivery_method="DELIVERY",
         currency="UGX",
