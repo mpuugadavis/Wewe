@@ -55,7 +55,7 @@ def test_notification_cannot_be_read_by_another_user(client: TestClient, databas
     owner, owner_headers = _user(client)
     other, other_headers = _user(client)
     notification = NotificationOutbox(
-        user_id=owner["id"],
+        user_id=UUID(owner["id"]),
         event_type="ORDER_READY",
         channel="IN_APP",
         payload={"message": "Private notification"},
