@@ -50,7 +50,7 @@ def test_failed_notification_retries_then_dead_letters(database):
     notification = NotificationOutbox(
         user_id=user.id,
         event_type="EMAIL_TEST",
-        channel="EMAIL",
+        channel="UNREGISTERED",
         payload={"subject": "test"},
     )
     database.add(notification)
@@ -69,6 +69,48 @@ def test_failed_notification_retries_then_dead_letters(database):
     assert notification.status == "DEAD"
     assert notification.attempts == 1
     assert "No notification handler" in notification.last_error
+
+
+def test_email_notification_uses_mailer(database, monkeypatch):
+    user = make_user(database)
+    notification = NotificationOutbox(
+        user_id=user.id,
+        event_type="ORDER_READY",
+        channel="EMAIL",
+        payload={"to": "customer@example.com", "subject": "Order ready", "body": "Your order is ready."},
+    )
+    database.add(notification)
+    database.commit()
+    sent = []
+
+    def fake_send_email(to_address, subject, body):
+        sent.append((to_address, subject, body))
+
+    monkeypatch.setattr("app.services.notification_outbox.send_email", fake_send_email)
+    session_factory = sessionmaker(bind=database.get_bind(), autoflush=False, expire_on_commit=False)
+
+    assert process_outbox_batch(session_factory) == 1
+    database.refresh(notification)
+    assert notification.status == "SENT"
+    assert sent == [("customer@example.com", "Order ready", "Your order is ready.")]
+
+
+def test_email_notification_rejects_invalid_payload(database):
+    user = make_user(database)
+    notification = NotificationOutbox(
+        user_id=user.id,
+        event_type="EMAIL_INVALID",
+        channel="EMAIL",
+        payload={"subject": "Missing recipient", "body": "Body"},
+    )
+    database.add(notification)
+    database.commit()
+    session_factory = sessionmaker(bind=database.get_bind(), autoflush=False, expire_on_commit=False)
+
+    assert process_outbox_batch(session_factory, max_attempts=1) == 1
+    database.refresh(notification)
+    assert notification.status == "DEAD"
+    assert "requires a non-empty 'to' address" in notification.last_error
 
 
 def test_stale_processing_job_is_reclaimed(database):
