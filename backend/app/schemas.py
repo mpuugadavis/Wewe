@@ -294,6 +294,25 @@ class AvailabilityUpdate(BaseModel):
     availability_status: Literal["AVAILABLE", "OFFLINE"]
 
 
+class DeliveryAgentLocationUpdate(BaseModel):
+    latitude: Decimal = Field(ge=-90, le=90)
+    longitude: Decimal = Field(ge=-180, le=180)
+    accuracy_m: Decimal = Field(ge=0, le=100000)
+    heading_deg: Decimal | None = Field(default=None, ge=0, lt=360)
+    speed_mps: Decimal | None = Field(default=None, ge=0, le=1000)
+
+
+class DeliveryAgentLocationOut(BaseModel):
+    agent_id: UUID
+    latitude: float
+    longitude: float
+    accuracy_m: float
+    heading_deg: float | None = None
+    speed_mps: float | None = None
+    updated_at: datetime
+
+
+
 class FulfillmentAction(BaseModel):
     reason: str | None = Field(default=None, max_length=300)
 
