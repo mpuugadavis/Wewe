@@ -917,7 +917,10 @@ def system_health(db: Session = Depends(get_db)) -> dict:
     workers = []
     for health in db.scalars(select(WorkerHealth).order_by(WorkerHealth.worker_name)).all():
         heartbeat = health.last_heartbeat_at
-        stale = heartbeat is None or (now - heartbeat).total_seconds() > stale_after
+        heartbeat_for_age = heartbeat
+        if heartbeat_for_age is not None and heartbeat_for_age.tzinfo is None:
+            heartbeat_for_age = heartbeat_for_age.replace(tzinfo=now.tzinfo)
+        stale = heartbeat_for_age is None or (now - heartbeat_for_age).total_seconds() > stale_after
         worker_status = health.status
         if stale and worker_status in {"STARTING", "RUNNING", "HEALTHY"}:
             worker_status = "STALE"
