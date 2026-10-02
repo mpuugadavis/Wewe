@@ -7,9 +7,12 @@ from app.models import (
     DeliveryAssignment,
     DeliveryPoint,
     DeliveryOffer,
+    Order,
     Retailer,
     RetailerFulfillment,
     User,
+    University,
+    Campus,
     utcnow,
 )
 from app.services.delivery_dispatch import (
@@ -41,9 +44,16 @@ def _dispatch_fixture(database):
     database.add_all([customer, retailer_user, rider_a, rider_b])
     database.flush()
 
+    university = University(id=uuid4(), name=f"Test University {uuid4()}", slug=f"test-university-{uuid4()}")
+    database.add(university)
+    database.flush()
+    campus = Campus(id=uuid4(), university_id=university.id, name=f"Test Campus {uuid4()}", slug=f"test-campus-{uuid4()}")
+    database.add(campus)
+    database.flush()
+
     pickup = DeliveryPoint(
         id=uuid4(),
-        campus_id=uuid4(),
+        campus_id=campus.id,
         kind="BUILDING",
         name="Retailer Pickup",
         latitude=0.3476,
@@ -52,7 +62,7 @@ def _dispatch_fixture(database):
     )
     dropoff = DeliveryPoint(
         id=uuid4(),
-        campus_id=pickup.campus_id,
+        campus_id=campus.id,
         kind="ROOM",
         name="Customer Dropoff",
         latitude=0.3500,
@@ -75,9 +85,25 @@ def _dispatch_fixture(database):
     database.add(retailer)
     database.flush()
 
+    order = Order(
+        id=uuid4(),
+        order_number=f"W{uuid4().hex[:12].upper()}",
+        customer_id=customer.id,
+        delivery_point_id=dropoff.id,
+        delivery_method="DELIVERY",
+        currency="UGX",
+        subtotal_ugx=10000,
+        delivery_fee_ugx=1000,
+        total_ugx=11000,
+        status="READY",
+        payment_status="PAID",
+    )
+    database.add(order)
+    database.flush()
+
     fulfillment = RetailerFulfillment(
         id=uuid4(),
-        order_id=uuid4(),
+        order_id=order.id,
         retailer_id=retailer.id,
         status="READY",
         ready_at=utcnow(),
