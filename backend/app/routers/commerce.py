@@ -435,7 +435,7 @@ def cancel_order(
             payment.id,
             amount_ugx=payment.amount_ugx,
             idempotency_key=f"order-cancellation:{order.id}:payment:{payment.id}",
-            external_reference=f"order-cancellation:{order.id}",
+            external_reference=f"order-cancellation:{order.id}:payment:{payment.id}",
         )
         if refund.status == "SUBMITTED":
             db.add(
