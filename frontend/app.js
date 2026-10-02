@@ -1056,7 +1056,7 @@
     }
     if (section === "available") {
       if (profile.availability_status === "AVAILABLE") {
-        try { await startRiderLocationTracking({requireInitialFix: false}); } catch {}
+        try { await startRiderLocationTracking({requireInitialFix: true}); } catch {}
       }
       const offers = profile.availability_status === "AVAILABLE" ? await apiFetch("/deliveries/me/offers") : [];
       syncRiderOfferPolling();
