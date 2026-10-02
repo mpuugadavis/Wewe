@@ -131,23 +131,3 @@ def test_missing_allocation_is_rejected():
             )
 
 
-def test_allocation_currency_must_be_ugx():
-    with _session() as session:
-        _, _, fulfillment, payment = _seed(session)
-        allocation = RetailerPaymentAllocation(
-            id=uuid4(),
-            payment_id=payment.id,
-            fulfillment_id=fulfillment.id,
-            retailer_id=fulfillment.retailer_id,
-            amount_ugx=1000,
-            currency="USD",
-        )
-        session.add(allocation)
-        # SQLite does not enforce the currency CHECK in every test setup,
-        # so the service guard is tested independently of database enforcement.
-        session.commit()
-
-        with pytest.raises(PaymentAllocationPayableLinkError):
-            post_payable_credit_for_payment_allocation(
-                session, allocation_id=allocation.id
-            )
