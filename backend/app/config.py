@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     refresh_token_days: int = 30
     password_reset_minutes: int = 30
     cors_origins: str = "http://localhost:5500,http://127.0.0.1:5500"
+    trusted_hosts: str = "localhost,127.0.0.1,testserver"
+    max_request_body_bytes: int = 2_000_000
     payment_callback_url: str = "http://localhost:8000/api/v1/payments/webhooks"
     payment_webhook_secret: SecretStr | None = None
     payment_mode: Literal["DISABLED", "SIMULATED", "EXTERNAL"] = "DISABLED"
@@ -158,6 +160,17 @@ class Settings(BaseSettings):
         return value
 
     @property
+    @property
+    def trusted_host_list(self) -> list[str]:
+        return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
+
+    @field_validator("max_request_body_bytes")
+    @classmethod
+    def validate_request_body_limit(cls, value: int) -> int:
+        if value <= 0 or value > 50_000_000:
+            raise ValueError("MAX_REQUEST_BODY_BYTES must be between 1 and 50000000")
+        return value
+
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
@@ -165,6 +178,8 @@ class Settings(BaseSettings):
     def validate_production_cors(self) -> "Settings":
         if self.app_env == "production" and "*" in self.cors_origin_list:
             raise ValueError("Wildcard CORS origins are forbidden in production")
+        if self.app_env == "production" and not self.trusted_host_list:
+            raise ValueError("TRUSTED_HOSTS must contain at least one host in production")
         if self.app_env == "production" and not self.smtp_host:
             raise ValueError("SMTP_HOST must be configured in production for account recovery")
         if self.app_env == "production" and not self.database_url.lower().startswith(("postgresql://", "postgresql+psycopg://")):
