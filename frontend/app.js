@@ -596,13 +596,68 @@
     return Boolean(window.google?.maps);
   }
 
+  async function loadLeafletMap() {
+    if (window.L?.map) return true;
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    css.dataset.weweLeaflet = "true";
+    if (!document.querySelector('link[data-wewe-leaflet]')) document.head.appendChild(css);
+    await new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-wewe-leaflet]');
+      if (existing) {
+        existing.addEventListener("load", resolve, { once: true });
+        existing.addEventListener("error", reject, { once: true });
+        if (window.L?.map) resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.async = true;
+      script.defer = true;
+      script.dataset.weweLeaflet = "true";
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("Campus map could not be loaded."));
+      document.head.appendChild(script);
+    });
+    return Boolean(window.L?.map);
+  }
+
+  function centerCheckoutMap(point) {
+    if (!state.checkoutMap || !point) return;
+    const lat = Number(point.latitude);
+    const lng = Number(point.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (typeof state.checkoutMap.setCenter === "function") {
+      state.checkoutMap.setCenter({ lat, lng });
+      state.checkoutMap.setZoom(17);
+    } else if (typeof state.checkoutMap.setView === "function") {
+      state.checkoutMap.setView([lat, lng], 17);
+    }
+  }
+
   async function initializeCheckoutMap(points) {
     const mapElement = $("#checkoutMap");
     if (!mapElement) return;
     try {
       const loaded = await loadGoogleMaps();
       if (!loaded) {
-        mapElement.innerHTML = '<div class="map-unavailable"><b>Google Maps preview</b><span>Configure the restricted Maps browser key to enable the live map.</span></div>';
+        const leafletLoaded = await loadLeafletMap();
+        if (!leafletLoaded) throw new Error("Campus map could not be loaded.");
+        const defaultCenter = [0.3350, 32.5700];
+        state.checkoutMap = window.L.map(mapElement, { scrollWheelZoom: false }).setView(defaultCenter, 15);
+        window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(state.checkoutMap);
+        const usable = points.filter(point => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)));
+        usable.forEach(point => {
+          const marker = window.L.marker([Number(point.latitude), Number(point.longitude)]).addTo(state.checkoutMap);
+          marker.bindTooltip(point.name, { direction: "top" });
+          marker.on("click", () => selectCheckoutPoint(point.id));
+        });
+        if (usable[0]) centerCheckoutMap(usable[0]);
+        mapElement.dataset.mapProvider = "openstreetmap";
         return;
       }
       const { Map } = await google.maps.importLibrary("maps");
@@ -687,10 +742,7 @@
     state.checkoutSelectedExternal = null;
     const label = $("#selectedDeliveryLocation");
     if (label) label.textContent = point.name + (point.directions ? " · " + point.directions : "");
-    if (state.checkoutMap && point.latitude && point.longitude) {
-      state.checkoutMap.setCenter({ lat: Number(point.latitude), lng: Number(point.longitude) });
-      state.checkoutMap.setZoom(17);
-    }
+    centerCheckoutMap(point);
     updateCheckoutQuote().catch(error => showToast(error.message));
   }
 
@@ -732,9 +784,11 @@
     const label = $("#selectedDeliveryLocation");
     if (label) label.textContent = "My current location · GPS coordinates";
     if (state.checkoutMap) {
-      state.checkoutMap.setCenter({ lat: latitude, lng: longitude });
-      state.checkoutMap.setZoom(17);
-      if (window.google?.maps) {
+      centerCheckoutMap(point);
+      if (state.checkoutMap.setView && window.L?.marker) {
+        if (state.checkoutMarker) state.checkoutMap.removeLayer(state.checkoutMarker);
+        state.checkoutMarker = window.L.marker([latitude, longitude]).addTo(state.checkoutMap).bindTooltip("My current location", { direction: "top" }).openTooltip();
+      } else if (window.google?.maps) {
         const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
         state.checkoutMarker = new AdvancedMarkerElement({ map: state.checkoutMap, position: { lat: latitude, lng: longitude }, title: "My current location" });
       }
