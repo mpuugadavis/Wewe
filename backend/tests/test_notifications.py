@@ -1,4 +1,4 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
@@ -25,7 +25,7 @@ def _user(client: TestClient):
 def test_notification_list_is_private_and_mark_read_is_idempotent(client: TestClient, database):
     user, headers = _user(client)
     notification = NotificationOutbox(
-        user_id=user["id"],
+        user_id=UUID(user["id"]),
         event_type="ORDER_READY",
         channel="IN_APP",
         payload={"title": "Order ready", "message": "Your order is ready."},
