@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     media_signed_url_ttl_seconds: int = 300
     #: Minimum age before an unreferenced object can be collected.
     media_cleanup_grace_seconds: int = 86_400
+    #: Cleanup worker polls at this interval. Destructive cleanup remains opt-in.
+    media_cleanup_poll_seconds: float = 300.0
+    #: Keep cleanup non-destructive until explicitly enabled in the deployment.
+    media_cleanup_dry_run: bool = True
+    media_cleanup_prefix: str = "products/"
+    worker_health_stale_after_seconds: int = 900
+    backup_max_age_seconds: int = 86_400
     notification_worker_batch_size: int = 50
     notification_worker_poll_seconds: float = 2.0
     notification_worker_stale_after_seconds: int = 300
@@ -99,6 +106,20 @@ class Settings(BaseSettings):
     def validate_media_signed_url_ttl(cls, value: int) -> int:
         if value <= 0 or value > 3600:
             raise ValueError("MEDIA_SIGNED_URL_TTL_SECONDS must be between 1 and 3600")
+        return value
+
+    @field_validator("media_cleanup_poll_seconds")
+    @classmethod
+    def validate_media_cleanup_poll_seconds(cls, value: float) -> float:
+        if value <= 0 or value > 86_400:
+            raise ValueError("MEDIA_CLEANUP_POLL_SECONDS must be between 0 and 86400")
+        return value
+
+    @field_validator("worker_health_stale_after_seconds", "backup_max_age_seconds")
+    @classmethod
+    def validate_operational_age_settings(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("operational age settings must be positive")
         return value
 
     @field_validator("notification_worker_batch_size")
