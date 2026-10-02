@@ -32,6 +32,7 @@ from app.models import (
     utcnow,
 )
 from app.schemas import CartItemIn, CartItemUpdate, CheckoutIn, FulfillmentAction, OrderOut, PaymentCreate, PaymentOut
+from app.services.delivery_dispatch import dispatch_ready_fulfillment
 from app.services.delivery_pricing import remove_committed_delivery_quote
 from app.services.orders import create_order, order_payload, preview_checkout_quote, recompute_order_status
 from app.services.payment_attempts import record_reconciliation_unresolved
@@ -556,6 +557,7 @@ def update_fulfillment(
     elif action == "ready":
         fulfillment.status = "READY"
         fulfillment.ready_at = now
+        dispatch_ready_fulfillment(db, fulfillment.id)
     db.add(
         RetailerFulfillmentEvent(
             fulfillment_id=fulfillment.id,
