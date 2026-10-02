@@ -26,7 +26,8 @@
     checkoutAutocomplete: null,
     refreshPromise: null,
     riderLocationWatchId: null,
-    riderOfferRefreshTimer: null
+    riderOfferRefreshTimer: null,
+    unreadNotifications: []
   };
 
   class ApiError extends Error {
@@ -401,6 +402,7 @@
     transport.classList.toggle("hidden", role !== "DELIVERY_AGENT");
   }
 
+  startNotificationPolling();
   async function loadCurrentUser() {
     state.user = await apiFetch("/auth/me");
     updateAccountButton();
@@ -424,6 +426,7 @@
   }
 
   async function signOut() {
+    stopNotificationPolling();
     stopRiderLocationTracking();
     syncRiderOfferPolling();
     const refreshToken = localStorage.getItem(REFRESH_KEY);
@@ -881,8 +884,7 @@
     if(section==="orders") return dashboardPage("My orders","Track purchases, payment status and delivery progress.",renderOrders(orders,true));
     if(section==="wishlist"){const items=await apiFetch("/wishlist");return dashboardPage("Saved items","Products you want to come back to.",(items||[]).map(x=>`<div class="dashboard-list-item"><div><b>${escapeHtml(x.product_name||x.name)}</b><small>${escapeHtml(x.retailer_name||"Campus retailer")}</small></div><b>${money(x.price_ugx)}</b></div>`).join("")||dashboardEmpty("No saved products yet.","Browse the shop and save items you like."));}
     if(section==="addresses") return dashboardPage("Delivery points","Manage where WEWE should bring your orders.",`<div class="dashboard-toolbar"><button class="button-primary" data-action="new-address">Add delivery point</button></div>${points.map(x=>`<div class="dashboard-list-item"><div><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.directions||"Saved campus destination")}</small></div><button class="button-outline" data-action="delete-address" data-id="${escapeHtml(x.id)}">Remove</button></div>`).join("")||dashboardEmpty("No delivery points.","Add a hall, hostel or approved pickup destination.")}`);
-    if(section==="notifications") return dashboardPage("Notifications","Important updates from your WEWE activity.",notes.map(x=>`<div class="notification-row"><div><b>${escapeHtml(x.event_type||"WEWE update")}</b><small>${escapeHtml(x.created_at||"")}</small><p>${escapeHtml(x.message||"You have a new account update.")}</p></div>${x.read_at?"":`<button class="button-outline" data-action="read-notification" data-id="${escapeHtml(x.id)}">Mark read</button>`}</div>`).join("")||dashboardEmpty("You are all caught up.","New notifications will appear here."));
-    if(section==="profile"){const profile=await apiFetch("/users/me/profile");return dashboardPage("Profile & preferences","Keep your account and delivery preferences up to date.",`<form data-form="customer-profile" class="api-form dashboard-form"><label class="field">Preferred delivery point<select name="preferred_delivery_point_id"><option value="">None selected</option>${points.map(x=>`<option value="${escapeHtml(x.id)}" ${profile.preferred_delivery_point_id===x.id?"selected":""}>${escapeHtml(x.name)}</option>`).join("")}</select></label><label><input type="checkbox" name="marketing_opt_in" ${profile.marketing_opt_in?"checked":""}> Receive WEWE updates</label><button class="button-primary">Save preferences</button></form>`);}
+    if(section==="notifications"){const notes=await apiFetch("/notifications?limit=50");return dashboardPage("Notifications","Important updates from your WEWE activity.",notes.map(x=>`<div class="notification-row"><div><b>${escapeHtml(x.event_type||"WEWE update")}</b><small>${escapeHtml(x.created_at||"")}</small><p>${escapeHtml(x.payload?.message||x.payload?.title||"You have a new WEWE update.")}</p></div>${x.read_at?"":`<button class="button-outline" data-action="read-notification" data-id="${escapeHtml(x.id)}">Mark read</button>`}</div>`).join("")||dashboardEmpty("You are all caught up.","New notifications will appear here."));}if(section==="profile"){const profile=await apiFetch("/users/me/profile");return dashboardPage("Profile & preferences","Keep your account and delivery preferences up to date.",`<form data-form="customer-profile" class="api-form dashboard-form"><label class="field">Preferred delivery point<select name="preferred_delivery_point_id"><option value="">None selected</option>${points.map(x=>`<option value="${escapeHtml(x.id)}" ${profile.preferred_delivery_point_id===x.id?"selected":""}>${escapeHtml(x.name)}</option>`).join("")}</select></label><label><input type="checkbox" name="marketing_opt_in" ${profile.marketing_opt_in?"checked":""}> Receive WEWE updates</label><button class="button-primary">Save preferences</button></form>`);}
     const preferred=points.find(x=>x.id===state.user?.preferred_delivery_point_id);
     return `<div class="dashboard-hero"><div><span class="eyebrow">Customer workspace</span><h2>Welcome back, ${escapeHtml(state.user?.name||"there")}.</h2><p>Your campus shopping activity, delivery points and orders in one place.</p></div><button class="button-primary" data-action="storefront">Continue shopping →</button></div><div class="stat-grid dashboard-stat-grid"><div class="stat-card"><span>Total orders</span><b class="stat-value">${orders.length}</b><small>Campus purchases</small></div><div class="stat-card"><span>Unread updates</span><b class="stat-value">${notes.filter(x=>!x.read_at).length}</b><small>Stay up to date</small></div><div class="stat-card"><span>Saved destination</span><b class="stat-value stat-text">${escapeHtml(preferred?.name||"Not set")}</b><small>Used at checkout</small></div><div class="stat-card"><span>Payments</span><b class="stat-value stat-text">Online</b><small>Secure checkout</small></div></div><div class="dashboard-grid-3"><div class="dashboard-panel dashboard-span-2"><div class="panel-head"><div><h2>Recent orders</h2><small>Your latest campus purchases</small></div><button class="text-link" data-action="dashboard-section" data-section="orders">View all →</button></div>${renderOrders(orders.slice(0,5),true)||dashboardEmpty("No orders yet.","Your first order will appear here.")}</div><div class="dashboard-panel"><h2>Quick actions</h2><div class="quick-actions"><button data-action="dashboard-section" data-section="addresses">📍 Delivery points</button><button data-action="dashboard-section" data-section="wishlist">♡ Saved items</button><button data-action="dashboard-section" data-section="notifications">🔔 Notifications</button><button data-action="dashboard-section" data-section="profile">⚙ Profile</button></div></div></div>`;
   }
@@ -984,6 +986,35 @@
       <div class="rider-route"><div class="rider-stop"><span class="rider-stop-dot pickup"></span><div><small>PICKUP</small><b>${escapeHtml(pickup)}</b></div>${pickupNav ? `<a href="${pickupNav}" target="_blank" rel="noopener noreferrer">Navigate</a>` : ""}</div>
       <div class="rider-route-line"></div><div class="rider-stop"><span class="rider-stop-dot dropoff"></span><div><small>DROP-OFF</small><b>${escapeHtml(dropoff)}</b></div>${dropoffNav ? `<a href="${dropoffNav}" target="_blank" rel="noopener noreferrer">Navigate</a>` : ""}</div></div>
       ${nextAction ? `<div class="rider-job-actions">${nextAction}</div>` : ""}</article>`;
+  }
+
+  let notificationRefreshTimer = null;
+
+  async function refreshInAppNotifications() {
+    if (!state.user) return;
+    try {
+      const rows = await apiFetch("/notifications?unread_only=true&limit=20");
+      state.unreadNotifications = rows || [];
+      renderNotificationBadge();
+    } catch {}
+  }
+
+  function renderNotificationBadge() {
+    const count = state.unreadNotifications?.length || 0;
+    document.querySelectorAll("[data-notification-count]").forEach(el => {
+      el.textContent = count > 99 ? "99+" : String(count);
+      el.hidden = count === 0;
+    });
+  }
+
+  function startNotificationPolling() {
+    if (notificationRefreshTimer) clearInterval(notificationRefreshTimer);
+    notificationRefreshTimer = setInterval(refreshInAppNotifications, 5000);
+  }
+
+  function stopNotificationPolling() {
+    if (notificationRefreshTimer) clearInterval(notificationRefreshTimer);
+    notificationRefreshTimer = null;
   }
 
   function stopRiderLocationTracking() {
