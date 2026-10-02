@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -44,6 +45,7 @@ app = FastAPI(
     redoc_url=None,
 )
 app.state.limiter = limiter
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_host_list)
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
@@ -53,6 +55,18 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Webhook-Signature", "X-Request-ID"],
     expose_headers=["X-Request-ID"],
 )
+
+
+@app.middleware("http")
+async def request_size_limit_middleware(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > settings.max_request_body_bytes:
+                return error_response(413, "request_too_large", "Request body exceeds the configured size limit.", getattr(request.state, "request_id", None))
+        except ValueError:
+            return error_response(400, "invalid_content_length", "The request content length is invalid.", getattr(request.state, "request_id", None))
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -82,6 +96,10 @@ async def request_id_middleware(request: Request, call_next):
         if response is not None:
             response.headers["X-Request-ID"] = request_id
             response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+            if request.url.path.startswith(settings.api_prefix + "/auth"):
+                response.headers["Cache-Control"] = "no-store"
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
             response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
             if settings.app_env == "production":
