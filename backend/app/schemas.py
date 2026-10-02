@@ -302,7 +302,7 @@ class DeliveryAgentLocationUpdate(BaseModel):
     speed_mps: Decimal | None = Field(default=None, ge=0, le=1000)
 
 
-class DeliveryAgentLocationOut(BaseModel):
+class DeliveryAgentLocationOut(ORMModel):
     agent_id: UUID
     latitude: float
     longitude: float
