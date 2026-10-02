@@ -42,7 +42,25 @@ services:
         mc mb --ignore-existing "local/wewe-media"
         mc anonymous set download "local/wewe-media"
 
-  notification-worker:
+  media-cleanup-worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to use host postgres}
+      STORAGE_PROVIDER: S3
+      STORAGE_BUCKET: wewe-media
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_ACCESS_KEY: wewe-local
+      STORAGE_SECRET_KEY: wewe-local-storage-password
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    command: ["python", "-m", "app.workers.media_cleanup_worker"]
+    restart: unless-stopped
+
+  migrate:
     build: .
     env_file: .env
     environment:
@@ -50,6 +68,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+
+  notification-worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to use host postgres}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     command: ["python", "-m", "app.workers.notification_worker"]
     restart: unless-stopped
 
@@ -67,11 +95,11 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 volumes:
   wewe_postgres:

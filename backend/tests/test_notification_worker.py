@@ -1,7 +1,7 @@
 from app.workers import notification_worker
 
 
-def test_worker_processes_until_shutdown(monkeypatch):
+def test_worker_processes_until_shutdown(database, monkeypatch):
     calls = []
 
     class Settings:
@@ -11,20 +11,17 @@ def test_worker_processes_until_shutdown(monkeypatch):
         notification_worker_max_attempts = 8
         notification_worker_poll_seconds = 0.001
 
-    state = {"shutdown": False}
-
     def fake_settings():
         return Settings()
 
     def fake_process(*args, **kwargs):
         calls.append((args, kwargs))
-        state["shutdown"] = True
         notification_worker._shutdown = True
         return 1
 
     monkeypatch.setattr(notification_worker, "get_settings", fake_settings)
     monkeypatch.setattr(notification_worker, "process_outbox_batch", fake_process)
-    monkeypatch.setattr(notification_worker, "SessionLocal", object())
+    monkeypatch.setattr(notification_worker, "SessionLocal", lambda: database)
     monkeypatch.setattr(notification_worker, "_shutdown", False)
 
     notification_worker.run()

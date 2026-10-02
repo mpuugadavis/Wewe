@@ -57,6 +57,9 @@ class MediaStorage(Protocol):
     def delete(self, *, key: str) -> None:
         """Delete an object by storage key."""
 
+    def healthcheck(self) -> None:
+        """Verify bucket reachability without reading or mutating objects."""
+
 
 class S3CompatibleMediaStorage:
     """S3-compatible object storage adapter (AWS S3, R2, MinIO, etc.)."""
@@ -140,6 +143,12 @@ class S3CompatibleMediaStorage:
             self.client.delete_object(Bucket=self.bucket, Key=key)
         except (BotoCoreError, ClientError) as exc:
             raise MediaStorageError("Object storage deletion failed.") from exc
+
+    def healthcheck(self) -> None:
+        try:
+            self.client.head_bucket(Bucket=self.bucket)
+        except (BotoCoreError, ClientError) as exc:
+            raise MediaStorageError("Object storage health check failed.") from exc
 
 
 def validate_product_image_url(value: str, *, allowed_hosts: set[str] | None = None) -> str:
