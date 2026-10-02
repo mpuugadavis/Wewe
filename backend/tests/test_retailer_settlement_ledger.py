@@ -25,8 +25,8 @@ def test_retailer_settlement_ledger_tables_exist_with_expected_guards():
         "ck_retailer_payable_entry_type",
         "ck_retailer_payable_entry_amount",
         "ck_retailer_payable_entry_currency",
-        "uq_retailer_payable_entry_source_reference",
     }.issubset({c.name for c in RetailerPayableEntry.__table__.constraints})
+    assert RetailerPayableEntry.__table__.c.source_reference.unique is True
 
     assert {
         "ck_retailer_settlement_status",
