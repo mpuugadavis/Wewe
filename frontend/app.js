@@ -961,18 +961,20 @@
     return destination ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}` : "";
   }
 
-  function riderJobCard(row, compact = false) {
+  function riderJobCard(row, compact = false, offer = false) {
     const pickup = row.pickup?.name || row.retailer_name || "Collection point";
     const dropoff = row.dropoff?.name || row.delivery_point_name || "Customer destination";
     const pickupNav = mapsDirectionsUrl(row.pickup);
     const dropoffNav = mapsDirectionsUrl(row.dropoff);
-    const nextAction = row.status === "ACCEPTED"
-      ? `<button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="PICKED_UP">Confirm pickup</button>`
-      : row.status === "PICKED_UP"
-        ? `<button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="OUT_FOR_DELIVERY">Start delivery</button>`
-        : row.status === "OUT_FOR_DELIVERY"
-          ? `<form data-form="delivery-code" data-id="${escapeHtml(row.id)}" class="rider-code-form"><input name="confirmation_code" required minlength="4" maxlength="12" placeholder="Customer code"><button class="rider-primary-action">Complete delivery</button></form>`
-          : "";
+    const nextAction = offer
+      ? `<button class="rider-primary-action" data-action="accept-delivery" data-id="${escapeHtml(row.id)}">Accept delivery</button>`
+      : row.status === "ACCEPTED"
+        ? `<button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="PICKED_UP">Confirm pickup</button>`
+        : row.status === "PICKED_UP"
+          ? `<button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="OUT_FOR_DELIVERY">Start delivery</button>`
+          : row.status === "OUT_FOR_DELIVERY"
+            ? `<form data-form="delivery-code" data-id="${escapeHtml(row.id)}" class="rider-code-form"><input name="confirmation_code" required minlength="4" maxlength="12" placeholder="Customer code"><button class="rider-primary-action">Complete delivery</button></form>`
+            : "";
     return `<article class="rider-job-card ${compact ? "compact" : ""}">
       <div class="rider-job-top"><div><span class="rider-job-label">Delivery ${escapeHtml(row.order_number || row.id || "")}</span><h3>${escapeHtml(pickup)}</h3></div>${statusBadge(row.status)}</div>
       <div class="rider-route"><div class="rider-stop"><span class="rider-stop-dot pickup"></span><div><small>PICKUP</small><b>${escapeHtml(pickup)}</b></div>${pickupNav ? `<a href="${pickupNav}" target="_blank" rel="noopener noreferrer">Navigate</a>` : ""}</div>
@@ -997,7 +999,7 @@
     }
     if (section === "available") {
       const rows = await apiFetch("/deliveries/available");
-      return dashboardPage("Delivery offers",profile.availability_status === "AVAILABLE" ? "Offers appear here when you are online and eligible." : "Go online to receive delivery offers.",`<div class="rider-offer-toolbar"><div><span class="rider-live-dot"></span><b>${profile.availability_status === "AVAILABLE" ? "Online and ready" : "Offline"}</b></div><button class="button-outline" data-action="agent-availability" data-status="${profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE"}">${profile.availability_status === "AVAILABLE" ? "Go offline" : "Go online"}</button></div>${profile.availability_status !== "AVAILABLE" ? '<div class="rider-empty"><h3>You are offline</h3><p>Switch to online to become eligible for new delivery offers.</p></div>' : ((rows || []).map(row => riderJobCard(row)).join("") || '<div class="rider-empty"><h3>Waiting for a delivery</h3><p>Keep this screen open while online. New eligible offers will appear here as dispatch becomes available.</p></div>')}`);
+      return dashboardPage("Delivery offers",profile.availability_status === "AVAILABLE" ? "Offers appear here when you are online and eligible." : "Go online to receive delivery offers.",`<div class="rider-offer-toolbar"><div><span class="rider-live-dot"></span><b>${profile.availability_status === "AVAILABLE" ? "Online and ready" : "Offline"}</b></div><button class="button-outline" data-action="agent-availability" data-status="${profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE"}">${profile.availability_status === "AVAILABLE" ? "Go offline" : "Go online"}</button></div>${profile.availability_status !== "AVAILABLE" ? '<div class="rider-empty"><h3>You are offline</h3><p>Switch to online to become eligible for new delivery offers.</p></div>' : ((rows || []).map(row => riderJobCard(row, false, true)).join("") || '<div class="rider-empty"><h3>Waiting for a delivery</h3><p>Keep this screen open while online. New eligible offers will appear here as dispatch becomes available.</p></div>')}`);
     }
     if (section === "active") {
       return dashboardPage("Active delivery","One delivery at a time, with the next action made obvious.",activeJob ? riderJobCard(activeJob) : '<div class="rider-empty"><h3>No active delivery</h3><p>When you accept a delivery, the pickup and drop-off steps will appear here.</p><button class="rider-primary-action" data-action="dashboard-section" data-section="available">View delivery offers</button></div>');
