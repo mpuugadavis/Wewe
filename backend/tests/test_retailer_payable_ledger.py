@@ -19,8 +19,9 @@ def _make_session():
 
 
 def _seed_order(session: Session):
-    university = University(id=uuid4(), name="Test University", slug=f"test-{uuid4().hex[:8]}")
-    campus = Campus(id=uuid4(), university_id=university.id, name="Main", slug=f"main-{uuid4().hex[:8]}")
+    suffix = uuid4().hex[:8]
+    university = University(id=uuid4(), name=f"Test University {suffix}", slug=f"test-{suffix}")
+    campus = Campus(id=uuid4(), university_id=university.id, name=f"Main {suffix}", slug=f"main-{suffix}")
     customer = User(
         id=uuid4(),
         name="Customer",
@@ -39,12 +40,12 @@ def _seed_order(session: Session):
         id=uuid4(),
         campus_id=campus.id,
         kind="BUILDING",
-        name="Test Building",
+        name=f"Test Building {suffix}",
     )
     retailer = Retailer(
         id=uuid4(),
         user_id=retailer_user.id,
-        business_name="Test Retailer",
+        business_name=f"Test Retailer {suffix}",
         slug=f"retailer-{uuid4().hex[:8]}",
         phone="0700000000",
     )
@@ -150,7 +151,7 @@ def test_source_reference_conflict_cannot_change_existing_entry():
 def test_entry_rejects_cross_fulfillment_references():
     with _make_session() as session:
         retailer, order, fulfillment = _seed_order(session)
-        other_retailer, other_order, other_fulfillment = _seed_order(session)
+        _, _, other_fulfillment = _seed_order(session)
 
         try:
             post_payable_entry(
