@@ -669,6 +669,36 @@ def override_order_status(order_id: UUID, payload: AdminOrderStatusUpdate, princ
     return {"id": order.id, "order_number": order.order_number, "status": order.status}
 
 
+@router.get("/reviews")
+def admin_reviews(
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    rows = db.execute(
+        select(Review, Product, User)
+        .join(Product, Product.id == Review.product_id)
+        .join(User, User.id == Review.customer_id)
+        .order_by(Review.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "id": review.id,
+            "product_id": review.product_id,
+            "product_name": product.name,
+            "customer_id": review.customer_id,
+            "customer_name": user.name,
+            "rating": review.rating,
+            "body": review.body,
+            "status": review.moderation_status,
+            "created_at": review.created_at,
+        }
+        for review, product, user in rows
+    ]
+
+
 @router.patch("/reviews/{review_id}/moderation")
 def moderate_review(review_id: UUID, payload: ReviewModerationUpdate, principal: Principal = Depends(require_roles("ADMIN")), db: Session = Depends(get_db)) -> dict:
     review = db.get(Review, review_id)
