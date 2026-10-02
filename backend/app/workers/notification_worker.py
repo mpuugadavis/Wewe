@@ -14,6 +14,7 @@ import time
 from app.config import get_settings
 from app.db import SessionLocal
 from app.services.notification_outbox import process_outbox_batch
+from app.services.worker_health import mark_failure, mark_started, mark_success
 
 logger = logging.getLogger("wewe.notification_worker")
 _shutdown = False
@@ -34,7 +35,10 @@ def run() -> None:
     signal.signal(signal.SIGINT, _request_shutdown)
 
     logger.info("Notification worker started")
+    with SessionLocal() as db:
+        mark_started(db, "notification_outbox")
     while not _shutdown:
+        started = time.monotonic()
         try:
             processed = process_outbox_batch(
                 SessionLocal,
@@ -42,12 +46,18 @@ def run() -> None:
                 stale_after_seconds=settings.notification_worker_stale_after_seconds,
                 max_attempts=settings.notification_worker_max_attempts,
             )
+            duration_ms = round((time.monotonic() - started) * 1000)
+            with SessionLocal() as db:
+                mark_success(db, "notification_outbox", duration_ms=duration_ms, processed=processed)
             if processed:
                 logger.info("Notification batch processed", extra={"processed": processed})
             else:
                 time.sleep(settings.notification_worker_poll_seconds)
-        except Exception:
+        except Exception as exc:
+            duration_ms = round((time.monotonic() - started) * 1000)
             logger.exception("Notification worker batch failed")
+            with SessionLocal() as db:
+                mark_failure(db, "notification_outbox", duration_ms=duration_ms, error=str(exc))
             time.sleep(settings.notification_worker_poll_seconds)
 
     logger.info("Notification worker stopped")
