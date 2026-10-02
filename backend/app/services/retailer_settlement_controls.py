@@ -82,9 +82,23 @@ def attach_payable_entry_to_draft_settlement(
         raise SettlementEntryConflictError(
             "payable entry currency does not match settlement currency"
         )
-    if amount_ugx > entry.amount_ugx:
+    if entry.entry_type != "CREDIT":
         raise SettlementEntryConflictError(
-            "settlement line cannot exceed the payable entry amount"
+            "only CREDIT payable entries can be attached to a settlement"
+        )
+    if amount_ugx != entry.amount_ugx:
+        raise SettlementEntryConflictError(
+            "settlement line must consume the full payable entry amount"
+        )
+
+    existing_total = session.scalar(
+        select(func.coalesce(func.sum(RetailerSettlementLine.amount_ugx), 0)).where(
+            RetailerSettlementLine.settlement_id == settlement_id
+        )
+    )
+    if int(existing_total or 0) + amount_ugx > settlement.amount_ugx:
+        raise SettlementEntryConflictError(
+            "settlement lines cannot exceed the settlement amount"
         )
 
     existing = session.scalar(
