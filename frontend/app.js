@@ -324,7 +324,20 @@
 
   function renderCategories() {
     const categories = [{ id: "all", name: "Everything" }, ...state.categories];
-    $("#categoryList").innerHTML = categories.map(category => `<button class="category ${state.activeCategory === category.id ? "active" : ""}" data-action="category" data-category-id="${escapeHtml(category.id)}"><span class="cat-icon">◇</span><span>${escapeHtml(category.name)}</span></button>`).join("");
+    const categoryIcon = name => {
+      const key = String(name || "").toLowerCase();
+      if (key === "everything" || key === "all") return "◈";
+      if (/food|grocer|grocery|meal|restaurant|bakery|snack|drink|beverage/.test(key)) return "🍴";
+      if (/fashion|cloth|wear|shoe|footwear|bag|accessor/.test(key)) return "👟";
+      if (/electronic|phone|computer|laptop|tech|gadget/.test(key)) return "⌁";
+      if (/station|book|school|academic|study|office/.test(key)) return "✎";
+      if (/beauty|cosmetic|hair|skin/.test(key)) return "✦";
+      if (/home|house|furniture|decor|kitchen/.test(key)) return "⌂";
+      if (/health|care|pharmacy|fitness|sport/.test(key)) return "✚";
+      if (/service|repair|delivery|other/.test(key)) return "⚙";
+      return "◇";
+    };
+    $("#categoryList").innerHTML = categories.map(category => `<button class="category ${state.activeCategory === category.id ? "active" : ""}" data-action="category" data-category-id="${escapeHtml(category.id)}" aria-label="Browse ${escapeHtml(category.name)}"><span class="cat-icon" aria-hidden="true">${categoryIcon(category.name)}</span><span>${escapeHtml(category.name)}</span></button>`).join("");
   }
 
   function renderRetailers() {
