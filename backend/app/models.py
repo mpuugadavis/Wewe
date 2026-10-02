@@ -258,6 +258,41 @@ class Product(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(20), default="DRAFT", nullable=False, index=True)
 
 
+class WorkerHealth(Base):
+    __tablename__ = "worker_health"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('STARTING','RUNNING','HEALTHY','FAILING','STOPPED')",
+            name="ck_worker_health_status",
+        ),
+        CheckConstraint(
+            "last_duration_ms IS NULL OR last_duration_ms >= 0",
+            name="ck_worker_health_duration",
+        ),
+        CheckConstraint(
+            "last_processed >= 0 AND last_scanned >= 0 AND last_candidates >= 0 "
+            "AND last_deleted >= 0 AND last_skipped >= 0 AND last_failed >= 0",
+            name="ck_worker_health_counts",
+        ),
+    )
+
+    worker_name: Mapped[str] = mapped_column(String(80), primary_key=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_duration_ms: Mapped[int | None] = mapped_column(Integer)
+    last_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_scanned: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_candidates: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_deleted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_failed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(String(1000))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class ProductImage(TimestampMixin, Base):
     __tablename__ = "product_images"
     __table_args__ = (
