@@ -347,6 +347,23 @@ def order_payload(db: Session, order: Order) -> dict:
         "status": order.status,
         "payment_status": order.payment_status,
         "created_at": order.created_at,
+        "refunds": [
+            {
+                "id": refund.id,
+                "payment_id": refund.payment_id,
+                "amount_ugx": refund.amount_ugx,
+                "status": refund.status,
+                "external_reference": refund.external_reference,
+                "created_at": refund.created_at,
+                "resolved_at": refund.resolved_at,
+            }
+            for refund in db.scalars(
+                select(PaymentRefund)
+                .join(Payment, Payment.id == PaymentRefund.payment_id)
+                .where(Payment.order_id == order.id)
+                .order_by(PaymentRefund.created_at.desc())
+            ).all()
+        ],
         "items": [
             {
                 "id": item.id,
