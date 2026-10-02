@@ -24,7 +24,9 @@
     checkoutMap: null,
     checkoutMarker: null,
     checkoutAutocomplete: null,
-    refreshPromise: null
+    refreshPromise: null,
+    riderLocationWatchId: null,
+    riderOfferRefreshTimer: null
   };
 
   class ApiError extends Error {
@@ -422,6 +424,8 @@
   }
 
   async function signOut() {
+    stopRiderLocationTracking();
+    syncRiderOfferPolling();
     const refreshToken = localStorage.getItem(REFRESH_KEY);
     try {
       if (refreshToken) await apiFetch("/auth/logout", { method: "POST", body: JSON.stringify({ refresh_token: refreshToken }) });
@@ -982,6 +986,59 @@
       ${nextAction ? `<div class="rider-job-actions">${nextAction}</div>` : ""}</article>`;
   }
 
+  function stopRiderLocationTracking() {
+    if (state.riderLocationWatchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(state.riderLocationWatchId);
+    state.riderLocationWatchId = null;
+  }
+
+  async function publishRiderLocation(position) {
+    const coords = position?.coords;
+    if (!coords || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) return;
+    await apiFetch("/deliveries/me/location", { method: "PATCH", body: JSON.stringify({
+      latitude: coords.latitude, longitude: coords.longitude,
+      accuracy_m: Number.isFinite(coords.accuracy) ? Math.max(0, coords.accuracy) : 0,
+      heading_deg: Number.isFinite(coords.heading) && coords.heading >= 0 ? coords.heading : null,
+      speed_mps: Number.isFinite(coords.speed) && coords.speed >= 0 ? coords.speed : null
+    }) });
+  }
+
+  async function startRiderLocationTracking({requireInitialFix = true} = {}) {
+    if (state.user?.role !== "DELIVERY_AGENT" || !navigator.geolocation) throw new Error("Location sharing is required for delivery work.");
+    if (state.riderLocationWatchId !== null) return;
+    const options = { enableHighAccuracy: true, maximumAge: 15000, timeout: 15000 };
+    if (requireInitialFix) {
+      const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, options));
+      await publishRiderLocation(position);
+    }
+    state.riderLocationWatchId = navigator.geolocation.watchPosition(
+      position => publishRiderLocation(position).catch(error => { if (error.status === 409 || error.status === 403) stopRiderLocationTracking(); }),
+      () => showToast("WEWE could not refresh your location. Keep location permission enabled while online."),
+      options
+    );
+  }
+
+  function syncRiderOfferPolling() {
+    if (state.riderOfferRefreshTimer) { clearInterval(state.riderOfferRefreshTimer); state.riderOfferRefreshTimer = null; }
+    if (state.user?.role === "DELIVERY_AGENT" && state.dashboardSection === "available") {
+      state.riderOfferRefreshTimer = setInterval(() => {
+        if (state.dashboardSection !== "available" || state.user?.role !== "DELIVERY_AGENT") return syncRiderOfferPolling();
+        renderDashboard().catch(() => {});
+      }, 5000);
+    }
+  }
+
+  function riderOfferCard(offer) {
+    const expiresIn = Math.max(0, Math.ceil((Date.parse(offer.expires_at) - Date.now()) / 1000));
+    const pickup = offer.delivery?.pickup;
+    return [
+      '<article class="rider-dispatch-offer">',
+      '<div class="rider-dispatch-offer-head"><div><span class="eyebrow">NEW DELIVERY OFFER</span><h3>', escapeHtml(offer.delivery?.retailer_name || "WEWE retailer"), '</h3></div><span class="rider-offer-timer">', expiresIn, 's</span></div>',
+      '<div class="rider-dispatch-route"><div><small>PICKUP</small><b>', escapeHtml(pickup?.name || "Pickup point"), '</b>', pickup?.directions ? '<span>' + escapeHtml(pickup.directions) + '</span>' : "", '</div><strong>≈ ', Math.round(Number(offer.distance_m || 0)).toLocaleString(), ' m</strong></div>',
+      '<div class="rider-dispatch-meta"><span>Order ', escapeHtml(offer.delivery?.order_number || "—"), '</span><span>Offer ', escapeHtml(offer.offer_sequence), '</span></div>',
+      '<div class="rider-dispatch-actions"><button class="rider-primary-action" data-action="accept-delivery-offer" data-id="', escapeHtml(offer.id), '">Accept delivery</button><button class="button-outline" data-action="reject-delivery-offer" data-id="', escapeHtml(offer.id), '">Decline</button></div>',
+      '</article>'
+    ].join("");
+  }
   async function agentDashboard() {
     const section = state.dashboardSection;
     const profilePromise = apiFetch("/deliveries/me/profile");
@@ -998,8 +1055,12 @@
       return dashboardPage("Earnings","Your delivery earnings at a glance. Payment and payout rules remain controlled by WEWE's operational system.",`<div class="rider-earnings-grid"><div class="rider-earnings-card"><span>Paid</span><strong>${money(earnings.paid_ugx)}</strong><small>Recorded paid earnings</small></div><div class="rider-earnings-card"><span>Pending</span><strong>${money(earnings.pending_ugx)}</strong><small>Recorded pending earnings</small></div></div><div class="rider-info-card"><b>Keep delivering safely</b><span>Your earnings history is tied to completed delivery records.</span></div>`);
     }
     if (section === "available") {
-      const rows = await apiFetch("/deliveries/available");
-      return dashboardPage("Delivery offers",profile.availability_status === "AVAILABLE" ? "Offers appear here when you are online and eligible." : "Go online to receive delivery offers.",`<div class="rider-offer-toolbar"><div><span class="rider-live-dot"></span><b>${profile.availability_status === "AVAILABLE" ? "Online and ready" : "Offline"}</b></div><button class="button-outline" data-action="agent-availability" data-status="${profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE"}">${profile.availability_status === "AVAILABLE" ? "Go offline" : "Go online"}</button></div>${profile.availability_status !== "AVAILABLE" ? '<div class="rider-empty"><h3>You are offline</h3><p>Switch to online to become eligible for new delivery offers.</p></div>' : ((rows || []).map(row => riderJobCard(row, false, true)).join("") || '<div class="rider-empty"><h3>Waiting for a delivery</h3><p>Keep this screen open while online. New eligible offers will appear here as dispatch becomes available.</p></div>')}`);
+      if (profile.availability_status === "AVAILABLE") {
+        try { await startRiderLocationTracking({requireInitialFix: false}); } catch {}
+      }
+      const offers = profile.availability_status === "AVAILABLE" ? await apiFetch("/deliveries/me/offers") : [];
+      syncRiderOfferPolling();
+      return dashboardPage("Delivery offers", profile.availability_status === "AVAILABLE" ? "Fresh dispatch offers appear here while you are online." : "Go online to receive delivery offers.", `<div class="rider-offer-toolbar"><div><span class="rider-live-dot"></span><b>${profile.availability_status === "AVAILABLE" ? "Online and location sharing" : "Offline"}</b></div><button class="button-outline" data-action="agent-availability" data-status="${profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE"}">${profile.availability_status === "AVAILABLE" ? "Go offline" : "Go online"}</button></div>${profile.availability_status !== "AVAILABLE" ? '<div class="rider-empty"><h3>You are offline</h3><p>Switch to online to become eligible for new delivery offers.</p></div>' : ((offers || []).map(riderOfferCard).join("") || '<div class="rider-empty"><h3>Waiting for dispatch</h3><p>Keep location sharing enabled. WEWE will offer eligible ready deliveries to you.</p></div>')}`);
     }
     if (section === "active") {
       return dashboardPage("Active delivery","One delivery at a time, with the next action made obvious.",activeJob ? riderJobCard(activeJob) : '<div class="rider-empty"><h3>No active delivery</h3><p>When you accept a delivery, the pickup and drop-off steps will appear here.</p><button class="rider-primary-action" data-action="dashboard-section" data-section="available">View delivery offers</button></div>');
@@ -1278,7 +1339,27 @@
       return renderDashboard();
     }
     if (action === "agent-availability") {
-      await apiFetch("/deliveries/me/availability", { method: "PATCH", body: JSON.stringify({ availability_status: button.dataset.status }) });
+      const nextStatus = button.dataset.status;
+      if (nextStatus === "AVAILABLE") {
+        try {
+          await startRiderLocationTracking({requireInitialFix: true});
+        } catch (error) {
+          stopRiderLocationTracking();
+          throw new Error(error.code === 1 ? "Location permission is required before you can go online." : (error.message || "Unable to start location sharing."));
+        }
+      }
+      await apiFetch("/deliveries/me/availability", { method: "PATCH", body: JSON.stringify({ availability_status: nextStatus }) });
+      if (nextStatus === "OFFLINE") stopRiderLocationTracking();
+      return renderDashboard();
+    }
+    if (action === "accept-delivery-offer") {
+      await apiFetch(`/deliveries/offers/${encodeURIComponent(button.dataset.id)}/accept`, { method: "POST", body: JSON.stringify({}) });
+      showToast("Delivery accepted.");
+      return renderDashboard();
+    }
+    if (action === "reject-delivery-offer") {
+      await apiFetch(`/deliveries/offers/${encodeURIComponent(button.dataset.id)}/reject`, { method: "POST", body: JSON.stringify({}) });
+      showToast("Offer declined.");
       return renderDashboard();
     }
     if (action === "accept-delivery") {
