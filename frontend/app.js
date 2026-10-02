@@ -1260,7 +1260,7 @@
           const [freshOrder, freshTracking] = await Promise.all([apiFetch("/orders/" + encodeURIComponent(orderId)), apiFetch("/orders/" + encodeURIComponent(orderId) + "/tracking")]);
           if (!$("#modalBackdrop")?.classList.contains("open")) return stopOrderTracking();
           $("#modalContent").innerHTML = renderOrderModal(freshOrder, freshTracking);
-          if (!(freshTracking.deliveries || []).some(item => ["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(item.status)) stopOrderTracking();
+          if (!(freshTracking.deliveries || []).some(item => ["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(item.status))) stopOrderTracking();
         } catch {}
       }, 5000);
     }
