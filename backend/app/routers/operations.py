@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from hmac import compare_digest
 from uuid import UUID
 
@@ -153,6 +153,91 @@ def get_delivery_agent_location(
     if location is None:
         raise HTTPException(status_code=404, detail={"code": "location_not_found", "message": "No rider location has been recorded yet."})
     return location
+
+
+@router.get("/orders/{order_id}/tracking")
+def customer_order_tracking(
+    order_id: UUID,
+    principal: Principal = Depends(require_roles("CUSTOMER")),
+    db: Session = Depends(get_db),
+) -> dict:
+    order = db.get(Order, order_id)
+    if order is None or order.customer_id != principal.user.id:
+        raise HTTPException(status_code=404, detail={"code": "order_not_found", "message": "Order was not found."})
+
+    assignments = db.execute(
+        select(DeliveryAssignment, RetailerFulfillment, Retailer)
+        .join(RetailerFulfillment, RetailerFulfillment.id == DeliveryAssignment.fulfillment_id)
+        .join(Retailer, Retailer.id == RetailerFulfillment.retailer_id)
+        .where(RetailerFulfillment.order_id == order.id)
+        .order_by(DeliveryAssignment.created_at)
+    ).all()
+
+    now = utcnow()
+    deliveries = []
+    for assignment, fulfillment, retailer in assignments:
+        pickup = db.get(DeliveryPoint, assignment.pickup_point_id) if assignment.pickup_point_id else None
+        dropoff = db.get(DeliveryPoint, assignment.dropoff_point_id) if assignment.dropoff_point_id else None
+
+        rider = None
+        location = None
+        location_status = "UNAVAILABLE"
+        if assignment.agent_id is not None and assignment.status not in {"UNASSIGNED", "CANCELLED", "DELIVERED"}:
+            agent = db.get(DeliveryAgent, assignment.agent_id)
+            rider_user = db.get(User, assignment.agent_id)
+            if agent is not None and rider_user is not None:
+                rider = {
+                    "name": rider_user.name,
+                    "transport_mode": agent.transport_mode,
+                }
+                rider_location = db.get(DeliveryAgentLocation, assignment.agent_id)
+                if rider_location is not None:
+                    location_updated_at = rider_location.updated_at
+                    if location_updated_at.tzinfo is None:
+                        location_updated_at = location_updated_at.replace(tzinfo=timezone.utc)
+                    age_seconds = max(0.0, (now - location_updated_at).total_seconds())
+                    if age_seconds <= 60:
+                        location_status = "LIVE"
+                        location = {
+                            "latitude": float(rider_location.latitude),
+                            "longitude": float(rider_location.longitude),
+                            "accuracy_m": float(rider_location.accuracy_m),
+                            "heading_deg": float(rider_location.heading_deg) if rider_location.heading_deg is not None else None,
+                            "speed_mps": float(rider_location.speed_mps) if rider_location.speed_mps is not None else None,
+                            "updated_at": rider_location.updated_at,
+                        }
+                    else:
+                        location_status = "STALE"
+
+        deliveries.append({
+            "assignment_id": assignment.id,
+            "fulfillment_id": fulfillment.id,
+            "retailer_name": retailer.business_name,
+            "status": assignment.status,
+            "location_status": location_status,
+            "rider": rider,
+            "location": location,
+            "pickup": {
+                "name": pickup.name,
+                "directions": pickup.directions,
+                "latitude": float(pickup.latitude) if pickup and pickup.latitude is not None else None,
+                "longitude": float(pickup.longitude) if pickup and pickup.longitude is not None else None,
+            } if pickup else None,
+            "dropoff": {
+                "name": dropoff.name,
+                "directions": dropoff.directions,
+                "latitude": float(dropoff.latitude) if dropoff and dropoff.latitude is not None else None,
+                "longitude": float(dropoff.longitude) if dropoff and dropoff.longitude is not None else None,
+            } if dropoff else None,
+        })
+
+    return {
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "status": order.status,
+        "deliveries": deliveries,
+        "updated_at": now,
+    }
 
 
 @router.get("/deliveries/me/offers")

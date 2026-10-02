@@ -27,7 +27,8 @@
     refreshPromise: null,
     riderLocationWatchId: null,
     riderOfferRefreshTimer: null,
-    unreadNotifications: []
+    unreadNotifications: [],
+    orderTrackingTimer: null
   };
 
   class ApiError extends Error {
@@ -174,6 +175,8 @@
   }
 
   function closeModal() {
+    if (state.orderTrackingTimer) clearInterval(state.orderTrackingTimer);
+    state.orderTrackingTimer = null;
     $("#modalBackdrop").classList.remove("open");
     document.body.classList.remove("modal-open");
   }
@@ -1209,12 +1212,58 @@
   }
 
 
-  async function showOrder(orderId) {
-    const order = await apiFetch(`/orders/${encodeURIComponent(orderId)}`);
+  function stopOrderTracking() {
+    if (state.orderTrackingTimer) clearInterval(state.orderTrackingTimer);
+    state.orderTrackingTimer = null;
+  }
+
+  function orderTrackingView(tracking) {
+    const deliveries = tracking?.deliveries || [];
+    if (!deliveries.length) return '<div class="tracking-live-card"><b>No delivery assignment yet</b><small>WEWE will show rider tracking once a delivery assignment exists.</small></div>';
+    return deliveries.map(delivery => {
+      const location = delivery.location;
+      const rider = delivery.rider;
+      let locationHtml;
+      if (delivery.status === "DELIVERED") locationHtml = '<div class="tracking-location-muted"><b>Delivered</b><small>Live rider location is no longer shared for this completed delivery.</small></div>';
+      else if (delivery.location_status === "LIVE" && location) {
+        const mapsUrl = mapsDirectionsUrl(location);
+        locationHtml = '<div class="tracking-location-live"><span class="rider-live-dot"></span><div><b>Rider location is live</b><small>' + Number(location.accuracy_m || 0).toFixed(0) + ' m accuracy · updated ' + formatDate(location.updated_at) + '</small></div>' +
+          (mapsUrl ? '<a class="button-outline tracking-map-link" href="' + escapeHtml(mapsUrl) + '" target="_blank" rel="noopener noreferrer">Open in Maps</a>' : '') +
+          '</div><div class="tracking-coordinates"><span>Latitude <b>' + Number(location.latitude).toFixed(6) + '</b></span><span>Longitude <b>' + Number(location.longitude).toFixed(6) + '</b></span></div>';
+      } else if (delivery.location_status === "STALE") locationHtml = '<div class="tracking-location-muted"><b>Updating rider location…</b><small>The last location is too old to display. WEWE is waiting for a fresh GPS update.</small></div>';
+      else if (rider) locationHtml = '<div class="tracking-location-muted"><b>Waiting for rider location</b><small>The rider is assigned, but a fresh GPS position is not available yet.</small></div>';
+      else locationHtml = '<div class="tracking-location-muted"><b>Finding your rider</b><small>WEWE is dispatching this delivery to an eligible nearby rider.</small></div>';
+      return '<article class="tracking-live-card"><div class="tracking-card-head"><div><span class="section-kicker">Delivery</span><h3>' + escapeHtml(delivery.retailer_name || "Campus retailer") + '</h3></div>' + statusBadge(delivery.status) + '</div>' +
+        (rider ? '<div class="tracking-rider"><div><b>' + escapeHtml(rider.name) + '</b><small>' + escapeHtml(rider.transport_mode || "Delivery agent") + '</small></div></div>' : '') +
+        locationHtml + '<div class="tracking-route"><div><span>Pickup</span><b>' + escapeHtml(delivery.pickup?.name || "Retailer pickup") + '</b></div><span class="tracking-arrow">→</span><div><span>Drop-off</span><b>' + escapeHtml(delivery.dropoff?.name || "Your delivery point") + '</b></div></div></article>';
+    }).join("");
+  }
+
+  function renderOrderModal(order, tracking) {
     const stages = ["PENDING", "CONFIRMED", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"];
     const currentStage = stages.indexOf(order.status);
-    const tracking = stages.map((stage, index) => `<div class="tracking-step ${index <= currentStage ? "done" : ""} ${stage === order.status ? "current" : ""}"><span>${index <= currentStage ? "✓" : index + 1}</span><div><b>${escapeHtml(stage.replaceAll("_", " "))}</b><small>${stage === order.status ? "Current status" : index < currentStage ? "Completed" : "Waiting"}</small></div></div>`).join("");
-    setModal(`<div class="modal-head"><div><div class="section-kicker">Order</div><h2>${escapeHtml(order.order_number)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${statusBadge(order.status)} ${statusBadge(order.payment_status)}</p><div class="tracking-timeline">${tracking}</div>${(order.items || []).map(item => `<div class="listing-row"><span>${escapeHtml(item.product_name)} × ${Number(item.quantity)}</span><b>${money(item.line_total_ugx)}</b></div>`).join("")}<div class="checkout-totals"><p>Subtotal <b>${money(order.subtotal_ugx)}</b></p><p>Delivery <b>${money(order.delivery_fee_ugx)}</b></p><p>Total <b>${money(order.total_ugx)}</b></p></div>`);
+    const timeline = stages.map((stage, index) => '<div class="tracking-step ' + (index <= currentStage ? "done" : "") + ' ' + (stage === order.status ? "current" : "") + '"><span>' + (index <= currentStage ? "✓" : index + 1) + '</span><div><b>' + escapeHtml(stage.replaceAll("_", " ")) + '</b><small>' + (stage === order.status ? "Current status" : index < currentStage ? "Completed" : "Waiting") + '</small></div></div>').join("");
+    return '<div class="modal-head"><div><div class="section-kicker">Order</div><h2>' + escapeHtml(order.order_number) + '</h2></div><button class="close-modal" data-action="close-modal">×</button></div>' +
+      '<p>' + statusBadge(order.status) + ' ' + statusBadge(order.payment_status) + '</p><div class="tracking-timeline">' + timeline + '</div>' +
+      '<section class="order-tracking-panel"><div class="panel-head"><div><h3>Live delivery tracking</h3><small>Updates automatically while your delivery is active.</small></div><span class="tracking-refresh-dot"></span></div>' + orderTrackingView(tracking) + '</section>' +
+      (order.items || []).map(item => '<div class="listing-row"><span>' + escapeHtml(item.product_name) + ' × ' + Number(item.quantity) + '</span><b>' + money(item.line_total_ugx) + '</b></div>').join("") +
+      '<div class="checkout-totals"><p>Subtotal <b>' + money(order.subtotal_ugx) + '</b></p><p>Delivery <b>' + money(order.delivery_fee_ugx) + '</b></p><p>Total <b>' + money(order.total_ugx) + '</b></p></div>';
+  }
+
+  async function showOrder(orderId) {
+    stopOrderTracking();
+    const [order, tracking] = await Promise.all([apiFetch("/orders/" + encodeURIComponent(orderId)), apiFetch("/orders/" + encodeURIComponent(orderId) + "/tracking")]);
+    setModal(renderOrderModal(order, tracking), true);
+    if ((tracking.deliveries || []).some(item => ["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(item.status))) {
+      state.orderTrackingTimer = setInterval(async () => {
+        try {
+          const [freshOrder, freshTracking] = await Promise.all([apiFetch("/orders/" + encodeURIComponent(orderId)), apiFetch("/orders/" + encodeURIComponent(orderId) + "/tracking")]);
+          if (!$("#modalBackdrop")?.classList.contains("open")) return stopOrderTracking();
+          $("#modalContent").innerHTML = renderOrderModal(freshOrder, freshTracking);
+          if (!(freshTracking.deliveries || []).some(item => ["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(item.status))) stopOrderTracking();
+        } catch {}
+      }, 5000);
+    }
   }
 
   async function newProduct() {
