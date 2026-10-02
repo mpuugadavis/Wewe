@@ -211,6 +211,33 @@ class DeliveryAgentLocation(TimestampMixin, Base):
     speed_mps: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
 
 
+class DeliveryOffer(TimestampMixin, Base):
+    __tablename__ = "delivery_offers"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING','ACCEPTED','REJECTED','EXPIRED','CANCELLED')",
+            name="ck_delivery_offer_status",
+        ),
+        CheckConstraint("distance_m >= 0", name="ck_delivery_offer_distance"),
+        UniqueConstraint("assignment_id", "agent_id", "offer_sequence", name="uq_delivery_offer_attempt"),
+        Index("ix_delivery_offers_agent_status", "agent_id", "status"),
+        Index("ix_delivery_offers_assignment_status_expiry", "assignment_id", "status", "expires_at"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    assignment_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("delivery_assignments.id", ondelete="CASCADE"), index=True
+    )
+    agent_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("delivery_agents.user_id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", nullable=False, index=True)
+    offer_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    offered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    distance_m: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+
+
 class Category(TimestampMixin, Base):
     __tablename__ = "categories"
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
