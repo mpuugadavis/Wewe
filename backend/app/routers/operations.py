@@ -39,6 +39,15 @@ from app.schemas import (
     WishlistIn,
 )
 from app.security import hash_token
+from app.services.delivery_dispatch import (
+    OfferUnavailableError,
+    accept_offer,
+    advance_dispatch,
+    dispatch_ready_queue,
+    list_active_offers,
+    offer_view,
+    reject_offer,
+)
 from app.services.orders import recompute_order_status
 from app.services.state_transitions import (
     is_delivery_assignment_transition_allowed,
@@ -95,6 +104,8 @@ def set_availability(
     if active and payload.availability_status == "OFFLINE":
         raise HTTPException(status_code=409, detail={"code": "active_delivery", "message": "Complete your active delivery before going offline."})
     agent.availability_status = payload.availability_status
+    if payload.availability_status == "AVAILABLE":
+        dispatch_ready_queue(db)
     db.commit()
     return {"availability_status": agent.availability_status}
 
@@ -143,6 +154,54 @@ def get_delivery_agent_location(
     if location is None:
         raise HTTPException(status_code=404, detail={"code": "location_not_found", "message": "No rider location has been recorded yet."})
     return location
+
+
+@router.get("/deliveries/me/offers")
+def my_delivery_offers(
+    limit: int = Query(default=20, ge=1, le=50),
+    principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    _agent_profile(db, principal.user.id)
+    offers = list_active_offers(db, principal.user.id, limit=limit)
+    db.commit()
+    return offers
+
+
+@router.post("/deliveries/offers/{offer_id}/accept")
+def accept_delivery_offer(
+    offer_id: UUID,
+    principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        assignment = accept_offer(db, principal.user.id, offer_id)
+    except OfferUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "delivery_offer_unavailable", "message": str(exc)},
+        ) from exc
+    db.commit()
+    return _delivery_view(db, assignment, reveal_destination=True)
+
+
+@router.post("/deliveries/offers/{offer_id}/reject")
+def reject_delivery_offer(
+    offer_id: UUID,
+    principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        offer = reject_offer(db, principal.user.id, offer_id)
+    except OfferUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "delivery_offer_unavailable", "message": str(exc)},
+        ) from exc
+    db.commit()
+    return offer_view(db, offer)
 
 
 @router.get("/deliveries/available")
