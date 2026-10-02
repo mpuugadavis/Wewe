@@ -1009,7 +1009,9 @@ def admin_settlements(
             "authorized_by_user_id": row.authorized_by_user_id,
             "submitted_at": row.submitted_at,
             "settled_at": row.settled_at,
-            **settlement_snapshot(db, row.id).__dict__,
+            "line_count": settlement_snapshot(db, row.id).line_count,
+            "line_total_ugx": settlement_snapshot(db, row.id).line_total_ugx,
+            "is_balanced": settlement_snapshot(db, row.id).is_balanced,
         }
         for row in rows
     ]
