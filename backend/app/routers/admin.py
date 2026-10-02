@@ -34,6 +34,7 @@ from app.models import (
     Review,
     University,
     User,
+    WorkerHealth,
     utcnow,
 )
 from app.routers.commerce import _release_fulfillment_inventory
