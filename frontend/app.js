@@ -975,7 +975,7 @@
       const deliveryRate = totalOrders ? Math.round((deliveredOrders / totalOrders) * 100) : 0;
       const productMax = Math.max(1, ...products.map(x => Number(x.units_sold || 0)));
       const categoryMax = Math.max(1, ...categories.map(x => Number(x.units_sold || 0)));
-      const retailerMax = Math.max(1, ...retailers.map(x => Number(x.completed_orders || x.orders || x.completed_deliveries || 0)));
+      const retailerMax = Math.max(1, ...retailers.map(x => Number(x.orders || 0)));
 
       const rankList = (items, valueKey, formatter, max, empty) => items.length ? items.map((x, i) => {
         const value = Number(x[valueKey] || 0);
@@ -1026,7 +1026,7 @@
           </section>
           <section class="analytics-card">
             <div class="analytics-card-head"><div><h3>Retailer performance</h3><p>Current activity across retailers</p></div></div>
-            <div class="analytics-bars">${rankList(retailers, "completed_orders", v => v.toLocaleString(), retailerMax, "No retailer performance data yet.")}</div>
+            <div class="analytics-bars">${rankList(retailers, "orders", v => v.toLocaleString(), retailerMax, "No retailer performance data yet.")}</div>
           </section>
         </div>
 
