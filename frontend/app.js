@@ -1083,6 +1083,21 @@
       showToast("Product listing deactivated.");
       return renderDashboard();
     }
+    if (action === "moderate-review") {
+      await apiFetch("/admin/reviews/" + encodeURIComponent(button.dataset.id) + "/moderation", { method: "PATCH", body: JSON.stringify({ status: button.dataset.status }) });
+      showToast("Review moderation updated.");
+      return renderDashboard();
+    }
+    if (action === "settlement-submit") {
+      await apiFetch("/admin/settlements/" + encodeURIComponent(button.dataset.id) + "/submit", { method: "POST", body: JSON.stringify({}) });
+      showToast("Settlement submitted.");
+      return renderDashboard();
+    }
+    if (action === "settlement-review") {
+      await apiFetch("/admin/settlements/" + encodeURIComponent(button.dataset.id) + "/review", { method: "POST", body: JSON.stringify({}) });
+      showToast("Settlement moved to review.");
+      return renderDashboard();
+    }
     if (action === "user-status") {
       await apiFetch(`/admin/users/${encodeURIComponent(button.dataset.id)}/status`, { method: "PATCH", body: JSON.stringify({ status: button.dataset.status }) });
       return renderDashboard();
