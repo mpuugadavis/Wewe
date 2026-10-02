@@ -404,6 +404,34 @@ class RetailerVerificationUpdate(BaseModel):
     reason: str | None = Field(default=None, max_length=300)
 
 
+class SettlementCreate(BaseModel):
+    retailer_id: UUID
+    amount_ugx: int = Field(gt=0, le=2_000_000_000)
+    settlement_reference: str = Field(min_length=4, max_length=180)
+    idempotency_key: str = Field(min_length=4, max_length=180)
+
+
+class SettlementPayoutUpdate(BaseModel):
+    payout_reference: str = Field(min_length=4, max_length=180)
+
+
+class SettlementOut(ORMModel):
+    id: UUID
+    retailer_id: UUID
+    amount_ugx: int
+    currency: str
+    status: Literal["DRAFT", "SUBMITTED", "SETTLED", "FAILED", "REVIEW_REQUIRED"]
+    settlement_reference: str
+    idempotency_key: str
+    payout_reference: str | None
+    authorized_by_user_id: UUID | None
+    submitted_at: Any | None
+    settled_at: Any | None
+    line_count: int
+    line_total_ugx: int
+    is_balanced: bool
+
+
 class LocationCreate(BaseModel):
     campus_id: UUID
     hall_id: UUID | None = None
