@@ -135,6 +135,17 @@ def test_attach_rejects_overconsumption_and_non_draft_settlement():
                 amount_ugx=5001,
             )
 
+        smaller = _entry(session, retailer, order, fulfillment, source="capture-2")
+        settlement.amount_ugx = 6000
+        session.commit()
+        with pytest.raises(SettlementEntryConflictError):
+            attach_payable_entry_to_draft_settlement(
+                session,
+                settlement_id=settlement.id,
+                payable_entry_id=smaller.id,
+                amount_ugx=5000,
+            )
+
         settlement.status = "SUBMITTED"
         session.commit()
 
@@ -177,3 +188,68 @@ def test_audit_exposes_line_total_without_deciding_eligibility():
         assert audit.line_total_ugx == 5000
         assert audit.settlement_amount_ugx == 5000
         assert audit.is_balanced is True
+
+
+def test_settlement_cannot_exceed_settlement_amount_across_lines():
+    with _session() as session:
+        retailer, order, fulfillment = _seed(session)
+        first = _entry(session, retailer, order, fulfillment, source="capture-bounded-1")
+        second = post_payable_entry(
+            session,
+            retailer_id=retailer.id,
+            order_id=order.id,
+            fulfillment_id=fulfillment.id,
+            entry_type="CREDIT",
+            amount_ugx=3000,
+            reason="approved_retailer_credit",
+            source_reference="capture-bounded-2",
+        )
+        settlement = RetailerSettlement(
+            id=uuid4(), retailer_id=retailer.id, amount_ugx=6000,
+            currency="UGX", status="DRAFT",
+            settlement_reference="SET-BOUNDED",
+            idempotency_key="SET-IDEMP-BOUNDED",
+        )
+        session.add(settlement)
+        session.commit()
+
+        attach_payable_entry_to_draft_settlement(
+            session, settlement_id=settlement.id,
+            payable_entry_id=first.id, amount_ugx=5000,
+        )
+        session.commit()
+
+        with pytest.raises(SettlementEntryConflictError):
+            attach_payable_entry_to_draft_settlement(
+                session, settlement_id=settlement.id,
+                payable_entry_id=second.id, amount_ugx=3000,
+            )
+
+
+def test_debit_payable_entry_cannot_be_settled():
+    with _session() as session:
+        retailer, order, fulfillment = _seed(session)
+        debit = post_payable_entry(
+            session,
+            retailer_id=retailer.id,
+            order_id=order.id,
+            fulfillment_id=fulfillment.id,
+            entry_type="DEBIT",
+            amount_ugx=1000,
+            reason="approved_adjustment",
+            source_reference="debit-settlement-test",
+        )
+        settlement = RetailerSettlement(
+            id=uuid4(), retailer_id=retailer.id, amount_ugx=1000,
+            currency="UGX", status="DRAFT",
+            settlement_reference="SET-DEBIT",
+            idempotency_key="SET-IDEMP-DEBIT",
+        )
+        session.add(settlement)
+        session.commit()
+
+        with pytest.raises(SettlementEntryConflictError):
+            attach_payable_entry_to_draft_settlement(
+                session, settlement_id=settlement.id,
+                payable_entry_id=debit.id, amount_ugx=1000,
+            )
