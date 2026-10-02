@@ -375,6 +375,58 @@ def my_deliveries(
     return [_delivery_view(db, assignment, reveal_destination=True) for assignment in assignments]
 
 
+@router.post("/deliveries/{assignment_id}/release")
+def release_my_delivery(
+    assignment_id: UUID,
+    principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Allow a rider to release an accepted assignment before pickup."""
+    assignment = db.scalar(
+        select(DeliveryAssignment)
+        .where(
+            DeliveryAssignment.id == assignment_id,
+            DeliveryAssignment.agent_id == principal.user.id,
+        )
+        .with_for_update()
+    )
+    if assignment is None:
+        raise HTTPException(status_code=404, detail={"code": "delivery_not_found", "message": "Delivery was not found."})
+    if assignment.status != "ACCEPTED" or assignment.picked_up_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "delivery_release_not_allowed", "message": "Only an accepted delivery that has not been picked up can be released."},
+        )
+
+    assignment.status = "UNASSIGNED"
+    assignment.agent_id = None
+    assignment.accepted_at = None
+    agent = db.scalar(
+        select(DeliveryAgent).where(DeliveryAgent.user_id == principal.user.id).with_for_update()
+    )
+    if agent is not None:
+        agent.availability_status = "AVAILABLE"
+    db.add(
+        DeliveryEvent(
+            assignment_id=assignment.id,
+            actor_user_id=principal.user.id,
+            previous_status="ACCEPTED",
+            new_status="UNASSIGNED",
+            note="Rider released assignment before pickup",
+        )
+    )
+    db.add(
+        NotificationOutbox(
+            user_id=principal.user.id,
+            event_type="DELIVERY_RELEASED",
+            payload={"assignment_id": str(assignment.id)},
+        )
+    )
+    dispatch_ready_queue(db)
+    db.commit()
+    return _delivery_view(db, assignment, reveal_destination=False)
+
+
 @router.post("/deliveries/{assignment_id}/status")
 @limiter.limit("10/minute")
 def update_delivery_status(

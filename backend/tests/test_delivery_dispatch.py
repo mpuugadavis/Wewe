@@ -218,3 +218,11 @@ def test_rejecting_offer_advances_dispatch(database):
     assert next_offer is not None
     assert next_offer.agent_id in {rider_a.id, rider_b.id}
     assert next_offer.agent_id != first.agent_id
+
+
+def test_pre_pickup_acceptance_can_be_released_for_redispatch():
+    from app.services.state_transitions import is_delivery_assignment_transition_allowed
+
+    assert is_delivery_assignment_transition_allowed("ACCEPTED", "UNASSIGNED")
+    assert not is_delivery_assignment_transition_allowed("PICKED_UP", "UNASSIGNED")
+    assert not is_delivery_assignment_transition_allowed("OUT_FOR_DELIVERY", "UNASSIGNED")

@@ -64,6 +64,7 @@ from app.schemas import (
     UserStatusUpdate,
 )
 from app.services.orders import order_payload
+from app.services.delivery_dispatch import dispatch_ready_queue
 from app.services.retailer_settlement_operations import (
     RetailerSettlementOperationError,
     SettlementIdempotencyConflictError,
@@ -514,6 +515,68 @@ def admin_orders(status_filter: str | None = None, limit: int = Query(default=50
         query = query.where(Order.status == status_filter)
     orders = db.scalars(query.order_by(Order.created_at.desc()).offset(offset).limit(limit)).all()
     return [order_payload(db, order) for order in orders]
+
+
+@router.post("/deliveries/{assignment_id}/release")
+def release_delivery_assignment(
+    assignment_id: UUID,
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Release an accepted rider before pickup so the assignment can be redispatched.
+
+    The existing assignment is reused rather than creating a second assignment,
+    preserving the one-assignment-per-fulfillment invariant and preventing
+    duplicate delivery earnings.
+    """
+    assignment = db.scalar(
+        select(DeliveryAssignment)
+        .where(DeliveryAssignment.id == assignment_id)
+        .with_for_update()
+    )
+    if assignment is None:
+        raise HTTPException(status_code=404, detail={"code": "delivery_not_found", "message": "Delivery assignment was not found."})
+    if assignment.status != "ACCEPTED" or assignment.picked_up_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "delivery_release_not_allowed", "message": "Only an accepted delivery that has not been picked up can be released."},
+        )
+
+    previous_agent_id = assignment.agent_id
+    assignment.status = "UNASSIGNED"
+    assignment.agent_id = None
+    assignment.accepted_at = None
+    db.add(
+        DeliveryEvent(
+            assignment_id=assignment.id,
+            actor_user_id=principal.user.id,
+            previous_status="ACCEPTED",
+            new_status="UNASSIGNED",
+            note="Authorized pre-pickup release for reassignment",
+        )
+    )
+    if previous_agent_id is not None:
+        previous_agent = db.scalar(
+            select(DeliveryAgent).where(DeliveryAgent.user_id == previous_agent_id).with_for_update()
+        )
+        if previous_agent is not None:
+            previous_agent.availability_status = "AVAILABLE"
+            db.add(
+                NotificationOutbox(
+                    user_id=previous_agent_id,
+                    event_type="DELIVERY_RELEASED",
+                    payload={"assignment_id": str(assignment.id)},
+                )
+            )
+
+    dispatch_ready_queue(db)
+    db.commit()
+    db.refresh(assignment)
+    return {
+        "assignment_id": assignment.id,
+        "status": assignment.status,
+        "previous_agent_id": previous_agent_id,
+    }
 
 
 @router.post("/payments/{payment_id}/confirm-refund")

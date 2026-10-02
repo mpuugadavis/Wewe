@@ -22,7 +22,7 @@ FULFILLMENT_TRANSITIONS = {
 
 DELIVERY_ASSIGNMENT_TRANSITIONS = {
     "UNASSIGNED": frozenset({"ACCEPTED", "CANCELLED"}),
-    "ACCEPTED": frozenset({"PICKED_UP", "CANCELLED"}),
+    "ACCEPTED": frozenset({"PICKED_UP", "CANCELLED", "UNASSIGNED"}),
     "PICKED_UP": frozenset({"OUT_FOR_DELIVERY"}),
     "OUT_FOR_DELIVERY": frozenset({"DELIVERED"}),
     "DELIVERED": frozenset(),
