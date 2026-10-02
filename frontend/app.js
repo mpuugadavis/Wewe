@@ -1534,6 +1534,7 @@
     if (action === "checkout") return showCheckout();
     if (action === "use-current-location") return useCurrentLocation();
     if (action === "select-delivery-point") return selectCheckoutPoint(button.dataset.id);
+    if (action === "retry-delivery-quote") return updateCheckoutQuote();
     if (action === "new-address") return showNewAddress();
     if (action === "retailer-details") return showRetailer(button.dataset.retailerSlug);
     if (action === "retry-online-payment") return retryOnlinePayment(button.dataset.orderId, button.dataset.method, button.dataset.phone);
