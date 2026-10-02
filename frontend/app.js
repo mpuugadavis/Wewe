@@ -598,29 +598,59 @@
 
   async function loadLeafletMap() {
     if (window.L?.map) return true;
-    const css = document.createElement("link");
-    css.rel = "stylesheet";
-    css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-    css.dataset.weweLeaflet = "true";
-    if (!document.querySelector('link[data-wewe-leaflet]')) document.head.appendChild(css);
-    await new Promise((resolve, reject) => {
-      const existing = document.querySelector('script[data-wewe-leaflet]');
-      if (existing) {
-        existing.addEventListener("load", resolve, { once: true });
-        existing.addEventListener("error", reject, { once: true });
-        if (window.L?.map) resolve();
-        return;
+
+    // Do not get stuck on a previously failed CDN script. Try two independent
+    // public CDNs so a transient/unreachable unpkg connection does not disable
+    // the checkout map.
+    const sources = [
+      {
+        css: "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css",
+        js: "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
+      },
+      {
+        css: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
+        js: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       }
+    ];
+
+    const loadScript = (src) => new Promise((resolve, reject) => {
       const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.src = src;
       script.async = true;
       script.defer = true;
       script.dataset.weweLeaflet = "true";
-      script.onload = resolve;
-      script.onerror = () => reject(new Error("Campus map could not be loaded."));
+      const timer = setTimeout(() => {
+        script.remove();
+        reject(new Error("Leaflet CDN timed out."));
+      }, 8000);
+      script.onload = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      script.onerror = () => {
+        clearTimeout(timer);
+        script.remove();
+        reject(new Error("Leaflet CDN failed."));
+      };
       document.head.appendChild(script);
     });
-    return Boolean(window.L?.map);
+
+    for (const source of sources) {
+      try {
+        if (!document.querySelector('link[data-wewe-leaflet-css]')) {
+          const css = document.createElement("link");
+          css.rel = "stylesheet";
+          css.href = source.css;
+          css.dataset.weweLeafletCss = "true";
+          document.head.appendChild(css);
+        }
+        await loadScript(source.js);
+        if (window.L?.map) return true;
+      } catch {
+        // Try the next CDN.
+      }
+    }
+    return false;
   }
 
   function centerCheckoutMap(point) {
@@ -851,10 +881,20 @@
     if (!destination) { box.textContent = "Choose a destination to calculate delivery."; return; }
     box.textContent = "Calculating delivery…";
     const payload = { delivery_method: method, ...(method === "PICKUP" ? { pickup_point_id: destination } : { delivery_point_id: destination }) };
-    const quote = await apiFetch("/orders/delivery-quote", { method: "POST", body: JSON.stringify(payload) });
-    const routeRows = (quote.fulfillments || []).map(item => '<p><span>' + escapeHtml(item.retailer_name || "Retailer") + ' · ' + Number(item.route_distance_km || 0).toFixed(1) + ' km</span><b>' + money(item.delivery_fee_ugx) + '</b></p>').join("");
-    box.innerHTML = '<div class="checkout-totals"><p>Subtotal <b>' + money(quote.subtotal_ugx) + '</b></p>' + routeRows + '<p>Delivery fee <b>' + money(quote.delivery_fee_ugx) + '</b></p><p class="checkout-total"><span>Total</span><b>' + money(quote.total_ugx) + '</b></p><small class="route-note">' + (quote.routing_provider ? 'Google/road routing is used when configured; WEWE applies its own UGX pricing formula.' : 'Pickup has no delivery fee.') + '</small></div>';
-    form.dataset.quoteTotal = String(quote.total_ugx);
+    try {
+      const quote = await apiFetch("/orders/delivery-quote", { method: "POST", body: JSON.stringify(payload) });
+      const routeRows = (quote.fulfillments || []).map(item => {
+        const distance = Number(item.route_distance_km);
+        const distanceText = Number.isFinite(distance) ? distance.toFixed(1) + " km" : "Route unavailable";
+        return '<p><span>' + escapeHtml(item.retailer_name || "Retailer") + ' · ' + distanceText + '</span><b>' + money(item.delivery_fee_ugx) + '</b></p>';
+      }).join("");
+      box.innerHTML = '<div class="checkout-totals"><p>Subtotal <b>' + money(quote.subtotal_ugx) + '</b></p>' + routeRows + '<p>Delivery fee <b>' + money(quote.delivery_fee_ugx) + '</b></p><p class="checkout-total"><span>Total</span><b>' + money(quote.total_ugx) + '</b></p><small class="route-note">' + (quote.routing_provider ? escapeHtml(quote.routing_provider) + ' road routing · WEWE delivery pricing' : 'Pickup has no delivery fee.') + '</small></div>';
+      form.dataset.quoteTotal = String(quote.total_ugx);
+    } catch (error) {
+      box.innerHTML = '<div class="api-state api-error"><b>Delivery fee could not be calculated.</b><span>' + escapeHtml(error.message || "Please choose another delivery point or try again.") + '</span><button type="button" class="button-outline" data-action="retry-delivery-quote">Try again</button></div>';
+      delete form.dataset.quoteTotal;
+      throw error;
+    }
   }
 
   async function placeOrder(form) {
