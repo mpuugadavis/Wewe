@@ -16,6 +16,8 @@ from app.models import (
     NotificationOutbox,
     Order,
     OrderItem,
+    Payment,
+    PaymentRefund,
     PickupPoint,
     Product,
     Retailer,
