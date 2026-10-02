@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     media_signed_url_ttl_seconds: int = 300
     #: Minimum age before an unreferenced object can be collected.
     media_cleanup_grace_seconds: int = 86_400
+    notification_worker_batch_size: int = 50
+    notification_worker_poll_seconds: float = 2.0
+    notification_worker_stale_after_seconds: int = 300
+    notification_worker_max_attempts: int = 8
 
     @field_validator("secret_key")
     @classmethod
@@ -95,6 +99,27 @@ class Settings(BaseSettings):
     def validate_media_signed_url_ttl(cls, value: int) -> int:
         if value <= 0 or value > 3600:
             raise ValueError("MEDIA_SIGNED_URL_TTL_SECONDS must be between 1 and 3600")
+        return value
+
+    @field_validator("notification_worker_batch_size")
+    @classmethod
+    def validate_notification_batch_size(cls, value: int) -> int:
+        if value <= 0 or value > 500:
+            raise ValueError("NOTIFICATION_WORKER_BATCH_SIZE must be between 1 and 500")
+        return value
+
+    @field_validator("notification_worker_poll_seconds")
+    @classmethod
+    def validate_notification_poll_seconds(cls, value: float) -> float:
+        if value <= 0 or value > 60:
+            raise ValueError("NOTIFICATION_WORKER_POLL_SECONDS must be between 0 and 60")
+        return value
+
+    @field_validator("notification_worker_stale_after_seconds", "notification_worker_max_attempts")
+    @classmethod
+    def validate_notification_worker_positive(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("notification worker settings must be positive")
         return value
 
     @field_validator("media_max_upload_bytes")

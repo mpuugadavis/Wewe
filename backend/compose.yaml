@@ -42,6 +42,17 @@ services:
         mc mb --ignore-existing "local/wewe-media"
         mc anonymous set download "local/wewe-media"
 
+  notification-worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to use host postgres}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "app.workers.notification_worker"]
+    restart: unless-stopped
+
   api:
     build: .
     env_file: .env
