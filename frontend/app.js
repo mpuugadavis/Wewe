@@ -1341,15 +1341,31 @@
     if (action === "agent-availability") {
       const nextStatus = button.dataset.status;
       if (nextStatus === "AVAILABLE") {
+        if (!navigator.geolocation) throw new Error("Location sharing is required for delivery work.");
+        let initialPosition;
         try {
-          await startRiderLocationTracking({requireInitialFix: true});
+          initialPosition = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(
+            resolve,
+            reject,
+            { enableHighAccuracy: true, maximumAge: 15000, timeout: 15000 }
+          ));
         } catch (error) {
           stopRiderLocationTracking();
-          throw new Error(error.code === 1 ? "Location permission is required before you can go online." : (error.message || "Unable to start location sharing."));
+          throw new Error(error.code === 1 ? "Location permission is required before you can go online." : "Unable to get your current location.");
         }
+        await apiFetch("/deliveries/me/availability", { method: "PATCH", body: JSON.stringify({ availability_status: nextStatus }) });
+        try {
+          await publishRiderLocation(initialPosition);
+          await startRiderLocationTracking({requireInitialFix: false});
+        } catch (error) {
+          await apiFetch("/deliveries/me/availability", { method: "PATCH", body: JSON.stringify({ availability_status: "OFFLINE" }) }).catch(() => {});
+          stopRiderLocationTracking();
+          throw error;
+        }
+      } else {
+        await apiFetch("/deliveries/me/availability", { method: "PATCH", body: JSON.stringify({ availability_status: nextStatus }) });
+        stopRiderLocationTracking();
       }
-      await apiFetch("/deliveries/me/availability", { method: "PATCH", body: JSON.stringify({ availability_status: nextStatus }) });
-      if (nextStatus === "OFFLINE") stopRiderLocationTracking();
       return renderDashboard();
     }
     if (action === "accept-delivery-offer") {
