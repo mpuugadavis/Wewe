@@ -414,6 +414,87 @@ class DeliveryEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False)
 
 
+
+class RetailerPaymentAllocation(Base):
+    """Immutable attribution of a captured payment to a retailer fulfillment."""
+    __tablename__ = "retailer_payment_allocations"
+    __table_args__ = (
+        CheckConstraint("amount_ugx > 0", name="ck_retailer_payment_allocation_amount"),
+        CheckConstraint("currency = 'UGX'", name="ck_retailer_payment_allocation_currency"),
+        UniqueConstraint("payment_id", "fulfillment_id", name="uq_retailer_payment_allocation_payment_fulfillment"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    payment_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("payments.id", ondelete="RESTRICT"), index=True)
+    fulfillment_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("retailer_fulfillments.id", ondelete="RESTRICT"), index=True)
+    retailer_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("retailers.id", ondelete="RESTRICT"), index=True)
+    amount_ugx: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="UGX", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False)
+
+
+class RetailerPayableEntry(Base):
+    """Auditable credit/debit entry contributing to a retailer payable balance."""
+    __tablename__ = "retailer_payable_entries"
+    __table_args__ = (
+        CheckConstraint("entry_type IN ('CREDIT','DEBIT')", name="ck_retailer_payable_entry_type"),
+        CheckConstraint("amount_ugx > 0", name="ck_retailer_payable_entry_amount"),
+        CheckConstraint("currency = 'UGX'", name="ck_retailer_payable_entry_currency"),
+        Index("ix_retailer_payable_entries_retailer_created", "retailer_id", "created_at"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    retailer_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("retailers.id", ondelete="RESTRICT"), index=True)
+    order_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("orders.id", ondelete="RESTRICT"), index=True)
+    fulfillment_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("retailer_fulfillments.id", ondelete="RESTRICT"), index=True)
+    payment_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("payments.id", ondelete="RESTRICT"), index=True)
+    entry_type: Mapped[str] = mapped_column(String(10), nullable=False)
+    amount_ugx: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="UGX", nullable=False)
+    reason: Mapped[str] = mapped_column(String(60), nullable=False)
+    source_reference: Mapped[str | None] = mapped_column(String(180), unique=True)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False)
+
+
+class RetailerSettlement(Base):
+    """Idempotent settlement instruction; submission is not settlement confirmation."""
+    __tablename__ = "retailer_settlements"
+    __table_args__ = (
+        CheckConstraint("status IN ('DRAFT','SUBMITTED','SETTLED','FAILED','REVIEW_REQUIRED')", name="ck_retailer_settlement_status"),
+        CheckConstraint("amount_ugx > 0", name="ck_retailer_settlement_amount"),
+        CheckConstraint("currency = 'UGX'", name="ck_retailer_settlement_currency"),
+        UniqueConstraint("settlement_reference", name="uq_retailer_settlement_reference"),
+        UniqueConstraint("idempotency_key", name="uq_retailer_settlement_idempotency"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    retailer_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("retailers.id", ondelete="RESTRICT"), index=True)
+    amount_ugx: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="UGX", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="DRAFT", nullable=False, index=True)
+    settlement_reference: Mapped[str] = mapped_column(String(180), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(180), nullable=False)
+    payout_reference: Mapped[str | None] = mapped_column(String(180), unique=True)
+    authorized_by_user_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False)
+
+
+class RetailerSettlementLine(Base):
+    """Links a settlement to the exact payable entries it consumes."""
+    __tablename__ = "retailer_settlement_lines"
+    __table_args__ = (
+        CheckConstraint("amount_ugx > 0", name="ck_retailer_settlement_line_amount"),
+        CheckConstraint("currency = 'UGX'", name="ck_retailer_settlement_line_currency"),
+        UniqueConstraint("settlement_id", "payable_entry_id", name="uq_retailer_settlement_line_entry"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    settlement_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("retailer_settlements.id", ondelete="CASCADE"), index=True)
+    payable_entry_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("retailer_payable_entries.id", ondelete="RESTRICT"), index=True)
+    amount_ugx: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="UGX", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False)
+
+
 class DeliveryEarning(Base):
     __tablename__ = "delivery_earnings"
     __table_args__ = (CheckConstraint("status IN ('PENDING','PAID')", name="ck_delivery_earning_status"),)
