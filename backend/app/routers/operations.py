@@ -42,7 +42,6 @@ from app.security import hash_token
 from app.services.delivery_dispatch import (
     OfferUnavailableError,
     accept_offer,
-    advance_dispatch,
     dispatch_ready_queue,
     list_active_offers,
     offer_view,
