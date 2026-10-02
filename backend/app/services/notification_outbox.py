@@ -16,6 +16,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import NotificationOutbox, utcnow
+from app.services.mailer import send_email
 
 
 class NotificationHandler(Protocol):
@@ -59,6 +60,24 @@ def _in_app_handler(_notification: NotificationOutbox) -> None:
 
 notification_dispatcher = NotificationDispatcher()
 notification_dispatcher.register("IN_APP", _in_app_handler)
+
+
+def _email_handler(notification: NotificationOutbox) -> None:
+    """Deliver a durable EMAIL notification through the configured SMTP adapter."""
+    payload = notification.payload or {}
+    to_address = payload.get("to")
+    subject = payload.get("subject")
+    body = payload.get("body")
+    if not isinstance(to_address, str) or not to_address.strip():
+        raise NotificationDispatchError("EMAIL notification requires a non-empty 'to' address")
+    if not isinstance(subject, str) or not subject.strip():
+        raise NotificationDispatchError("EMAIL notification requires a non-empty 'subject'")
+    if not isinstance(body, str):
+        raise NotificationDispatchError("EMAIL notification requires a string 'body'")
+    send_email(to_address.strip(), subject.strip(), body)
+
+
+notification_dispatcher.register("EMAIL", _email_handler)
 
 
 def claim_notifications(
