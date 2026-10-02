@@ -178,4 +178,113 @@
   observer.observe(document.body, { childList: true, subtree: true });
   addStyles();
   enhanceProductsPanel();
+
+  function systemHealthStyles() {
+    if (document.querySelector("#wewe-system-health-styles")) return;
+    const style = document.createElement("style");
+    style.id = "wewe-system-health-styles";
+    style.textContent = `
+      .wewe-health-panel{margin-bottom:16px;border:1px solid #e7e0ef;border-radius:18px;background:#fff;box-shadow:0 7px 22px rgba(45,25,90,.045);overflow:hidden}
+      .wewe-health-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 20px;border-bottom:1px solid #eee9f3}
+      .wewe-health-head h2{margin:0;font-size:17px;color:#342643}.wewe-health-head p{margin:4px 0 0;color:#91879c;font-size:10px}
+      .wewe-health-status{display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:99px;font-size:9px;font-weight:900}
+      .wewe-health-status.healthy{background:#e8f7ef;color:#18794e}.wewe-health-status.degraded{background:#fff2df;color:#9a5a00}
+      .wewe-health-status::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+      .wewe-health-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px 20px}
+      .wewe-health-card{border:1px solid #eee9f3;border-radius:13px;padding:13px;background:#fbfaff}
+      .wewe-health-card h3{margin:0 0 9px;font-size:12px;color:#4b3b58}.wewe-health-meta{display:flex;justify-content:space-between;gap:10px;font-size:10px;color:#82778e}.wewe-health-meta strong{color:#38274a}
+      .wewe-health-workers{border-top:1px solid #eee9f3;padding:0 20px 8px}
+      .wewe-health-worker{display:grid;grid-template-columns:1.5fr .8fr 1fr 1fr;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #f0ebf4;font-size:10px}
+      .wewe-health-worker:last-child{border-bottom:0}.wewe-health-worker small{display:block;color:#9a90a4;margin-top:2px}
+      .wewe-health-worker-error{grid-column:1/-1;color:#a34a43;background:#fff5f4;border-radius:8px;padding:7px 9px}
+      .wewe-health-action{border:1px solid #d8cef0;background:#fff;color:#5b3db2;border-radius:9px;padding:7px 10px;font-size:10px;font-weight:800;cursor:pointer}
+      .wewe-health-action:hover{background:#f8f5ff}.wewe-health-loading{padding:22px 20px;color:#8c8297;font-size:11px}
+      @media(max-width:700px){.wewe-health-grid{grid-template-columns:1fr}.wewe-health-worker{grid-template-columns:1fr 1fr}.wewe-health-worker-error{grid-column:1/-1}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function healthBadge(status) {
+    const normalized = String(status || "UNKNOWN").toLowerCase();
+    return `<span class="wewe-health-status ${normalized === "healthy" ? "healthy" : "degraded"}">${escapeHtml(status || "UNKNOWN")}</span>`;
+  }
+
+  function healthTime(value) {
+    if (!value) return "Never";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleString();
+  }
+
+  async function loadSystemHealth() {
+    const request = window.weweApiFetch;
+    if (typeof request !== "function") throw new Error("WEWE is still loading. Please try again.");
+    const health = await request("/admin/system-health");
+    const content = document.querySelector("#dashboardContent");
+    if (!content) return;
+    const workers = Array.isArray(health.workers) ? health.workers : [];
+    const storage = health.storage || {};
+    content.innerHTML = `
+      <section class="wewe-health-panel">
+        <div class="wewe-health-head">
+          <div><div class="section-kicker">Operations</div><h2>System health</h2><p>Worker heartbeats and object-storage reachability for administrators.</p></div>
+          <div style="display:flex;align-items:center;gap:8px">${healthBadge(health.overall_status)}<button class="wewe-health-action" data-wewe-health-refresh>Refresh</button></div>
+        </div>
+        <div class="wewe-health-grid">
+          <div class="wewe-health-card"><h3>Object storage</h3><div class="wewe-health-meta"><span>Provider</span><strong>${escapeHtml(storage.provider || "—")}</strong></div><div class="wewe-health-meta" style="margin-top:6px"><span>Status</span><strong>${escapeHtml(storage.status || "UNKNOWN")}</strong></div></div>
+          <div class="wewe-health-card"><h3>Worker monitoring</h3><div class="wewe-health-meta"><span>Stale after</span><strong>${Number(health.worker_stale_after_seconds || 0)}s</strong></div><div class="wewe-health-meta" style="margin-top:6px"><span>Degraded</span><strong>${health.degraded_workers?.length || 0}</strong></div></div>
+        </div>
+        <div class="wewe-health-workers">
+          ${workers.length ? workers.map(worker => `
+            <div class="wewe-health-worker">
+              <div><b>${escapeHtml(worker.worker_name)}</b><small>Heartbeat: ${escapeHtml(healthTime(worker.last_heartbeat_at))}</small></div>
+              <div>${healthBadge(worker.status)}</div>
+              <div><small>Last success</small>${escapeHtml(healthTime(worker.last_success_at))}</div>
+              <div><small>Failures</small>${Number(worker.last_failed || 0).toLocaleString()}</div>
+              ${worker.last_error ? `<div class="wewe-health-worker-error">${escapeHtml(worker.last_error)}</div>` : ""}
+            </div>`).join("") : '<div class="wewe-health-loading">No worker health records exist yet. This is degraded until workers report their first heartbeat.</div>'}
+        </div>
+      </section>`;
+  }
+
+  function enhanceAdminHealth() {
+    const role = document.querySelector("#sideRole")?.textContent?.trim();
+    const nav = document.querySelector("#dashNav");
+    if (!nav || role !== "ADMIN") return;
+    systemHealthStyles();
+    if (!nav.querySelector("[data-wewe-system-health]")) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "System health";
+      button.dataset.weweSystemHealth = "true";
+      nav.appendChild(button);
+    }
+  }
+
+  document.addEventListener("click", event => {
+    const healthButton = event.target.closest("[data-wewe-system-health]");
+    const refreshButton = event.target.closest("[data-wewe-health-refresh]");
+    if (healthButton) {
+      event.preventDefault();
+      document.querySelectorAll("#dashNav button").forEach(button => button.classList.remove("active"));
+      healthButton.classList.add("active");
+      const content = document.querySelector("#dashboardContent");
+      if (content) content.innerHTML = '<div class="wewe-health-loading">Loading operational health…</div>';
+      loadSystemHealth().catch(error => {
+        if (content) content.innerHTML = `<div class="api-state api-error">${escapeHtml(error.message)}</div>`;
+      });
+    }
+    if (refreshButton) {
+      event.preventDefault();
+      const content = document.querySelector("#dashboardContent");
+      if (content) content.innerHTML = '<div class="wewe-health-loading">Refreshing operational health…</div>';
+      loadSystemHealth().catch(error => {
+        if (content) content.innerHTML = `<div class="api-state api-error">${escapeHtml(error.message)}</div>`;
+      });
+    }
+  });
+
+  const adminHealthObserver = new MutationObserver(() => enhanceAdminHealth());
+  adminHealthObserver.observe(document.body, { childList: true, subtree: true });
+  enhanceAdminHealth();
+
 })();
