@@ -70,21 +70,15 @@ def _seed(session: Session, *, payment_status="SUCCESSFUL"):
 
 def test_successful_payment_allocation_is_idempotent_and_bounded():
     with _session() as session:
-        retailer, order, fulfillment, payment = _seed(session)
+        _, _, fulfillment, payment = _seed(session)
 
         first = allocate_successful_payment_to_fulfillment(
-            session,
-            payment_id=payment.id,
-            fulfillment_id=fulfillment.id,
-            amount_ugx=8000,
+            session, payment_id=payment.id, fulfillment_id=fulfillment.id, amount_ugx=8000
         )
         session.commit()
 
         replay = allocate_successful_payment_to_fulfillment(
-            session,
-            payment_id=payment.id,
-            fulfillment_id=fulfillment.id,
-            amount_ugx=8000,
+            session, payment_id=payment.id, fulfillment_id=fulfillment.id, amount_ugx=8000
         )
         assert replay.id == first.id
 
@@ -95,10 +89,7 @@ def test_successful_payment_allocation_is_idempotent_and_bounded():
 
         with pytest.raises(PaymentAllocationConflictError):
             allocate_successful_payment_to_fulfillment(
-                session,
-                payment_id=payment.id,
-                fulfillment_id=fulfillment.id,
-                amount_ugx=9000,
+                session, payment_id=payment.id, fulfillment_id=fulfillment.id, amount_ugx=9000
             )
 
         assert session.query(RetailerPaymentAllocation).count() == 1
@@ -107,15 +98,18 @@ def test_successful_payment_allocation_is_idempotent_and_bounded():
 def test_payment_cannot_be_overallocated_across_fulfillments():
     with _session() as session:
         _, order, first_fulfillment, payment = _seed(session)
-        retailer_user = session.query(User).filter_by(role="RETAILER").one()
+        second_retailer_user = User(
+            id=uuid4(), name="Second Retailer", email=f"second-{uuid4().hex}@example.com",
+            password_hash="hash", role="RETAILER",
+        )
         second_retailer = Retailer(
-            id=uuid4(), user_id=retailer_user.id, business_name="Second Retailer",
+            id=uuid4(), user_id=second_retailer_user.id, business_name="Second Retailer",
             slug=f"second-{uuid4().hex[:8]}", phone="0700000001",
         )
         second_fulfillment = RetailerFulfillment(
             id=uuid4(), order_id=order.id, retailer_id=second_retailer.id,
         )
-        session.add_all([second_retailer, second_fulfillment])
+        session.add_all([second_retailer_user, second_retailer, second_fulfillment])
         session.commit()
 
         allocate_successful_payment_to_fulfillment(
@@ -125,10 +119,7 @@ def test_payment_cannot_be_overallocated_across_fulfillments():
 
         with pytest.raises(PaymentAllocationConflictError):
             allocate_successful_payment_to_fulfillment(
-                session,
-                payment_id=payment.id,
-                fulfillment_id=second_fulfillment.id,
-                amount_ugx=4000,
+                session, payment_id=payment.id, fulfillment_id=second_fulfillment.id, amount_ugx=4000
             )
 
 
@@ -138,22 +129,16 @@ def test_only_successful_online_payment_can_be_allocated():
 
         with pytest.raises(RetailerPaymentAllocationError):
             allocate_successful_payment_to_fulfillment(
-                session,
-                payment_id=payment.id,
-                fulfillment_id=fulfillment.id,
-                amount_ugx=1000,
+                session, payment_id=payment.id, fulfillment_id=fulfillment.id, amount_ugx=1000
             )
 
 
 def test_payment_and_fulfillment_must_belong_to_same_order():
     with _session() as session:
         _, _, fulfillment, _ = _seed(session)
-        _, other_order, _, other_payment = _seed(session)
+        _, _, _, other_payment = _seed(session)
 
         with pytest.raises(PaymentAllocationConflictError):
             allocate_successful_payment_to_fulfillment(
-                session,
-                payment_id=other_payment.id,
-                fulfillment_id=fulfillment.id,
-                amount_ugx=1000,
+                session, payment_id=other_payment.id, fulfillment_id=fulfillment.id, amount_ugx=1000
             )
