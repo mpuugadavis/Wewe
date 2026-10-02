@@ -902,3 +902,76 @@ def fail_admin_settlement(
 def audit_logs(limit: int = Query(default=100, ge=1, le=500), offset: int = Query(default=0, ge=0), db: Session = Depends(get_db)) -> list[dict]:
     rows = db.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).offset(offset).limit(limit)).all()
     return [{"id": row.id, "actor_user_id": row.actor_user_id, "action": row.action, "resource_type": row.resource_type, "resource_id": row.resource_id, "details": row.details, "created_at": row.created_at} for row in rows]
+
+
+@router.get("/system-health")
+def system_health(db: Session = Depends(get_db)) -> dict:
+    """Return operational health details for administrators only."""
+    from app.config import get_settings
+    from app.services.media_uploads import build_media_storage
+
+    settings = get_settings()
+    now = utcnow()
+    stale_after = settings.worker_health_stale_after_seconds
+
+    workers = []
+    for health in db.scalars(select(WorkerHealth).order_by(WorkerHealth.worker_name)).all():
+        heartbeat = health.last_heartbeat_at
+        stale = heartbeat is None or (now - heartbeat).total_seconds() > stale_after
+        worker_status = health.status
+        if stale and worker_status in {"STARTING", "RUNNING", "HEALTHY"}:
+            worker_status = "STALE"
+        workers.append({
+            "worker_name": health.worker_name,
+            "status": worker_status,
+            "last_started_at": health.last_started_at,
+            "last_heartbeat_at": heartbeat,
+            "last_success_at": health.last_success_at,
+            "last_failure_at": health.last_failure_at,
+            "last_duration_ms": health.last_duration_ms,
+            "last_processed": health.last_processed,
+            "last_scanned": health.last_scanned,
+            "last_candidates": health.last_candidates,
+            "last_deleted": health.last_deleted,
+            "last_skipped": health.last_skipped,
+            "last_failed": health.last_failed,
+            "last_error": health.last_error,
+            "stale": stale,
+        })
+
+    storage = {
+        "provider": settings.storage_provider,
+        "status": "DISABLED" if settings.storage_provider == "DISABLED" else "UNKNOWN",
+    }
+    if settings.storage_provider != "DISABLED":
+        try:
+            storage_adapter = build_media_storage(settings)
+            if storage_adapter is None:
+                storage["status"] = "DISABLED"
+            else:
+                storage_adapter.healthcheck()
+                storage["status"] = "HEALTHY"
+        except Exception as exc:
+            storage["status"] = "FAILING"
+            storage["error"] = str(exc)[:500]
+
+    degraded_workers = [
+        worker["worker_name"]
+        for worker in workers
+        if worker["status"] in {"FAILING", "STALE", "STOPPED"}
+    ]
+    if not workers:
+        degraded_workers = ["worker_health:no_workers"]
+
+    return {
+        "overall_status": (
+            "DEGRADED"
+            if degraded_workers or storage["status"] == "FAILING"
+            else "HEALTHY"
+        ),
+        "generated_at": now,
+        "worker_stale_after_seconds": stale_after,
+        "workers": workers,
+        "degraded_workers": degraded_workers,
+        "storage": storage,
+    }
