@@ -192,7 +192,10 @@ def customer_order_tracking(
                 }
                 rider_location = db.get(DeliveryAgentLocation, assignment.agent_id)
                 if rider_location is not None:
-                    location_updated_at = rider_location.updated_at\n                    if location_updated_at.tzinfo is None:\n                        location_updated_at = location_updated_at.replace(tzinfo=timezone.utc)\n                    age_seconds = max(0.0, (now - location_updated_at).total_seconds())
+                    location_updated_at = rider_location.updated_at
+                    if location_updated_at.tzinfo is None:
+                        location_updated_at = location_updated_at.replace(tzinfo=timezone.utc)
+                    age_seconds = max(0.0, (now - location_updated_at).total_seconds())
                     if age_seconds <= 60:
                         location_status = "LIVE"
                         location = {
