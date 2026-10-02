@@ -160,7 +160,6 @@ class Settings(BaseSettings):
         return value
 
     @property
-    @property
     def trusted_host_list(self) -> list[str]:
         return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
 
@@ -171,6 +170,7 @@ class Settings(BaseSettings):
             raise ValueError("MAX_REQUEST_BODY_BYTES must be between 1 and 50000000")
         return value
 
+    @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
