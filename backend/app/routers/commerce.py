@@ -213,7 +213,9 @@ def clear_cart(
 
 
 @router.post("/orders/delivery-quote")
+@limiter.limit("20/minute")
 def quote_checkout(
+    request: Request,
     payload: CheckoutIn,
     principal: Principal = Depends(require_roles("CUSTOMER")),
     db: Session = Depends(get_db),
@@ -229,7 +231,9 @@ def quote_checkout(
 
 
 @router.post("/orders", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 def checkout(
+    request: Request,
     payload: CheckoutIn,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", min_length=8, max_length=100),
     principal: Principal = Depends(require_roles("CUSTOMER")),
@@ -265,7 +269,9 @@ def my_orders(
 
 
 @router.post("/orders/{order_id}/reorder")
+@limiter.limit("10/minute")
 def reorder(
+    request: Request,
     order_id: UUID,
     principal: Principal = Depends(require_roles("CUSTOMER")),
     db: Session = Depends(get_db),
@@ -350,7 +356,9 @@ def get_order(
 
 
 @router.post("/orders/{order_id}/cancel", response_model=OrderOut)
+@limiter.limit("10/minute")
 def cancel_order(
+    request: Request,
     order_id: UUID,
     principal: Principal = Depends(require_roles("CUSTOMER", "ADMIN")),
     db: Session = Depends(get_db),
