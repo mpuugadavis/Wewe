@@ -147,6 +147,7 @@ def _create_offer(db: Session, assignment: DeliveryAssignment) -> DeliveryOffer 
 
 
 def advance_dispatch(db: Session, assignment_id: UUID) -> DeliveryOffer | None:
+    db.flush()
     assignment = db.scalar(
         select(DeliveryAssignment)
         .where(DeliveryAssignment.id == assignment_id)
