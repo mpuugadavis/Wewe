@@ -335,13 +335,34 @@
     setModal(`<div class="modal-head"><div><div class="section-kicker">WEWE account</div><h2>${title}</h2></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div>
       <form data-form="${register ? "register" : "login"}" class="api-form">
         ${register ? '<label class="field">Full name<input name="name" required minlength="2" autocomplete="name"></label>' : ""}
-        ${register ? `<label class="field">Account type<select name="role"><option value="CUSTOMER" ${role === "CUSTOMER" ? "selected" : ""}>Customer</option><option value="RETAILER" ${role === "RETAILER" ? "selected" : ""}>Retailer</option><option value="DELIVERY_AGENT" ${role === "DELIVERY_AGENT" ? "selected" : ""}>Delivery agent</option></select></label>` : ""}
+        ${register ? `<label class="field">Account type<select name="role"><option value="CUSTOMER" selected>Customer</option><option value="RETAILER">Retailer</option></select></label>` : ""}
         <label class="field">Email or phone<input name="email" type="text" required autocomplete="username"></label>
         ${register ? '<label class="field">Phone<input name="phone" type="tel" autocomplete="tel"></label><label class="field hidden" data-register-business>Business name<input name="business_name" maxlength="180"></label><label class="field hidden" data-register-transport>Transport mode<input name="transport_mode" maxlength="40"></label>' : ""}
         <label class="field">Password<input name="password" type="password" required minlength="${register ? "12" : "1"}" autocomplete="${register ? "new-password" : "current-password"}"></label>
         <p class="form-message" aria-live="polite"></p><button class="button-primary" type="submit">${register ? "Create account" : "Sign in"}</button>
       </form><button class="text-link" data-action="${register ? "show-login" : "show-register"}">${register ? "Already registered? Sign in" : "New to WEWE? Create an account"}</button>`, false);
     if (register) updateRegistrationFields();
+  }
+
+  function showRiderApplication() {
+    setModal(`<div class="modal-head"><div><div class="section-kicker">WEWE delivery partner</div><h2>Become a WEWE rider</h2></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div>
+      <div class="rider-apply-intro"><div class="rider-apply-icon">🚴</div><div><p>Earn by helping students get their orders from campus retailers to their chosen delivery points.</p><small>Your application creates a delivery-agent account for review. You can only receive delivery work after WEWE verification.</small></div></div>
+      <form data-form="rider-application" class="api-form">
+        <label class="field">Full name<input name="name" required minlength="2" autocomplete="name"></label>
+        <label class="field">Email or phone<input name="email" required autocomplete="username"></label>
+        <label class="field">Phone number<input name="phone" required type="tel" autocomplete="tel" placeholder="+256…"></label>
+        <label class="field">Transport mode<select name="transport_mode" required><option value="">Choose transport</option><option>Walking</option><option>Bicycle</option><option>Motorcycle</option><option>Car</option><option>Other</option></select></label>
+        <label class="field">Create password<input name="password" required type="password" minlength="12" autocomplete="new-password"></label>
+        <p class="form-message" aria-live="polite"></p><button class="button-primary" type="submit">Submit rider application</button>
+      </form>
+      <p class="rider-apply-note">Already a delivery agent? <button class="text-link" data-action="show-login">Sign in instead</button></p>`, true);
+  }
+
+  async function submitRiderApplication(form) {
+    const body = Object.fromEntries(new FormData(form));
+    body.role = "DELIVERY_AGENT";
+    const response = await apiFetch("/auth/register", { method: "POST", body: JSON.stringify(body) }, false);
+    $( "#modalContent" ).innerHTML = `<div class="modal-head"><div><div class="section-kicker">Application received</div><h2>Thanks, ${escapeHtml(body.name)}.</h2></div><button class="close-modal" data-action="close-modal">×</button></div><div class="rider-apply-success"><div>✓</div><h3>Your rider account is ready for review.</h3><p>${escapeHtml(response?.message || "Sign in once your delivery-agent account has been verified by WEWE.")}</p><button class="button-primary" data-action="show-login">Go to sign in</button></div>`;
   }
 
   async function login(form) {
@@ -828,7 +849,7 @@
     const common = [["overview","Overview"]];
     if(role==="CUSTOMER") return [...common,["orders","Orders"],["wishlist","Saved items"],["addresses","Delivery points"],["notifications","Notifications"],["profile","Profile"]];
     if(role==="RETAILER") return [...common,["products","Products"],["fulfillments","Fulfilments"],["profile","Store profile"]];
-    if(role==="DELIVERY_AGENT") return [...common,["available","Available"],["active","My deliveries"],["history","History"],["earnings","Earnings"],["profile","Profile"]];
+    if(role==="DELIVERY_AGENT") return [...common,["available","Delivery offers"],["active","Active delivery"],["history","Delivery history"],["earnings","Earnings"],["profile","Rider profile"]];
     return [...common,["analytics","Analytics"],["users","Users"],["retailers","Retailers"],["products","Products"],["categories","Categories"],["orders","Orders"],["agents","Delivery agents"],["reviews","Reviews"],["settlements","Settlements"],["settings","Settings"],["audit","Audit log"]];
   }
   async function renderDashboard() {
@@ -933,23 +954,65 @@
       '<button data-action="dashboard-section" data-section="profile">⚙ Store profile</button></div></div></div>';
   }
 
+  function mapsDirectionsUrl(point) {
+    const name = point?.name || point?.address || "";
+    const lat = Number(point?.latitude), lng = Number(point?.longitude);
+    const destination = Number.isFinite(lat) && Number.isFinite(lng) ? `${lat},${lng}` : name;
+    return destination ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}` : "";
+  }
+
+  function riderJobCard(row, compact = false, offer = false) {
+    const pickup = row.pickup?.name || row.retailer_name || "Collection point";
+    const dropoff = row.dropoff?.name || row.delivery_point_name || "Customer destination";
+    const pickupNav = mapsDirectionsUrl(row.pickup);
+    const dropoffNav = mapsDirectionsUrl(row.dropoff);
+    const nextAction = offer
+      ? `<button class="rider-primary-action" data-action="accept-delivery" data-id="${escapeHtml(row.id)}">Accept delivery</button>`
+      : row.status === "ACCEPTED"
+        ? `<button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="PICKED_UP">Confirm pickup</button>`
+        : row.status === "PICKED_UP"
+          ? `<button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="OUT_FOR_DELIVERY">Start delivery</button>`
+          : row.status === "OUT_FOR_DELIVERY"
+            ? `<form data-form="delivery-code" data-id="${escapeHtml(row.id)}" class="rider-code-form"><input name="confirmation_code" required minlength="4" maxlength="12" placeholder="Customer code"><button class="rider-primary-action">Complete delivery</button></form>`
+            : "";
+    return `<article class="rider-job-card ${compact ? "compact" : ""}">
+      <div class="rider-job-top"><div><span class="rider-job-label">Delivery ${escapeHtml(row.order_number || row.id || "")}</span><h3>${escapeHtml(pickup)}</h3></div>${statusBadge(row.status)}</div>
+      <div class="rider-route"><div class="rider-stop"><span class="rider-stop-dot pickup"></span><div><small>PICKUP</small><b>${escapeHtml(pickup)}</b></div>${pickupNav ? `<a href="${pickupNav}" target="_blank" rel="noopener noreferrer">Navigate</a>` : ""}</div>
+      <div class="rider-route-line"></div><div class="rider-stop"><span class="rider-stop-dot dropoff"></span><div><small>DROP-OFF</small><b>${escapeHtml(dropoff)}</b></div>${dropoffNav ? `<a href="${dropoffNav}" target="_blank" rel="noopener noreferrer">Navigate</a>` : ""}</div></div>
+      ${nextAction ? `<div class="rider-job-actions">${nextAction}</div>` : ""}</article>`;
+  }
+
   async function agentDashboard() {
     const section = state.dashboardSection;
+    const profilePromise = apiFetch("/deliveries/me/profile");
     if (section === "profile") {
-      const profile = await apiFetch("/deliveries/me/profile");
-      return `<div class="dashboard-panel"><h2>Agent profile</h2><form data-form="agent-profile" class="api-form"><label class="field">Phone<input name="phone" value="${escapeHtml(profile.phone || "")}"></label><label class="field">Transport mode<input name="transport_mode" value="${escapeHtml(profile.transport_mode || "")}"></label><button class="button-primary">Save profile</button></form><button class="button-outline" data-action="agent-availability" data-status="${profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE"}">Set ${profile.availability_status === "AVAILABLE" ? "offline" : "available"}</button></div>`;
+      const profile = await profilePromise;
+      const available = profile.availability_status === "AVAILABLE";
+      return dashboardPage("Rider profile","Keep your contact and transport details ready for delivery work.",`<div class="rider-profile-grid"><div class="rider-profile-card"><div class="rider-avatar-large">${escapeHtml((state.user.name || "?").slice(0,1).toUpperCase())}</div><div><h3>${escapeHtml(state.user.name)}</h3><span>${escapeHtml(profile.verification_status || "PENDING")} verification</span></div></div>
+      <form data-form="agent-profile" class="api-form dashboard-form rider-form"><label class="field">Phone<input name="phone" value="${escapeHtml(profile.phone || "")}" autocomplete="tel"></label><label class="field">Transport mode<input name="transport_mode" value="${escapeHtml(profile.transport_mode || "")}" placeholder="Bicycle, motorcycle, car…" maxlength="40"></label><button class="rider-primary-action">Save rider profile</button></form>
+      <div class="rider-status-panel"><div><small>WORK STATUS</small><strong>${available ? "You are online" : "You are offline"}</strong><span>${available ? "New delivery offers can reach you." : "Go online when you are ready to receive work."}</span></div><button class="${available ? "rider-offline-button" : "rider-online-button"}" data-action="agent-availability" data-status="${available ? "OFFLINE" : "AVAILABLE"}">${available ? "Go offline" : "Go online"}</button></div></div>`);
     }
-    if (section === "overview" || section === "earnings") {
-      const [profile, earnings] = await Promise.all([apiFetch("/deliveries/me/profile"), apiFetch("/deliveries/me/earnings")]);
-      if (section === "earnings") return `<div class="dashboard-panel"><h2>Earnings</h2><pre>${escapeHtml(JSON.stringify(earnings, null, 2))}</pre></div>`;
-      return `<div class="stat-grid"><div class="stat-card"><span>Availability</span><b class="stat-value">${escapeHtml(profile.availability_status)}</b></div><div class="stat-card"><span>Paid earnings</span><b class="stat-value">${money(earnings.paid_ugx)}</b></div><div class="stat-card"><span>Pending earnings</span><b class="stat-value">${money(earnings.pending_ugx)}</b></div></div><div class="dashboard-panel"><button class="button-outline" data-action="dashboard-section" data-section="available">Find a delivery</button></div>`;
+    const [profile, earnings, active] = await Promise.all([profilePromise, apiFetch("/deliveries/me/earnings"), apiFetch("/deliveries/me")]);
+    const activeJob = (active || []).find(row => row.status !== "DELIVERED" && row.status !== "CANCELLED");
+    if (section === "earnings") {
+      return dashboardPage("Earnings","Your delivery earnings at a glance. Payment and payout rules remain controlled by WEWE's operational system.",`<div class="rider-earnings-grid"><div class="rider-earnings-card"><span>Paid</span><strong>${money(earnings.paid_ugx)}</strong><small>Recorded paid earnings</small></div><div class="rider-earnings-card"><span>Pending</span><strong>${money(earnings.pending_ugx)}</strong><small>Recorded pending earnings</small></div></div><div class="rider-info-card"><b>Keep delivering safely</b><span>Your earnings history is tied to completed delivery records.</span></div>`);
     }
     if (section === "available") {
       const rows = await apiFetch("/deliveries/available");
-      return `<div class="dashboard-panel"><h2>Available deliveries</h2>${rows.map(row => `<div class="order-card"><div class="panel-head"><b>${escapeHtml(row.order_number || row.id)}</b>${statusBadge(row.status)}</div><p>${escapeHtml(row.pickup?.name || row.retailer_name || "Collection location")} → ${escapeHtml(row.dropoff?.name || "Customer delivery destination")}</p><button data-action="accept-delivery" data-id="${escapeHtml(row.id)}">Accept delivery</button></div>`).join("") || "<p>No deliveries are currently available.</p>"}</div>`;
+      return dashboardPage("Delivery offers",profile.availability_status === "AVAILABLE" ? "Offers appear here when you are online and eligible." : "Go online to receive delivery offers.",`<div class="rider-offer-toolbar"><div><span class="rider-live-dot"></span><b>${profile.availability_status === "AVAILABLE" ? "Online and ready" : "Offline"}</b></div><button class="button-outline" data-action="agent-availability" data-status="${profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE"}">${profile.availability_status === "AVAILABLE" ? "Go offline" : "Go online"}</button></div>${profile.availability_status !== "AVAILABLE" ? '<div class="rider-empty"><h3>You are offline</h3><p>Switch to online to become eligible for new delivery offers.</p></div>' : ((rows || []).map(row => riderJobCard(row, false, true)).join("") || '<div class="rider-empty"><h3>Waiting for a delivery</h3><p>Keep this screen open while online. New eligible offers will appear here as dispatch becomes available.</p></div>')}`);
     }
-    const rows = await apiFetch(section === "history" ? "/deliveries/me/history" : "/deliveries/me");
-    return `<div class="dashboard-panel"><h2>${section === "history" ? "Completed deliveries" : "My deliveries"}</h2>${rows.map(row => `<div class="order-card"><div class="panel-head"><b>${escapeHtml(row.order_number || row.id)}</b>${statusBadge(row.status)}</div><p>${escapeHtml(row.pickup?.name || row.retailer_name || "Collection location")} → ${escapeHtml(row.dropoff?.name || "Delivery destination")}</p>${row.status !== "DELIVERED" ? `<div class="row-actions">${row.status === "ACCEPTED" ? `<button data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="PICKED_UP">Mark picked up</button>` : ""}${row.status === "PICKED_UP" ? `<button data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="OUT_FOR_DELIVERY">Out for delivery</button>` : ""}${row.status === "OUT_FOR_DELIVERY" ? `<form data-form="delivery-code" data-id="${escapeHtml(row.id)}" class="inline-form"><input name="confirmation_code" required minlength="4" maxlength="12" placeholder="Customer code" aria-label="Customer confirmation code"><button data-status="DELIVERED">Confirm delivery</button></form>` : ""}</div>` : ""}</div>`).join("") || "<p>No assigned deliveries.</p>"}</div>`;
+    if (section === "active") {
+      return dashboardPage("Active delivery","One delivery at a time, with the next action made obvious.",activeJob ? riderJobCard(activeJob) : '<div class="rider-empty"><h3>No active delivery</h3><p>When you accept a delivery, the pickup and drop-off steps will appear here.</p><button class="rider-primary-action" data-action="dashboard-section" data-section="available">View delivery offers</button></div>');
+    }
+    if (section === "history") {
+      const rows = await apiFetch("/deliveries/me/history");
+      return dashboardPage("Delivery history","Review completed deliveries and their recorded status.",(rows || []).map(row => riderJobCard(row, true)).join("") || '<div class="rider-empty"><h3>No completed deliveries yet</h3><p>Your completed delivery history will appear here.</p></div>');
+    }
+    const current = activeJob ? riderJobCard(activeJob) : '<div class="rider-empty"><div class="rider-empty-icon">✓</div><h3>Ready when you are</h3><p>Go online to receive eligible delivery offers from WEWE.</p><button class="rider-primary-action" data-action="agent-availability" data-status="AVAILABLE">Go online</button></div>';
+    const availableLabel = profile.availability_status === "AVAILABLE" ? "Online" : "Offline";
+    return `<div class="rider-hero"><div><span class="eyebrow">WEWE delivery desk</span><h2>Welcome, ${escapeHtml(state.user.name.split(" ")[0] || state.user.name)}.</h2><p>Stay available, accept a job, follow the pickup-to-drop-off flow and keep customers updated.</p></div><div class="rider-online-control ${profile.availability_status === "AVAILABLE" ? "online" : ""}"><span class="rider-live-dot"></span><b>${availableLabel}</b><button data-action="agent-availability" data-status="${profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE"}">${profile.availability_status === "AVAILABLE" ? "Go offline" : "Go online"}</button></div></div>
+      <div class="rider-stats"><div><span>Current status</span><strong>${escapeHtml(profile.availability_status)}</strong><small>Work availability</small></div><div><span>Paid earnings</span><strong>${money(earnings.paid_ugx)}</strong><small>Recorded paid amount</small></div><div><span>Pending earnings</span><strong>${money(earnings.pending_ugx)}</strong><small>Awaiting payout</small></div><div><span>Active job</span><strong>${activeJob ? "1" : "0"}</strong><small>Assigned deliveries</small></div></div>
+      <div class="rider-layout"><section><div class="rider-section-head"><div><h3>${activeJob ? "Your active delivery" : "Your next job"}</h3><p>${activeJob ? "Complete the current step before taking another job." : "Your delivery workspace is ready."}</p></div><button class="text-link" data-action="dashboard-section" data-section="available">View offers →</button></div>${current}</section><aside class="rider-side-card"><h3>Rider shortcuts</h3><button data-action="dashboard-section" data-section="available">🚚 Delivery offers</button><button data-action="dashboard-section" data-section="history">🧾 Delivery history</button><button data-action="dashboard-section" data-section="earnings">UGX Earnings</button><button data-action="dashboard-section" data-section="profile">⚙ Rider profile</button></aside></div>`;
   }
 
   function dashboardPage(title,subtitle,content){return `<div class="dashboard-page-head"><div><span class="eyebrow">WEWE workspace</span><h2>${escapeHtml(title)}</h2><p>${escapeHtml(subtitle)}</p></div></div><div class="dashboard-panel dashboard-content-panel">${content}</div>`;}
@@ -1103,6 +1166,7 @@
       const action = form.dataset.form;
       if (action === "login") await login(form);
       else if (action === "register") await register(form);
+      else if (action === "rider-application") await submitRiderApplication(form);
       else if (action === "checkout") await placeOrder(form);
       else if (action === "address") await saveAddress(form);
       else if (action === "review") await submitReview(form);
@@ -1150,6 +1214,7 @@
     const action = button.dataset.action;
     if (action === "close-modal") return closeModal();
     if (action === "show-register") return showAuth(true);
+    if (action === "become-rider") return showRiderApplication();
     if (action === "show-login") return showAuth(false);
     if (action === "retry-catalog") return loadCatalog();
     if (action === "clear-search") { state.search = ""; state.activeCategory = "all"; state.availability = "all"; $("#searchInput").value = ""; $("#availabilityFilter").value = "all"; renderCategories(); return renderCatalog(); }
@@ -1271,6 +1336,38 @@
     }
   }
 
+  function installRiderStyles() {
+    if ($("#riderUiStyles")) return;
+    const style = document.createElement("style");
+    style.id = "riderUiStyles";
+    style.textContent = `
+      .rider-hero{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:28px;border-radius:22px;background:linear-gradient(135deg,#281044,#7041f5);color:#fff;box-shadow:0 18px 45px rgba(55,24,91,.16);margin-bottom:18px}.rider-hero h2{margin:6px 0;font-size:30px}.rider-hero p{margin:0;color:#e8e0f5;max-width:720px}.rider-online-control{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.10);white-space:nowrap}.rider-online-control button{border:0;border-radius:9px;padding:8px 10px;background:#fff;color:#39205e;font-weight:900}.rider-live-dot{width:9px;height:9px;border-radius:50%;background:#a8a0b5;display:inline-block}.rider-online-control.online .rider-live-dot,.rider-offer-toolbar .rider-live-dot{background:#30d18a;box-shadow:0 0 0 5px rgba(48,209,138,.14)}.rider-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:18px}.rider-stats>div,.rider-earnings-card{background:#fff;border:1px solid #e7e0ef;border-radius:17px;padding:17px;box-shadow:0 7px 22px rgba(45,25,90,.045)}.rider-stats span,.rider-earnings-card span{display:block;color:#83788e;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px}.rider-stats strong,.rider-earnings-card strong{display:block;color:#302040;font-size:19px;margin-top:8px}.rider-stats small,.rider-earnings-card small{display:block;color:#a096aa;font-size:10px;margin-top:5px}.rider-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(230px,.65fr);gap:17px}.rider-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:10px}.rider-section-head h3{margin:0;font-size:17px}.rider-section-head p{margin:4px 0 0;color:#91879c;font-size:10px}.rider-side-card,.rider-info-card{background:#fff;border:1px solid #e7e0ef;border-radius:17px;padding:18px;box-shadow:0 7px 22px rgba(45,25,90,.045)}.rider-side-card h3{margin:0 0 10px;font-size:15px}.rider-side-card button{display:block;width:100%;border:1px solid #e7e0ef;background:#faf8fd;border-radius:11px;padding:12px;text-align:left;margin-top:8px;color:#564b63;font-weight:800}.rider-job-card{background:#fff;border:1px solid #e4dced;border-radius:18px;padding:18px;box-shadow:0 8px 25px rgba(45,25,90,.05);margin-bottom:12px}.rider-job-card.compact{padding:14px}.rider-job-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.rider-job-label{display:block;color:#8d8299;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.6px}.rider-job-top h3{margin:5px 0 0;font-size:16px}.rider-route{margin:18px 0 3px}.rider-stop{display:grid;grid-template-columns:12px 1fr auto;gap:11px;align-items:center}.rider-stop small{display:block;color:#95899f;font-size:8px;font-weight:900;letter-spacing:.7px}.rider-stop b{display:block;color:#40354b;font-size:12px;margin-top:3px}.rider-stop a{font-size:10px;font-weight:900;color:#6840cf;text-decoration:none;padding:7px 9px;background:#f2edfc;border-radius:9px}.rider-stop-dot{width:10px;height:10px;border-radius:50%;background:#6c3df4}.rider-stop-dot.dropoff{background:#2b9b72}.rider-route-line{height:25px;border-left:2px dashed #d8cfe3;margin-left:4px}.rider-job-actions{margin-top:15px}.rider-primary-action{width:100%;border:0;border-radius:11px;padding:13px 15px;background:#6c3df4;color:#fff;font-weight:900;cursor:pointer}.rider-code-form{display:flex;gap:8px}.rider-code-form input{min-width:0;flex:1;border:1px solid #ddd4e7;border-radius:10px;padding:11px}.rider-code-form .rider-primary-action{width:auto;white-space:nowrap}.rider-offer-toolbar{display:flex;justify-content:space-between;align-items:center;padding:13px 14px;background:#faf8fd;border:1px solid #e7e0ef;border-radius:13px;margin-bottom:12px}.rider-offer-toolbar>div{display:flex;align-items:center;gap:8px;font-size:11px}.rider-empty{text-align:center;padding:44px 20px;border:1px dashed #d9cfe5;border-radius:17px;background:#fff}.rider-empty h3{margin:7px 0 4px;font-size:16px}.rider-empty p{margin:0 auto 15px;max-width:450px;color:#8e8498;font-size:11px}.rider-empty-icon{width:46px;height:46px;border-radius:14px;background:#efe9fb;color:#6c3df4;display:grid;place-items:center;margin:auto;font-weight:900}.rider-earnings-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:14px}.rider-info-card{display:flex;flex-direction:column;gap:5px}.rider-info-card span{font-size:11px;color:#8d8397}.rider-profile-grid{display:grid;grid-template-columns:1fr 1.4fr;gap:14px}.rider-profile-card,.rider-status-panel{background:#fff;border:1px solid #e7e0ef;border-radius:17px;padding:18px;display:flex;align-items:center;gap:13px}.rider-profile-card{grid-column:1/-1}.rider-avatar-large{width:54px;height:54px;border-radius:17px;background:#eee8fa;color:#6c3df4;display:grid;place-items:center;font-size:22px;font-weight:900}.rider-profile-card h3{margin:0 0 4px}.rider-profile-card span{color:#8e8399;font-size:10px}.rider-status-panel{grid-column:1/-1;justify-content:space-between}.rider-status-panel div{display:flex;flex-direction:column;gap:3px}.rider-status-panel small{color:#8f849a;font-size:8px;font-weight:900;letter-spacing:.6px}.rider-status-panel span{color:#8c8297;font-size:10px}.rider-online-button,.rider-offline-button{border:0;border-radius:10px;padding:11px 14px;font-weight:900}.rider-online-button{background:#6c3df4;color:#fff}.rider-offline-button{background:#eee8f4;color:#4e4359}.rider-apply-intro{display:flex;gap:12px;padding:14px;border-radius:14px;background:#faf8fd;border:1px solid #e7e0ef;margin-bottom:15px}.rider-apply-icon{width:44px;height:44px;border-radius:13px;background:#eee8fa;display:grid;place-items:center;font-size:21px;flex:none}.rider-apply-intro p{margin:0 0 5px;color:#4c4157;font-size:12px;line-height:1.5}.rider-apply-intro small,.rider-apply-note{color:#91869d;font-size:10px;line-height:1.5}.rider-apply-note{text-align:center}.rider-apply-success{text-align:center;padding:28px 12px}.rider-apply-success>div{width:52px;height:52px;border-radius:16px;background:#e5f6ee;color:#18734f;display:grid;place-items:center;margin:0 auto 12px;font-weight:900;font-size:22px}.rider-apply-success h3{margin:0 0 7px}.rider-apply-success p{color:#8d8397;font-size:11px;max-width:470px;margin:0 auto 17px}.rider-form{max-width:100%}.rider-status-panel{margin-top:0}@media(max-width:900px){.rider-hero{align-items:flex-start;flex-direction:column}.rider-stats{grid-template-columns:repeat(2,1fr)}.rider-layout,.rider-profile-grid{grid-template-columns:1fr}.rider-profile-card,.rider-status-panel{grid-column:auto}}@media(max-width:600px){.rider-stats,.rider-earnings-grid{grid-template-columns:1fr}.rider-job-card{padding:15px}.rider-code-form{flex-direction:column}.rider-code-form .rider-primary-action{width:100%}.rider-stop{grid-template-columns:10px 1fr}.rider-stop a{grid-column:2;justify-self:start}.rider-online-control{width:100%;justify-content:space-between}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function installRiderEntryPoints() {
+    if (document.querySelector("[data-rider-entry]")) return;
+    const heroActions = document.querySelector(".hero-actions");
+    if (heroActions) {
+      const button = document.createElement("button");
+      button.className = "button-outline";
+      button.dataset.riderEntry = "true";
+      button.dataset.action = "become-rider";
+      button.textContent = "Deliver with WEWE";
+      heroActions.appendChild(button);
+    }
+    const footerLinks = document.querySelector(".footer-links");
+    if (footerLinks) {
+      const button = document.createElement("button");
+      button.className = "text-link";
+      button.dataset.riderEntry = "true";
+      button.dataset.action = "become-rider";
+      button.textContent = "Become a delivery agent";
+      footerLinks.prepend(button);
+    }
+  }
+
   function installStyles() {
     const account = $("#accountButton");
     if (account) account.classList.remove("hidden");
@@ -1305,6 +1402,7 @@
       showDashboard(true);
     });
     $("#sellCta").addEventListener("click", () => state.user ? showDashboard(true) : showAuth(true, "RETAILER"));
+    installRiderEntryPoints();
     $("#searchInput").addEventListener("input", event => {
       state.search = event.target.value.trim();
       renderCatalog();
@@ -1348,6 +1446,7 @@
   }
 
   async function initialize() {
+    installRiderStyles();
     installStyles();
     bindEvents();
     updateAccountButton();
