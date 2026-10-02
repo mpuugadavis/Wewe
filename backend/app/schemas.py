@@ -286,6 +286,19 @@ class WishlistIn(BaseModel):
     product_id: UUID
 
 
+class DeliveryOfferOut(ORMModel):
+    id: UUID
+    assignment_id: UUID
+    agent_id: UUID
+    status: Literal["PENDING", "ACCEPTED", "REJECTED", "EXPIRED", "CANCELLED"]
+    offer_sequence: int
+    offered_at: datetime
+    expires_at: datetime
+    responded_at: datetime | None = None
+    distance_m: float
+    delivery: dict[str, Any]
+
+
 class DeliveryStatusUpdate(BaseModel):
     status: Literal["PICKED_UP", "OUT_FOR_DELIVERY", "DELIVERED"]
     confirmation_code: str | None = Field(default=None, min_length=4, max_length=12)
