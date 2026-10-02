@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi.testclient import TestClient
 
 from app.models import DeliveryAgent
@@ -30,7 +32,7 @@ def _register_rider(client: TestClient) -> tuple[dict, dict]:
 
 def test_verified_available_rider_can_publish_location(client: TestClient, database) -> None:
     user, headers = _register_rider(client)
-    agent = database.get(DeliveryAgent, user["id"])
+    agent = database.get(DeliveryAgent, UUID(user["id"]))
     assert agent is not None
     agent.verification_status = "VERIFIED"
     agent.availability_status = "AVAILABLE"
@@ -64,7 +66,7 @@ def test_verified_available_rider_can_publish_location(client: TestClient, datab
 
 def test_rider_cannot_publish_location_while_offline(client: TestClient, database) -> None:
     user, headers = _register_rider(client)
-    agent = database.get(DeliveryAgent, user["id"])
+    agent = database.get(DeliveryAgent, UUID(user["id"]))
     assert agent is not None
     agent.verification_status = "VERIFIED"
     database.commit()
@@ -80,7 +82,7 @@ def test_rider_cannot_publish_location_while_offline(client: TestClient, databas
 
 def test_rider_location_rejects_invalid_coordinate_pair(client: TestClient, database) -> None:
     user, headers = _register_rider(client)
-    agent = database.get(DeliveryAgent, user["id"])
+    agent = database.get(DeliveryAgent, UUID(user["id"]))
     assert agent is not None
     agent.verification_status = "VERIFIED"
     agent.availability_status = "AVAILABLE"
