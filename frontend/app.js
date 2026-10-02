@@ -5,7 +5,10 @@
   const ACCESS_KEY = "wewe_access_token";
   const REFRESH_KEY = "wewe_refresh_token";
   const $ = (selector, root = document) => root.querySelector(selector);
-  // Initialize notification polling state before startup can invoke the polling function.\n  let notificationRefreshTimer = null;\n\n  const state = {
+  // Initialize notification polling state before startup can invoke the polling function.
+  let notificationRefreshTimer = null;
+
+  const state = {
     user: null,
     products: [],
     categories: [],
