@@ -219,6 +219,16 @@ class CheckoutIn(BaseModel):
         return self
 
 
+class RefundOut(ORMModel):
+    id: UUID
+    payment_id: UUID
+    amount_ugx: int
+    status: Literal["SUBMITTED", "UNKNOWN", "CONFIRMED", "FAILED"]
+    external_reference: str | None = None
+    created_at: Any
+    resolved_at: Any | None = None
+
+
 class OrderOut(BaseModel):
     id: UUID
     order_number: str
@@ -233,6 +243,7 @@ class OrderOut(BaseModel):
     status: str
     payment_status: str
     created_at: Any
+    refunds: list[RefundOut] = Field(default_factory=list)
     items: list[dict[str, Any]]
     deliveries: list[dict[str, Any]] = Field(default_factory=list)
     delivery_quotes: list[dict[str, Any]] = Field(default_factory=list)
