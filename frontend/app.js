@@ -63,6 +63,47 @@
     }
   }
 
+
+  const CATALOG_FALLBACK_IMAGES = [
+    { keys: ["food","snack","meal","chapati","rolex","pizza","chicken","rice","bean","juice","drink","water"], url: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=82" },
+    { keys: ["shoe","sneaker","sandals","slipper","footwear"], url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=82" },
+    { keys: ["shirt","t-shirt","dress","jean","hoodie","clothes","fashion","bag","backpack"], url: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=900&q=82" },
+    { keys: ["phone","laptop","computer","earphone","headphone","charger","electronic"], url: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=82" },
+    { keys: ["book","stationery","pen","notebook","paper","school"], url: "https://images.unsplash.com/photo-1456324504439-367cee3b3c32?auto=format&fit=crop&w=900&q=82" },
+    { keys: ["beauty","hair","cosmetic","cream","perfume","makeup"], url: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=900&q=82" },
+    { keys: ["home","lamp","mug","bottle","bucket","storage"], url: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=900&q=82" }
+  ];
+  const DEFAULT_CATALOG_IMAGE = "https://images.unsplash.com/photo-1523474253046-8cd2748b5fd2?auto=format&fit=crop&w=900&q=82";
+
+  function catalogFallbackImage(product) {
+    const haystack = `${product?.name || ""} ${product?.description || ""} ${product?.category_name || ""}`.toLocaleLowerCase();
+    const match = CATALOG_FALLBACK_IMAGES.find(group => group.keys.some(key => haystack.includes(key)));
+    return match?.url || DEFAULT_CATALOG_IMAGE;
+  }
+
+  function startHeroSlider() {
+    const slides = [...document.querySelectorAll(".hero-slide")];
+    const dots = [...document.querySelectorAll(".hero-slider-dot")];
+    if (slides.length < 2) return;
+    let index = 0;
+    let timer;
+    const show = next => {
+      index = (next + slides.length) % slides.length;
+      slides.forEach((slide, i) => slide.classList.toggle("active", i === index));
+      dots.forEach((dot, i) => {
+        dot.classList.toggle("active", i === index);
+        dot.setAttribute("aria-current", i === index ? "true" : "false");
+      });
+    };
+    const restart = () => {
+      clearInterval(timer);
+      timer = setInterval(() => show(index + 1), 5000);
+    };
+    dots.forEach((dot, i) => dot.addEventListener("click", () => { show(i); restart(); }));
+    show(0);
+    restart();
+  }
+
   function money(value) {
     return `UGX ${Number(value || 0).toLocaleString("en-UG")}`;
   }
@@ -255,7 +296,7 @@
     const count = $("#productCount");
     if (count) count.textContent = rows.length ? rows.length + " product" + (rows.length === 1 ? "" : "s") + " available" : "";
     $("#productGrid").innerHTML = rows.length ? rows.map(({ product, listing }) => {
-      const image = safeImage(product.images?.[0]);
+      const image = safeImage(product.images?.[0]) || catalogFallbackImage(product);
       const productId = escapeHtml(product.id);
       const listingId = escapeHtml(listing.retailer_product_id);
       const wished = state.wishlist.has(product.id);
@@ -263,7 +304,7 @@
       const stockLabel = stock < 1 ? "Out of stock" : stock <= 5 ? stock + " left" : "In stock";
       const stockClass = stock < 1 ? "out" : stock <= 5 ? "low" : "";
       return `<article class="product-card" data-product-id="${productId}" data-listing-id="${listingId}">
-        <div class="product-image ${image ? "" : "image-placeholder"}">${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy">` : '<span>WEWE</span>'}
+        <div class="product-image"><img class="catalog-image-fallback" src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_CATALOG_IMAGE}'">
           <button class="wish-button ${wished ? "is-wished" : ""}" aria-label="${wished ? "Remove from" : "Add to"} wishlist" data-action="toggle-wishlist" data-product-id="${productId}">${wished ? "♥" : "♡"}</button>
           <button class="quick-add" data-action="add-cart" data-listing-id="${listingId}" ${stock < 1 ? "disabled" : ""}>${stock < 1 ? "Unavailable" : "Quick add"}</button>
         </div>
@@ -1623,6 +1664,7 @@
   }
 
   async function initialize() {
+    startHeroSlider();
     installRiderStyles();
     installStyles();
     bindEvents();
