@@ -23,6 +23,7 @@ from app.models import (
     OrderItem,
     Payment,
     PaymentEvent,
+    PaymentRefund,
     PickupPoint,
     PlatformSetting,
     Product,
@@ -539,13 +540,23 @@ def confirm_external_refund(
         raise HTTPException(status_code=409, detail={"code": "payment_not_refundable", "message": "Only a successful payment can be marked refunded."})
     if not is_payment_transition_allowed(payment.status, "REFUNDED"):
         raise HTTPException(status_code=409, detail={"code": "payment_not_refundable", "message": "Only a successful payment can be marked refunded."})
-    refund = reserve_refund_attempt(
-        db,
-        payment.id,
-        amount_ugx=payment.amount_ugx,
-        idempotency_key=event_id,
-        external_reference=payload.provider_event_id,
+    refund = db.scalar(
+        select(PaymentRefund)
+        .where(
+            PaymentRefund.payment_id == payment.id,
+            PaymentRefund.status.in_(["SUBMITTED", "UNKNOWN"]),
+        )
+        .order_by(PaymentRefund.created_at.asc())
+        .with_for_update()
     )
+    if refund is None:
+        refund = reserve_refund_attempt(
+            db,
+            payment.id,
+            amount_ugx=payment.amount_ugx,
+            idempotency_key=event_id,
+            external_reference=payload.provider_event_id,
+        )
     resolve_refund_attempt(
         db,
         refund.id,
