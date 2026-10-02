@@ -259,7 +259,7 @@ def list_retailers(
         if verification_status not in {"PENDING", "VERIFIED", "REJECTED"}:
             raise HTTPException(status_code=422, detail={"code": "invalid_status", "message": "Verification status is invalid."})
         query = query.where(Retailer.verification_status == verification_status)
-    return [{"id": r.id, "user_id": r.user_id, "business_name": r.business_name, "phone": r.phone, "verification_status": r.verification_status, "status": r.status} for r in db.scalars(query.order_by(Retailer.created_at.desc()).offset(offset).limit(limit)).all()]
+    return [{"id": r.id, "retailer_id": r.id, "user_id": r.user_id, "business_name": r.business_name, "phone": r.phone, "verification_status": r.verification_status, "status": r.status} for r in db.scalars(query.order_by(Retailer.created_at.desc()).offset(offset).limit(limit)).all()]
 
 
 @router.patch("/retailers/{retailer_id}/verification")
