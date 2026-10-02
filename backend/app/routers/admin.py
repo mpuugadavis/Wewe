@@ -259,7 +259,7 @@ def list_retailers(
         if verification_status not in {"PENDING", "VERIFIED", "REJECTED"}:
             raise HTTPException(status_code=422, detail={"code": "invalid_status", "message": "Verification status is invalid."})
         query = query.where(Retailer.verification_status == verification_status)
-    return [{"id": r.id, "user_id": r.user_id, "business_name": r.business_name, "phone": r.phone, "verification_status": r.verification_status, "status": r.status} for r in db.scalars(query.order_by(Retailer.created_at.desc()).offset(offset).limit(limit)).all()]
+    return [{"id": r.id, "retailer_id": r.id, "user_id": r.user_id, "business_name": r.business_name, "phone": r.phone, "verification_status": r.verification_status, "status": r.status} for r in db.scalars(query.order_by(Retailer.created_at.desc()).offset(offset).limit(limit)).all()]
 
 
 @router.patch("/retailers/{retailer_id}/verification")
@@ -667,6 +667,36 @@ def override_order_status(order_id: UUID, payload: AdminOrderStatusUpdate, princ
     db.add(NotificationOutbox(user_id=order.customer_id, event_type=f"ORDER_{payload.status}", payload={"order_id": str(order.id), "reason": payload.reason}))
     db.commit()
     return {"id": order.id, "order_number": order.order_number, "status": order.status}
+
+
+@router.get("/reviews")
+def admin_reviews(
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    rows = db.execute(
+        select(Review, Product, User)
+        .join(Product, Product.id == Review.product_id)
+        .join(User, User.id == Review.customer_id)
+        .order_by(Review.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "id": review.id,
+            "product_id": review.product_id,
+            "product_name": product.name,
+            "customer_id": review.customer_id,
+            "customer_name": user.name,
+            "rating": review.rating,
+            "body": review.body,
+            "status": review.moderation_status,
+            "created_at": review.created_at,
+        }
+        for review, product, user in rows
+    ]
 
 
 @router.patch("/reviews/{review_id}/moderation")
