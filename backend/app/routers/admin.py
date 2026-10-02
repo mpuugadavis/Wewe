@@ -979,6 +979,44 @@ def audit_logs(limit: int = Query(default=100, ge=1, le=500), offset: int = Quer
     return [{"id": row.id, "actor_user_id": row.actor_user_id, "action": row.action, "resource_type": row.resource_type, "resource_id": row.resource_id, "details": row.details, "created_at": row.created_at} for row in rows]
 
 
+@router.get("/settlements")
+def admin_settlements(
+    retailer_id: UUID | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """List settlement instructions for operational reconciliation."""
+    stmt = select(RetailerSettlement).order_by(RetailerSettlement.created_at.desc()).offset(offset).limit(limit)
+    if retailer_id is not None:
+        stmt = stmt.where(RetailerSettlement.retailer_id == retailer_id)
+    if status_filter is not None:
+        allowed = {"DRAFT", "SUBMITTED", "SETTLED", "FAILED", "REVIEW_REQUIRED"}
+        if status_filter not in allowed:
+            raise HTTPException(status_code=400, detail={"code": "invalid_settlement_status", "message": "Unsupported settlement status."})
+        stmt = stmt.where(RetailerSettlement.status == status_filter)
+    rows = db.scalars(stmt).all()
+    return [
+        {
+            "id": row.id,
+            "retailer_id": row.retailer_id,
+            "amount_ugx": row.amount_ugx,
+            "currency": row.currency,
+            "status": row.status,
+            "settlement_reference": row.settlement_reference,
+            "payout_reference": row.payout_reference,
+            "authorized_by_user_id": row.authorized_by_user_id,
+            "submitted_at": row.submitted_at,
+            "settled_at": row.settled_at,
+            "line_count": settlement_snapshot(db, row.id).line_count,
+            "line_total_ugx": settlement_snapshot(db, row.id).line_total_ugx,
+            "is_balanced": settlement_snapshot(db, row.id).is_balanced,
+        }
+        for row in rows
+    ]
+
+
 @router.get("/system-health")
 def system_health(db: Session = Depends(get_db)) -> dict:
     """Return operational health details for administrators only."""
