@@ -59,6 +59,7 @@ def _active_assignment_exists(db: Session, agent_id: UUID) -> bool:
 
 
 def _candidate_rows(db: Session, assignment: DeliveryAssignment) -> list[tuple[DeliveryAgent, DeliveryAgentLocation, float]]:
+    db.flush()
     pickup = db.get(DeliveryPoint, assignment.pickup_point_id) if assignment.pickup_point_id else None
     if pickup is None or pickup.latitude is None or pickup.longitude is None:
         return []
