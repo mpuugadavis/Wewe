@@ -35,7 +35,7 @@ from app.schemas import CartItemIn, CartItemUpdate, CheckoutIn, FulfillmentActio
 from app.services.delivery_dispatch import dispatch_ready_fulfillment
 from app.services.delivery_pricing import remove_committed_delivery_quote
 from app.services.orders import create_order, order_payload, preview_checkout_quote, recompute_order_status
-from app.services.payment_attempts import record_reconciliation_unresolved
+from app.services.payment_attempts import record_reconciliation_unresolved, reserve_refund_attempt
 from app.services.payments import PaymentProviderUnavailable, PaymentRequest, payment_providers
 from app.services.state_transitions import (
     aggregate_payment_status,
@@ -420,6 +420,38 @@ def cancel_order(
                 note="Order cancelled before physical pickup",
             )
         )
+    # A captured online payment cannot be silently lost when an order is
+    # cancelled. Reserve a full refund for each successful payment. The actual
+    # provider-side refund remains a separate, auditable operation; until it is
+    # confirmed the order payment_status stays PAID.
+    successful_payments = db.scalars(
+        select(Payment)
+        .where(Payment.order_id == order.id, Payment.status == "SUCCESSFUL")
+        .with_for_update()
+    ).all()
+    for payment in successful_payments:
+        refund = reserve_refund_attempt(
+            db,
+            payment.id,
+            amount_ugx=payment.amount_ugx,
+            idempotency_key=f"order-cancellation:{order.id}:payment:{payment.id}",
+            external_reference=f"order-cancellation:{order.id}:payment:{payment.id}",
+        )
+        if refund.status == "SUBMITTED":
+            db.add(
+                NotificationOutbox(
+                    user_id=payment.customer_id,
+                    event_type="REFUND_PENDING",
+                    payload={
+                        "order_id": str(order.id),
+                        "order_number": order.order_number,
+                        "payment_id": str(payment.id),
+                        "refund_id": str(refund.id),
+                        "amount_ugx": refund.amount_ugx,
+                    },
+                )
+            )
+
     # Legacy rows only: WEWE no longer creates cash payments (online-only), but
     # any pre-existing pending cash attempt is failed when the order is cancelled.
     cash_payments = db.scalars(

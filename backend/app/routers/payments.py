@@ -13,6 +13,7 @@ from app.models import (
     Payment,
     PaymentEvent,
     PaymentReconciliation,
+    PaymentRefund,
     utcnow,
 )
 from app.schemas import PaymentWebhookIn
@@ -244,4 +245,19 @@ def get_payment(
         "initiated_at": payment.initiated_at,
         "paid_at": payment.paid_at,
         "resolved_at": payment.resolved_at,
+        "refunds": [
+            {
+                "id": refund.id,
+                "amount_ugx": refund.amount_ugx,
+                "status": refund.status,
+                "external_reference": refund.external_reference,
+                "created_at": refund.created_at,
+                "resolved_at": refund.resolved_at,
+            }
+            for refund in db.scalars(
+                select(PaymentRefund)
+                .where(PaymentRefund.payment_id == payment.id)
+                .order_by(PaymentRefund.created_at.desc())
+            ).all()
+        ],
     }

@@ -982,6 +982,36 @@ def test_customer_cancellation_is_blocked_after_pickup_or_terminal_state(
     assert inventory.reserved_quantity == 2
 
 
+def test_paid_order_cancellation_creates_idempotent_refund_request(client, database) -> None:
+    customer, point, _listing, _inventory = marketplace_fixture(database)
+    order = create_order(
+        database,
+        customer,
+        CheckoutIn(delivery_method="DELIVERY", delivery_point_id=point.id),
+        "cancel-paid-refund",
+    )
+    payment = _create_payment_for_order(database, order, customer, "SUCCESSFUL")
+    order.payment_status = "PAID"
+    database.commit()
+
+    response = client.post(
+        f"/api/v1/orders/{order.id}/cancel",
+        headers=_authorization(database, customer),
+    )
+
+    assert response.status_code == 200
+    assert database.get(Order, order.id).status == "CANCELLED"
+    assert database.get(Payment, payment.id).status == "SUCCESSFUL"
+    refund = database.scalar(select(PaymentRefund).where(PaymentRefund.payment_id == payment.id))
+    assert refund is not None
+    assert refund.amount_ugx == payment.amount_ugx
+    assert refund.status == "SUBMITTED"
+    assert refund.idempotency_key == f"order-cancellation:{order.id}:payment:{payment.id}"
+    payload = response.json()
+    assert payload["payment_status"] == "PAID"
+    assert payload["refunds"][0]["status"] == "SUBMITTED"
+
+
 def test_cancellation_repeated_request_does_not_release_reservation_twice(client, database) -> None:
     customer, point, _listing, inventory = marketplace_fixture(database)
     order = create_order(
