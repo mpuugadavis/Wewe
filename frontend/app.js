@@ -1596,69 +1596,100 @@
   }
 
   function bindEvents() {
+    // Bind storefront controls defensively so one missing optional element
+    // can never prevent catalog loading or authentication from initializing.
+    const on = (selector, event, handler) => {
+      const element = $(selector);
+      if (element) element.addEventListener(event, handler);
+      return element;
+    };
+
     document.addEventListener("click", event => {
-      const button = event.target.closest("[data-action]");
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+
+      const button = target.closest("[data-action]");
       if (button) {
         event.preventDefault();
         performAction(button).catch(error => showToast(error.message));
         return;
       }
-      if (event.target === $("#modalBackdrop")) closeModal();
+
+      if (target === $("#modalBackdrop")) closeModal();
     });
+
     document.addEventListener("submit", event => {
-      const form = event.target.closest("form[data-form]");
+      const form = event.target instanceof Element ? event.target.closest("form[data-form]") : null;
       if (!form) return;
       event.preventDefault();
       submitForm(form);
     });
-    $("#accountButton").addEventListener("click", () => state.user ? showDashboard(true) : showAuth());
-    $("#mobileAccount").addEventListener("click", () => state.user ? showDashboard(true) : showAuth());
-    $("#cartButton").addEventListener("click", showCart);
-    $("#locationButton").addEventListener("click", () => {
+
+    on("#accountButton", "click", () => state.user ? showDashboard(true) : showAuth());
+    on("#mobileAccount", "click", () => state.user ? showDashboard(true) : showAuth());
+    on("#mobileAccountNav", "click", () => state.user ? showDashboard(true) : showAuth());
+    on("#cartButton", "click", showCart);
+    on("#locationButton", "click", () => {
       if (!state.user) return showAuth();
       state.dashboardSection = state.user.role === "CUSTOMER" ? "addresses" : "overview";
       showDashboard(true);
     });
-    $("#sellCta").addEventListener("click", () => state.user ? showDashboard(true) : showAuth(true, "RETAILER"));
+    on("#sellCta", "click", () => state.user ? showDashboard(true) : showAuth(true, "RETAILER"));
+
     installRiderEntryPoints();
-    $("#searchInput").addEventListener("input", event => {
+
+    on("#searchInput", "input", event => {
       state.search = event.target.value.trim();
       renderCatalog();
     });
-    $("#sortFilter").addEventListener("change", event => {
+    on("#sortFilter", "change", event => {
       state.sort = event.target.value;
       renderCatalog();
     });
-    $("#availabilityFilter").addEventListener("change", event => {
+    on("#availabilityFilter", "change", event => {
       state.availability = event.target.value === "nearby" ? "all" : event.target.value;
       if (event.target.value === "nearby") showToast("Nearby distance filtering is not provided by the current API.");
       renderCatalog();
     });
-    $("#modalContent").addEventListener("change", event => {
+
+    on("#modalContent", "change", event => {
       if (event.target.closest('form[data-form="checkout"]')) toggleCheckoutFields();
       if (event.target.closest('form[data-form="register"]')) updateRegistrationFields();
     });
-    $("#logo")?.addEventListener("click", () => showDashboard(false));
-    document.querySelectorAll(".logo").forEach(logo => logo.addEventListener("click", () => showDashboard(false)));
-    $("#nearbyButton").addEventListener("click", () => document.querySelector("#retailers").scrollIntoView({ behavior: "smooth" }));
-    $("#retailerMore").addEventListener("click", () => document.querySelector("#retailers").scrollIntoView({ behavior: "smooth" }));
-    $("#allCategories").addEventListener("click", () => {
+
+    on("#logo", "click", () => showDashboard(false));
+    document.querySelectorAll(".logo").forEach(logo => {
+      logo.addEventListener("click", event => {
+        // Let normal hash navigation work for storefront/footer logos.
+        // Only dashboard-specific logo controls should switch workspaces.
+        if (logo.id === "logo") {
+          event.preventDefault();
+          showDashboard(false);
+        }
+      });
+    });
+
+    on("#nearbyButton", "click", () => document.querySelector("#retailers")?.scrollIntoView({ behavior: "smooth" }));
+    on("#retailerMore", "click", () => document.querySelector("#retailers")?.scrollIntoView({ behavior: "smooth" }));
+    on("#allCategories", "click", () => {
       state.activeCategory = "all";
       renderCategories();
       renderCatalog();
-      document.querySelector("#products").scrollIntoView({ behavior: "smooth" });
+      document.querySelector("#products")?.scrollIntoView({ behavior: "smooth" });
     });
+
     window.addEventListener("storage", event => {
       if (event.key === ACCESS_KEY || event.key === REFRESH_KEY) {
         resetUserScopedUI();
         renderCatalog();
         if (!localStorage.getItem(ACCESS_KEY)) {
-          $("#dashboard").classList.add("hidden");
-          $("#storefront").classList.remove("hidden");
-          $("#footer").classList.remove("hidden");
-          $("#topbar").classList.remove("hidden");
+          $("#dashboard")?.classList.add("hidden");
+          $("#storefront")?.classList.remove("hidden");
+          $("#footer")?.classList.remove("hidden");
+          $("#topbar")?.classList.remove("hidden");
+        } else {
+          loadCurrentUser().catch(error => showToast(error.message));
         }
-        else loadCurrentUser().catch(error => showToast(error.message));
       }
     });
   }
