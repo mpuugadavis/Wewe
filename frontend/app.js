@@ -5,7 +5,7 @@
   const ACCESS_KEY = "wewe_access_token";
   const REFRESH_KEY = "wewe_refresh_token";
   const $ = (selector, root = document) => root.querySelector(selector);
-  const state = {
+  // Initialize notification polling state before startup can invoke the polling function.\n  let notificationRefreshTimer = null;\n\n  const state = {
     user: null,
     products: [],
     categories: [],
@@ -1032,7 +1032,7 @@
       ${nextAction ? `<div class="rider-job-actions">${nextAction}</div>` : ""}</article>`;
   }
 
-  let notificationRefreshTimer = null;
+
 
   async function refreshInAppNotifications() {
     if (!state.user) return;
