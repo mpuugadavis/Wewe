@@ -11,6 +11,7 @@ from app.dependencies import Principal, require_roles
 from app.limiter import limiter
 from app.models import (
     DeliveryAgent,
+    DeliveryAgentLocation,
     DeliveryAssignment,
     DeliveryEvent,
     DeliveryEarning,
@@ -29,7 +30,14 @@ from app.models import (
     utcnow,
 )
 from app.routers.commerce import _consume_fulfillment_inventory
-from app.schemas import AvailabilityUpdate, DeliveryStatusUpdate, ReviewCreate, WishlistIn
+from app.schemas import (
+    AvailabilityUpdate,
+    DeliveryAgentLocationOut,
+    DeliveryAgentLocationUpdate,
+    DeliveryStatusUpdate,
+    ReviewCreate,
+    WishlistIn,
+)
 from app.security import hash_token
 from app.services.orders import recompute_order_status
 from app.services.state_transitions import (
@@ -89,6 +97,52 @@ def set_availability(
     agent.availability_status = payload.availability_status
     db.commit()
     return {"availability_status": agent.availability_status}
+
+
+@router.patch("/deliveries/me/location", response_model=DeliveryAgentLocationOut)
+def update_delivery_agent_location(
+    payload: DeliveryAgentLocationUpdate,
+    principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
+    db: Session = Depends(get_db),
+) -> DeliveryAgentLocation:
+    agent = db.scalar(
+        select(DeliveryAgent)
+        .where(DeliveryAgent.user_id == principal.user.id)
+        .with_for_update()
+    )
+    if agent is None:
+        raise HTTPException(status_code=404, detail={"code": "agent_profile_missing", "message": "Delivery profile was not found."})
+    if agent.verification_status != "VERIFIED":
+        raise HTTPException(status_code=403, detail={"code": "agent_not_verified", "message": "A verified delivery profile is required."})
+    if agent.availability_status == "OFFLINE":
+        raise HTTPException(status_code=409, detail={"code": "agent_offline", "message": "Set delivery availability to available before sharing location."})
+
+    location = db.get(DeliveryAgentLocation, principal.user.id)
+    if location is None:
+        location = DeliveryAgentLocation(agent_id=principal.user.id)
+        db.add(location)
+
+    location.latitude = payload.latitude
+    location.longitude = payload.longitude
+    location.accuracy_m = payload.accuracy_m
+    location.heading_deg = payload.heading_deg
+    location.speed_mps = payload.speed_mps
+    location.updated_at = utcnow()
+    db.commit()
+    db.refresh(location)
+    return location
+
+
+@router.get("/deliveries/me/location", response_model=DeliveryAgentLocationOut)
+def get_delivery_agent_location(
+    principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
+    db: Session = Depends(get_db),
+) -> DeliveryAgentLocation:
+    _agent_profile(db, principal.user.id)
+    location = db.get(DeliveryAgentLocation, principal.user.id)
+    if location is None:
+        raise HTTPException(status_code=404, detail={"code": "location_not_found", "message": "No rider location has been recorded yet."})
+    return location
 
 
 @router.get("/deliveries/available")

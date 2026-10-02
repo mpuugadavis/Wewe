@@ -189,6 +189,28 @@ class DeliveryAgent(TimestampMixin, Base):
     transport_mode: Mapped[str | None] = mapped_column(String(40))
 
 
+class DeliveryAgentLocation(TimestampMixin, Base):
+    __tablename__ = "delivery_agent_locations"
+    __table_args__ = (
+        CheckConstraint("latitude >= -90 AND latitude <= 90", name="ck_delivery_agent_location_latitude"),
+        CheckConstraint("longitude >= -180 AND longitude <= 180", name="ck_delivery_agent_location_longitude"),
+        CheckConstraint("accuracy_m >= 0 AND accuracy_m <= 100000", name="ck_delivery_agent_location_accuracy"),
+        CheckConstraint("heading_deg IS NULL OR (heading_deg >= 0 AND heading_deg < 360)", name="ck_delivery_agent_location_heading"),
+        CheckConstraint("speed_mps IS NULL OR (speed_mps >= 0 AND speed_mps <= 1000)", name="ck_delivery_agent_location_speed"),
+        Index("ix_delivery_agent_locations_updated_at", "updated_at"),
+    )
+    agent_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("delivery_agents.user_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    latitude: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    longitude: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    accuracy_m: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
+    heading_deg: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    speed_mps: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+
+
 class Category(TimestampMixin, Base):
     __tablename__ = "categories"
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
