@@ -16,6 +16,8 @@ from app.config import get_settings
 from app.db import engine
 from app.limiter import limiter
 from app.observability import configure_logging
+from app.services.media_uploads import build_media_storage
+from app.services.worker_health import worker_snapshot
 from app.routers import accounts, admin, auth, catalog, commerce, locations, operations, payments
 
 settings = get_settings()
@@ -132,6 +134,41 @@ async def unexpected_error_handler(request: Request, exc: Exception):
 @app.get("/health/live", tags=["health"])
 def liveness() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/health/storage", tags=["health"])
+def storage_health() -> dict:
+    if settings.storage_provider == "DISABLED":
+        return {"status": "disabled", "provider": "DISABLED"}
+    try:
+        storage = build_media_storage(settings)
+        if storage is None:
+            return {"status": "disabled", "provider": settings.storage_provider}
+        storage.healthcheck()
+    except Exception:
+        logger.exception("Storage health check failed", extra={"environment": settings.app_env})
+        return JSONResponse(status_code=503, content={"status": "unavailable", "provider": settings.storage_provider})
+    return {"status": "ready", "provider": settings.storage_provider}
+
+
+@app.get("/health/workers", tags=["health"])
+def workers_health() -> dict:
+    from app.db import SessionLocal
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        workers = {}
+        for name in ("notification_outbox", "media_cleanup"):
+            snapshot = worker_snapshot(db, name)
+            if snapshot is None:
+                workers[name] = {"status": "never_run"}
+                continue
+            heartbeat = snapshot.get("last_heartbeat_at")
+            stale = heartbeat is None or heartbeat < now - timedelta(seconds=settings.worker_health_stale_after_seconds)
+            workers[name] = {**snapshot, "status": "STALE" if stale else snapshot["status"]}
+    overall = "healthy" if all(item["status"] in {"HEALTHY", "RUNNING"} for item in workers.values() if item["status"] != "never_run") and any(item["status"] != "never_run" for item in workers.values()) else "degraded"
+    return {"status": overall, "stale_after_seconds": settings.worker_health_stale_after_seconds, "workers": workers}
 
 
 @app.get("/health/ready", tags=["health"])
