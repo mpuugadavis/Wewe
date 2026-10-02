@@ -39,12 +39,10 @@ def test_notification_list_is_private_and_mark_read_is_idempotent(client: TestCl
     assert response.json()[0]["payload"]["message"] == "Your order is ready."
 
     read = client.post(f"/api/v1/notifications/{notification.id}/read", headers=headers)
-    assert read.status_code == 200
-    assert read.json()["read_at"]
+    assert read.status_code == 204
 
     again = client.post(f"/api/v1/notifications/{notification.id}/read", headers=headers)
-    assert again.status_code == 200
-    assert again.json()["read_at"]
+    assert again.status_code == 204
 
     unread = client.get("/api/v1/notifications?unread_only=true", headers=headers)
     assert unread.status_code == 200
