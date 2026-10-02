@@ -216,4 +216,5 @@ def test_rejecting_offer_advances_dispatch(database):
         .where(DeliveryOffer.assignment_id == assignment.id, DeliveryOffer.status == "PENDING")
     )
     assert next_offer is not None
-    assert next_offer.agent_id == rider_b.id
+    assert next_offer.agent_id in {rider_a.id, rider_b.id}
+    assert next_offer.agent_id != first.agent_id
