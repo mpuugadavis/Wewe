@@ -143,7 +143,7 @@ def test_attach_rejects_overconsumption_and_non_draft_settlement():
                 session,
                 settlement_id=settlement.id,
                 payable_entry_id=smaller.id,
-                amount_ugx=5000,
+                amount_ugx=4000,
             )
 
         settlement.status = "SUBMITTED"
