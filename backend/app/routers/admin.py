@@ -28,6 +28,7 @@ from app.models import (
     Product,
     RefreshTokenFamily,
     Retailer,
+    RetailerSettlement,
     RetailerFulfillment,
     RetailerFulfillmentEvent,
     Review,
@@ -52,14 +53,28 @@ from app.schemas import (
     PickupPointCreate,
     PickupPointStatusUpdate,
     ProductModerationUpdate,
-    RetailerVerificationUpdate,\n    SettlementCreate,\n    SettlementPayoutUpdate,
+    RetailerVerificationUpdate,
+    SettlementCreate,
+    SettlementPayoutUpdate,
     ReviewModerationUpdate,
     RefundConfirmationIn,
     UniversityCreate,
     UserStatusUpdate,
 )
 from app.services.orders import order_payload
-from app.services.retailer_settlement_operations import (\n    RetailerSettlementOperationError,\n    SettlementIdempotencyConflictError,\n    SettlementLifecycleConflictError,\n    create_draft_settlement,\n    list_retailer_settlements,\n    mark_settlement_failed,\n    mark_settlement_review_required,\n    mark_settlement_settled,\n    settlement_snapshot,\n    submit_settlement,\n)\nfrom app.services.state_transitions import (
+from app.services.retailer_settlement_operations import (
+    RetailerSettlementOperationError,
+    SettlementIdempotencyConflictError,
+    SettlementLifecycleConflictError,
+    create_draft_settlement,
+    list_retailer_settlements,
+    mark_settlement_failed,
+    mark_settlement_review_required,
+    mark_settlement_settled,
+    settlement_snapshot,
+    submit_settlement,
+)
+from app.services.state_transitions import (
     aggregate_payment_status,
     is_delivery_assignment_transition_allowed,
     is_fulfillment_transition_allowed,
@@ -687,6 +702,170 @@ def update_setting(key: str, payload: AdminSettingUpdate, principal: Principal =
     _audit(db, principal.user.id, "PLATFORM_SETTING_CHANGED", "platform_setting", key, payload.value)
     db.commit()
     return {"key": key, "value": payload.value}
+
+
+@router.get("/settlements")
+def admin_settlements(
+    retailer_id: UUID | None = None,
+    settlement_status: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    allowed_statuses = {"DRAFT", "SUBMITTED", "SETTLED", "FAILED", "REVIEW_REQUIRED"}
+    if settlement_status is not None and settlement_status not in allowed_statuses:
+        raise HTTPException(status_code=422, detail={"code": "invalid_settlement_status", "message": "Settlement status is invalid."})
+    query = select(RetailerSettlement)
+    if retailer_id is not None:
+        query = query.where(RetailerSettlement.retailer_id == retailer_id)
+    if settlement_status is not None:
+        query = query.where(RetailerSettlement.status == settlement_status)
+    rows = db.scalars(
+        query.order_by(RetailerSettlement.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return [
+        {
+            "id": row.id,
+            "retailer_id": row.retailer_id,
+            "amount_ugx": row.amount_ugx,
+            "currency": row.currency,
+            "status": row.status,
+            "settlement_reference": row.settlement_reference,
+            "idempotency_key": row.idempotency_key,
+            "payout_reference": row.payout_reference,
+            "authorized_by_user_id": row.authorized_by_user_id,
+            "submitted_at": row.submitted_at,
+            "settled_at": row.settled_at,
+        }
+        for row in rows
+    ]
+
+
+@router.post("/settlements", status_code=status.HTTP_201_CREATED)
+def create_admin_settlement(
+    payload: SettlementCreate,
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        settlement = create_draft_settlement(
+            db,
+            retailer_id=payload.retailer_id,
+            amount_ugx=payload.amount_ugx,
+            settlement_reference=payload.settlement_reference,
+            idempotency_key=payload.idempotency_key,
+        )
+    except SettlementIdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail={"code": "settlement_idempotency_conflict", "message": str(exc)}) from exc
+    except SettlementLifecycleConflictError as exc:
+        raise HTTPException(status_code=422, detail={"code": "settlement_invalid", "message": str(exc)}) from exc
+    _audit(db, principal.user.id, "SETTLEMENT_DRAFT_CREATED", "retailer_settlement", settlement.id)
+    db.commit()
+    return settlement_snapshot_payload(db, settlement.id)
+
+
+def settlement_snapshot_payload(db: Session, settlement_id: UUID) -> dict:
+    snapshot = settlement_snapshot(db, settlement_id)
+    return {
+        "id": snapshot.id,
+        "retailer_id": snapshot.retailer_id,
+        "amount_ugx": snapshot.amount_ugx,
+        "currency": snapshot.currency,
+        "status": snapshot.status,
+        "settlement_reference": snapshot.settlement_reference,
+        "idempotency_key": snapshot.idempotency_key,
+        "payout_reference": snapshot.payout_reference,
+        "authorized_by_user_id": snapshot.authorized_by_user_id,
+        "submitted_at": snapshot.submitted_at,
+        "settled_at": snapshot.settled_at,
+        "line_count": snapshot.line_count,
+        "line_total_ugx": snapshot.line_total_ugx,
+        "is_balanced": snapshot.is_balanced,
+    }
+
+
+@router.get("/settlements/{settlement_id}")
+def get_admin_settlement(settlement_id: UUID, db: Session = Depends(get_db)) -> dict:
+    try:
+        return settlement_snapshot_payload(db, settlement_id)
+    except SettlementLifecycleConflictError as exc:
+        raise HTTPException(status_code=404, detail={"code": "settlement_not_found", "message": str(exc)}) from exc
+
+
+@router.post("/settlements/{settlement_id}/submit")
+def submit_admin_settlement(
+    settlement_id: UUID,
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        settlement = submit_settlement(
+            db,
+            settlement_id=settlement_id,
+            authorized_by_user_id=principal.user.id,
+        )
+    except SettlementLifecycleConflictError as exc:
+        raise HTTPException(status_code=409, detail={"code": "settlement_lifecycle_conflict", "message": str(exc)}) from exc
+    _audit(db, principal.user.id, "SETTLEMENT_SUBMITTED", "retailer_settlement", settlement.id)
+    db.commit()
+    return settlement_snapshot_payload(db, settlement.id)
+
+
+@router.post("/settlements/{settlement_id}/settle")
+def settle_admin_settlement(
+    settlement_id: UUID,
+    payload: SettlementPayoutUpdate,
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        settlement = mark_settlement_settled(
+            db,
+            settlement_id=settlement_id,
+            payout_reference=payload.payout_reference,
+        )
+    except SettlementLifecycleConflictError as exc:
+        raise HTTPException(status_code=409, detail={"code": "settlement_lifecycle_conflict", "message": str(exc)}) from exc
+    _audit(
+        db,
+        principal.user.id,
+        "SETTLEMENT_SETTLED",
+        "retailer_settlement",
+        settlement.id,
+        {"payout_reference": payload.payout_reference},
+    )
+    db.commit()
+    return settlement_snapshot_payload(db, settlement.id)
+
+
+@router.post("/settlements/{settlement_id}/review")
+def review_admin_settlement(
+    settlement_id: UUID,
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        settlement = mark_settlement_review_required(db, settlement_id=settlement_id)
+    except SettlementLifecycleConflictError as exc:
+        raise HTTPException(status_code=409, detail={"code": "settlement_lifecycle_conflict", "message": str(exc)}) from exc
+    _audit(db, principal.user.id, "SETTLEMENT_REVIEW_REQUIRED", "retailer_settlement", settlement.id)
+    db.commit()
+    return settlement_snapshot_payload(db, settlement.id)
+
+
+@router.post("/settlements/{settlement_id}/fail")
+def fail_admin_settlement(
+    settlement_id: UUID,
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        settlement = mark_settlement_failed(db, settlement_id=settlement_id)
+    except SettlementLifecycleConflictError as exc:
+        raise HTTPException(status_code=409, detail={"code": "settlement_lifecycle_conflict", "message": str(exc)}) from exc
+    _audit(db, principal.user.id, "SETTLEMENT_FAILED", "retailer_settlement", settlement.id)
+    db.commit()
+    return settlement_snapshot_payload(db, settlement.id)
 
 
 @router.get("/audit-logs")
