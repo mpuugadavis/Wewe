@@ -26,7 +26,8 @@
     checkoutAutocomplete: null,
     refreshPromise: null,
     riderLocationWatchId: null,
-    riderOfferRefreshTimer: null
+    riderOfferRefreshTimer: null,
+    unreadNotifications: []
   };
 
   class ApiError extends Error {
@@ -401,6 +402,7 @@
     transport.classList.toggle("hidden", role !== "DELIVERY_AGENT");
   }
 
+  startNotificationPolling();
   async function loadCurrentUser() {
     state.user = await apiFetch("/auth/me");
     updateAccountButton();
@@ -424,6 +426,7 @@
   }
 
   async function signOut() {
+    stopNotificationPolling();
     stopRiderLocationTracking();
     syncRiderOfferPolling();
     const refreshToken = localStorage.getItem(REFRESH_KEY);
@@ -984,6 +987,35 @@
       <div class="rider-route"><div class="rider-stop"><span class="rider-stop-dot pickup"></span><div><small>PICKUP</small><b>${escapeHtml(pickup)}</b></div>${pickupNav ? `<a href="${pickupNav}" target="_blank" rel="noopener noreferrer">Navigate</a>` : ""}</div>
       <div class="rider-route-line"></div><div class="rider-stop"><span class="rider-stop-dot dropoff"></span><div><small>DROP-OFF</small><b>${escapeHtml(dropoff)}</b></div>${dropoffNav ? `<a href="${dropoffNav}" target="_blank" rel="noopener noreferrer">Navigate</a>` : ""}</div></div>
       ${nextAction ? `<div class="rider-job-actions">${nextAction}</div>` : ""}</article>`;
+  }
+
+  let notificationRefreshTimer = null;
+
+  async function refreshInAppNotifications() {
+    if (!state.user) return;
+    try {
+      const rows = await apiFetch("/notifications?unread_only=true&limit=20");
+      state.unreadNotifications = rows || [];
+      renderNotificationBadge();
+    } catch {}
+  }
+
+  function renderNotificationBadge() {
+    const count = state.unreadNotifications?.length || 0;
+    document.querySelectorAll("[data-notification-count]").forEach(el => {
+      el.textContent = count > 99 ? "99+" : String(count);
+      el.hidden = count === 0;
+    });
+  }
+
+  function startNotificationPolling() {
+    if (notificationRefreshTimer) clearInterval(notificationRefreshTimer);
+    notificationRefreshTimer = setInterval(refreshInAppNotifications, 5000);
+  }
+
+  function stopNotificationPolling() {
+    if (notificationRefreshTimer) clearInterval(notificationRefreshTimer);
+    notificationRefreshTimer = null;
   }
 
   function stopRiderLocationTracking() {
