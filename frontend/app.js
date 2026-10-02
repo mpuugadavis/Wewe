@@ -959,7 +959,94 @@
   async function adminDashboard(){
     const section=state.dashboardSection;
     if(section==="overview"){const [m,statuses,pending]=await Promise.all([apiFetch("/admin/metrics"),apiFetch("/admin/reports/order-statuses"),apiFetch("/admin/retailers?verification_status=PENDING")]);return `<div class="dashboard-hero admin-hero"><div><span class="eyebrow">Admin control center</span><h2>Platform overview</h2><p>Monitor marketplace health and resolve operational issues from one workspace.</p></div><div class="admin-hero-actions"><button class="button-primary" data-action="dashboard-section" data-section="retailers">Review retailers</button><button class="button-outline" data-action="dashboard-section" data-section="settlements">Settlements</button></div></div><div class="stat-grid dashboard-stat-grid"><div class="stat-card"><span>Users</span><b class="stat-value">${m.users??m.total_users??0}</b><small>Registered accounts</small></div><div class="stat-card"><span>Orders</span><b class="stat-value">${m.orders??m.total_orders??0}</b><small>Platform orders</small></div><div class="stat-card"><span>Active retailers</span><b class="stat-value">${m.active_retailers??0}</b><small>Verified and active</small></div><div class="stat-card"><span>Pending verification</span><b class="stat-value">${m.pending_retailers??pending.length}</b><small>Needs review</small></div></div><div class="dashboard-grid-3"><div class="dashboard-panel dashboard-span-2"><div class="panel-head"><div><h2>Order health</h2><small>Current status distribution</small></div><button class="text-link" data-action="dashboard-section" data-section="orders">Open orders →</button></div><div class="status-bars">${(Array.isArray(statuses)?statuses:Object.entries(statuses||{}).map(([status,count])=>({status,count}))).map(x=>`<div class="status-bar-row"><div><span>${escapeHtml(x.status||x.key||"Unknown")}</span><b>${x.count??x.total??0}</b></div><div class="status-bar"><i style="width:${Math.min(100,Number(x.count??x.total??0))}%"></i></div></div>`).join("")}</div></div><div class="dashboard-panel"><h2>Quick actions</h2><div class="quick-actions"><button data-action="dashboard-section" data-section="users">👥 Users</button><button data-action="dashboard-section" data-section="products">📦 Products</button><button data-action="dashboard-section" data-section="analytics">📊 Analytics</button><button data-action="dashboard-section" data-section="audit">🛡 Audit log</button></div></div></div>`;}
-    if(section==="analytics"){const [a,b,d,r]=await Promise.all([apiFetch("/admin/reports/popular-products"),apiFetch("/admin/reports/popular-categories"),apiFetch("/admin/reports/deliveries"),apiFetch("/admin/reports/retailers")]);return dashboardPage("Analytics & reports","Operational reporting; no commercial policy is inferred here.",`<div class="report-grid">${[["Popular products",a],["Popular categories",b],["Delivery report",d],["Retailer performance",r]].map(([t,x])=>`<div class="report-card"><h3>${escapeHtml(t)}</h3><pre class="data-preview">${escapeHtml(JSON.stringify(x,null,2))}</pre></div>`).join("")}</div>`);}
+    if(section==="analytics"){
+      const [metrics, products, categories, deliveries, retailers] = await Promise.all([
+        apiFetch("/admin/metrics"),
+        apiFetch("/admin/reports/popular-products?limit=8"),
+        apiFetch("/admin/reports/popular-categories?limit=8"),
+        apiFetch("/admin/reports/deliveries?limit=8"),
+        apiFetch("/admin/reports/retailers?limit=8")
+      ]);
+      const deliveredOrders = Number(metrics.completed_deliveries || 0);
+      const totalOrders = Number(metrics.orders || 0);
+      const inProgress = Number(metrics.deliveries_in_progress || 0);
+      const grossSales = Number(metrics.gross_sales_ugx || 0);
+      const aov = deliveredOrders ? Math.round(grossSales / deliveredOrders) : 0;
+      const deliveryRate = totalOrders ? Math.round((deliveredOrders / totalOrders) * 100) : 0;
+      const productMax = Math.max(1, ...products.map(x => Number(x.units_sold || 0)));
+      const categoryMax = Math.max(1, ...categories.map(x => Number(x.units_sold || 0)));
+      const retailerMax = Math.max(1, ...retailers.map(x => Number(x.completed_orders || x.orders || x.completed_deliveries || 0)));
+
+      const rankList = (items, valueKey, formatter, max, empty) => items.length ? items.map((x, i) => {
+        const value = Number(x[valueKey] || 0);
+        const width = Math.max(3, Math.round((value / max) * 100));
+        return `<div class="analytics-rank">
+          <div class="analytics-rank-top"><span><b>${i + 1}</b>${escapeHtml(x.name || x.business_name || "Unnamed")}</span><strong>${formatter(value)}</strong></div>
+          <div class="analytics-track"><i style="width:${width}%"></i></div>
+        </div>`;
+      }).join("") : `<div class="analytics-empty">${escapeHtml(empty)}</div>`;
+
+      const salesRows = products.map(x => `<tr><td>${escapeHtml(x.name)}</td><td>${Number(x.units_sold || 0).toLocaleString()}</td><td>${money(x.sales_ugx)}</td></tr>`).join("");
+      const deliveryRows = deliveries.map(x => `<tr><td>${escapeHtml(x.name)}</td><td>${Number(x.completed_deliveries || 0).toLocaleString()}</td><td>${money(x.earnings_ugx)}</td></tr>`).join("");
+      const retailerRows = retailers.map(x => `<tr><td>${escapeHtml(x.business_name || x.name || "Retailer")}</td><td>${Number(x.orders || x.completed_orders || 0).toLocaleString()}</td><td>${money(x.sales_ugx || x.revenue_ugx || 0)}</td></tr>`).join("");
+
+      return dashboardPage("Analytics & reports","A visual view of platform performance. Figures reflect the data currently recorded in WEWE.",`
+        <div class="analytics-toolbar">
+          <div><span class="analytics-live-dot"></span><b>Live platform data</b><span>All-time totals from completed records</span></div>
+          <button class="button-outline" data-action="dashboard-section" data-section="analytics">↻ Refresh</button>
+        </div>
+
+        <div class="analytics-kpis">
+          <article class="analytics-kpi"><span>Gross sales</span><strong>${money(grossSales)}</strong><small>Delivered orders</small></article>
+          <article class="analytics-kpi"><span>Total orders</span><strong>${totalOrders.toLocaleString()}</strong><small>All order statuses</small></article>
+          <article class="analytics-kpi"><span>Average order value</span><strong>${money(aov)}</strong><small>Based on delivered orders</small></article>
+          <article class="analytics-kpi"><span>Delivery completion</span><strong>${deliveryRate}%</strong><small>${deliveredOrders.toLocaleString()} completed</small></article>
+        </div>
+
+        <div class="analytics-grid analytics-grid-main">
+          <section class="analytics-card analytics-span-2">
+            <div class="analytics-card-head"><div><h3>Top products</h3><p>Products generating the most delivered units</p></div><span class="analytics-badge">Units sold</span></div>
+            <div class="analytics-bars">${rankList(products, "units_sold", v => v.toLocaleString(), productMax, "No delivered product sales yet.")}</div>
+          </section>
+          <section class="analytics-card">
+            <div class="analytics-card-head"><div><h3>Order pipeline</h3><p>Current operational load</p></div></div>
+            <div class="analytics-pipeline">
+              <div><span>All orders</span><b>${totalOrders.toLocaleString()}</b></div>
+              <div><span>In delivery</span><b>${inProgress.toLocaleString()}</b></div>
+              <div><span>Delivered</span><b>${deliveredOrders.toLocaleString()}</b></div>
+              <div class="analytics-pipeline-track"><i style="width:${Math.min(100, deliveryRate)}%"></i></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="analytics-grid">
+          <section class="analytics-card">
+            <div class="analytics-card-head"><div><h3>Sales by category</h3><p>Delivered units by marketplace category</p></div></div>
+            <div class="analytics-bars">${rankList(categories, "units_sold", v => v.toLocaleString(), categoryMax, "No category sales yet.")}</div>
+          </section>
+          <section class="analytics-card">
+            <div class="analytics-card-head"><div><h3>Retailer performance</h3><p>Current activity across retailers</p></div></div>
+            <div class="analytics-bars">${rankList(retailers, "completed_orders", v => v.toLocaleString(), retailerMax, "No retailer performance data yet.")}</div>
+          </section>
+        </div>
+
+        <div class="analytics-grid">
+          <section class="analytics-card">
+            <div class="analytics-card-head"><div><h3>Product sales detail</h3><p>Delivered units and sales value</p></div></div>
+            <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>Product</th><th>Units</th><th>Sales</th></tr></thead><tbody>${salesRows || '<tr><td colspan="3" class="analytics-empty">No data available</td></tr>'}</tbody></table></div>
+          </section>
+          <section class="analytics-card">
+            <div class="analytics-card-head"><div><h3>Delivery performance</h3><p>Completed deliveries and recorded earnings</p></div></div>
+            <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>Agent</th><th>Deliveries</th><th>Earnings</th></tr></thead><tbody>${deliveryRows || '<tr><td colspan="3" class="analytics-empty">No data available</td></tr>'}</tbody></table></div>
+          </section>
+        </div>
+
+        <section class="analytics-card">
+          <div class="analytics-card-head"><div><h3>Retailer sales detail</h3><p>Performance from the retailer report</p></div></div>
+          <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>Retailer</th><th>Orders</th><th>Sales</th></tr></thead><tbody>${retailerRows || '<tr><td colspan="3" class="analytics-empty">No data available</td></tr>'}</tbody></table></div>
+        </section>
+      `);
+    }
     if(section==="categories"){const rows=await apiFetch("/categories");return dashboardPage("Categories","Keep the marketplace taxonomy organized.",`<div class="dashboard-toolbar"><button class="button-primary" data-action="new-category">Add category</button></div>${rows.map(x=>`<div class="dashboard-list-item"><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.description||"Marketplace category")}</small></div>`).join("")||dashboardEmpty("No categories.","Create the first marketplace category.")}`);}
     if(section==="settlements"){const data=await apiFetch("/admin/settlements"),rows=Array.isArray(data)?data:data.items||[];return dashboardPage("Retailer settlements","Technical settlement operations only. Commercial eligibility and economics remain frozen until approved.",rows.length?dashboardTable(["Reference","Retailer","Amount","Status"],rows.map(raw=>({raw,cells:[escapeHtml(raw.settlement_reference||raw.id),escapeHtml(raw.retailer_id||""),money(raw.amount_ugx),statusBadge(raw.status)]})),raw=>raw.status==="DRAFT"?`<button data-action="settlement-submit" data-id="${escapeHtml(raw.id)}">Submit</button>`:raw.status==="SUBMITTED"?`<button data-action="settlement-review" data-id="${escapeHtml(raw.id)}">Review</button>`:""):dashboardEmpty("No settlement records.","Settlement records will appear here when created by the authorized workflow."));}
     const paths={users:"/admin/users",retailers:"/admin/retailers",products:"/admin/products",orders:"/admin/orders",agents:"/admin/delivery-agents",reviews:"/admin/reviews",settings:"/admin/settings",audit:"/admin/audit-logs"};const data=await apiFetch(paths[section]);const rows=Array.isArray(data)?data:data.items||[];if(!rows.length)return dashboardPage(sectionLabel(section),`Manage ${sectionLabel(section).toLowerCase()} from one place.`,dashboardEmpty("Nothing here yet.","There are no records requiring action."));
