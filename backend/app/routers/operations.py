@@ -253,7 +253,9 @@ def my_delivery_offers(
 
 
 @router.post("/deliveries/offers/{offer_id}/accept")
+@limiter.limit("20/minute")
 def accept_delivery_offer(
+    request: Request,
     offer_id: UUID,
     principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
     db: Session = Depends(get_db),
@@ -271,7 +273,9 @@ def accept_delivery_offer(
 
 
 @router.post("/deliveries/offers/{offer_id}/reject")
+@limiter.limit("20/minute")
 def reject_delivery_offer(
+    request: Request,
     offer_id: UUID,
     principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
     db: Session = Depends(get_db),
@@ -308,7 +312,9 @@ def available_deliveries(
 
 
 @router.post("/deliveries/{assignment_id}/accept")
+@limiter.limit("20/minute")
 def accept_delivery(
+    request: Request,
     assignment_id: UUID,
     principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
     db: Session = Depends(get_db),
@@ -376,7 +382,9 @@ def my_deliveries(
 
 
 @router.post("/deliveries/{assignment_id}/release")
+@limiter.limit("20/minute")
 def release_my_delivery(
+    request: Request,
     assignment_id: UUID,
     principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
     db: Session = Depends(get_db),
