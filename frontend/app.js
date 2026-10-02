@@ -1088,8 +1088,16 @@
       return renderDashboard();
     }
     if (action === "verify-retailer") {
-      await apiFetch(`/admin/retailers/${encodeURIComponent(button.dataset.id)}/verification`, { method: "PATCH", body: JSON.stringify({ status: "VERIFIED" }) });
-      return renderDashboard();
+      const retailerId = button.dataset.id;
+      if (!retailerId) return showToast("Missing retailer ID.");
+      try {
+        await apiFetch("/admin/retailers/" + encodeURIComponent(retailerId) + "/verification", { method: "PATCH", body: JSON.stringify({ status: "VERIFIED" }) });
+        showToast("Retailer verified successfully.");
+        return renderDashboard();
+      } catch (error) {
+        showToast(error.message || "Retailer verification failed.");
+        return renderDashboard();
+      }
     }
     if (action === "verify-agent") {
       await apiFetch(`/admin/delivery-agents/${encodeURIComponent(button.dataset.id)}/verification`, { method: "PATCH", body: JSON.stringify({ status: "VERIFIED" }) });
