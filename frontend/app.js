@@ -674,24 +674,28 @@
       const leafletLoaded = await loadLeafletMap();
       if (!leafletLoaded) throw new Error("Campus map could not be loaded.");
       const defaultCenter = [0.3350, 32.5700];
+      // Remove any previous Leaflet instance before rebuilding the checkout
+      // modal. This prevents stale tile layers and Leaflet initialization state
+      // from surviving repeated checkout openings.
+      if (state.checkoutMap) {
+        try { state.checkoutMap.remove(); } catch {}
+        state.checkoutMap = null;
+      }
+      mapElement.replaceChildren();
+      delete mapElement.dataset.mapProvider;
+      delete mapElement.dataset.tileStatus;
+      delete mapElement.dataset.tileFallback;
+
       state.checkoutMap = window.L.map(mapElement, {
         scrollWheelZoom: true,
-        zoomControl: true
+        zoomControl: true,
+        preferCanvas: false
       }).setView(defaultCenter, 15);
 
-      // Use the canonical HTTPS OSM tile endpoint instead of the a/b/c
-      // subdomain pattern. This is more reliable from localhost and avoids
-      // browser/referrer handling problems seen with some tile subdomains.
-      // Prefer the WEWE backend relay. This keeps browser tile requests
-      // same-origin with the API and lets the backend identify WEWE to OSM.
-      // Direct OSM remains the first external fallback for deployments where
-      // the backend cannot reach the public tile service.
+      // Use public map tiles directly in the browser. This keeps the checkout
+      // map independent of the WEWE API container's ability to reach an
+      // upstream tile provider. The backend relay remains a final fallback.
       const tileSources = [
-        {
-          id: "wewe-relay",
-          url: API_BASE + "/locations/map-tile/{z}/{x}/{y}.png",
-          attribution: '&copy; OpenStreetMap contributors'
-        },
         {
           id: "openstreetmap",
           url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -701,14 +705,13 @@
           id: "esri",
           url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
           attribution: 'Sources: Esri, HERE, Garmin, USGS, Intermap, &copy; OpenStreetMap contributors, GIS User Community'
+        },
+        {
+          id: "wewe-relay",
+          url: API_BASE + "/locations/map-tile/{z}/{x}/{y}.png",
+          attribution: '&copy; OpenStreetMap contributors'
         }
       ];
-
-      const tileOptions = {
-        maxZoom: 19,
-        referrerPolicy: "strict-origin",
-        attribution: tileSources[0].attribution
-      };
 
       let tileIndex = 0;
       let tileLayer = null;
@@ -733,6 +736,11 @@
         });
       };
       activateTileProvider(0);
+
+      // The checkout map lives inside a modal. Force Leaflet to recalculate
+      // its dimensions immediately and again after the modal transition.
+      requestAnimationFrame(() => state.checkoutMap?.invalidateSize?.({ pan: false }));
+      setTimeout(() => state.checkoutMap?.invalidateSize?.({ pan: false }), 150);
 
       const usable = points.filter(point =>
         Number.isFinite(Number(point.latitude)) &&
