@@ -702,16 +702,18 @@
       const tileLayer = window.L.tileLayer(tileSources[0].url, tileOptions)
         .addTo(state.checkoutMap);
 
-      // If OSM rejects/fails the tile requests, switch to a second
-      // OpenStreetMap-based provider without leaving a blank blue map.
+      // If the primary provider fails, remove its broken layer before
+      // activating the fallback so the map never accumulates failed layers.
       let fallbackLayer = null;
       const activateTileFallback = () => {
         if (fallbackLayer) return;
+        state.checkoutMap.removeLayer(tileLayer);
         fallbackLayer = window.L.tileLayer(tileSources[1].url, {
           maxZoom: 19,
-            referrerPolicy: "strict-origin",
+          referrerPolicy: "strict-origin-when-cross-origin",
           attribution: tileSources[1].attribution
         }).addTo(state.checkoutMap);
+        mapElement.dataset.mapProvider = "carto";
         mapElement.dataset.tileFallback = "carto";
       };
       tileLayer.on("tileerror", activateTileFallback);
