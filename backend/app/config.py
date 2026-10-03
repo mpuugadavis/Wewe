@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     #: Optional override of the routing service base URL (proxy or self-hosted
     #: OSRM instance). When unset the provider's public endpoint is used.
     routing_base_url: str | None = None
-    routing_timeout_seconds: float = 5.0
+    routing_timeout_seconds: float = 12.0
     routing_user_agent: str = "WEWE-campus-delivery/1.0"
     storage_provider: Literal["DISABLED", "S3"] = "DISABLED"
     storage_bucket: str | None = None
