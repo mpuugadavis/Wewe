@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.limiter import limiter
 from app.dependencies import Principal, require_roles
 from app.models import Block, Campus, DeliveryPoint, Hall, PickupPoint, University
 from app.schemas import LocationCreate, LocationOut
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/locations", tags=["locations"])
 
 
 @router.get("/map-tile/{z}/{x}/{y}.png", response_class=Response)
+@limiter.limit("120/minute")
 def map_tile(z: int, x: int, y: int, request: Request) -> Response:
     """Relay only the tiles visible in the checkout viewport through WEWE.
 
