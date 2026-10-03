@@ -1102,13 +1102,32 @@
     ]);
     if (section === "profile") {
       const open = profile.status === "ACTIVE";
+      const [campuses, publicPoints] = await Promise.all([
+        apiFetch("/locations/campuses"),
+        apiFetch("/locations/campuses").then(async campuses => {
+          const mainCampus = campuses.find(item => item.slug === "main-campus") || campuses[0];
+          return mainCampus ? apiFetch("/locations/delivery-points?campus_id=" + encodeURIComponent(mainCampus.id)) : [];
+        })
+      ]);
+      const selectedLocation = profile.location_id ? profile.location : null;
+      const locationOptions = publicPoints.map(point =>
+        '<option value="' + escapeHtml(point.id) + '" ' + (profile.location_id === point.id ? 'selected' : '') + '>' +
+        escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : '') + '</option>'
+      ).join("");
+      const locationStatus = selectedLocation
+        ? '<div class="retailer-location-status"><b>Pickup location set</b><span>' + escapeHtml(selectedLocation.name) + (selectedLocation.directions ? ' · ' + escapeHtml(selectedLocation.directions) : '') + '</span></div>'
+        : '<div class="retailer-location-warning"><b>Pickup location required</b><span>Set your pickup point before opening your store or requesting verification.</span></div>';
       const form = '<form data-form="retailer-profile" class="api-form dashboard-form">' +
         '<label class="field">Business name<input name="business_name" value="' + escapeHtml(profile.business_name) + '" required></label>' +
         '<label class="field">Description<textarea name="description">' + escapeHtml(profile.description || "") + '</textarea></label>' +
         '<label class="field">Phone<input name="phone" value="' + escapeHtml(profile.phone || "") + '" required></label>' +
+        '<div class="retailer-location-card"><div><b>Pickup location</b><small>Choose an existing campus point, or use your current GPS location for your exact shop.</small></div>' +
+        '<label class="field">Campus pickup point<select name="location_id"><option value="">Choose a pickup point</option>' + locationOptions + '</select></label>' +
+        '<button type="button" class="button-outline" data-action="retailer-current-location">Use my current location</button>' +
+        locationStatus + '</div>' +
         '<div class="form-actions"><button class="button-primary">Save profile</button>' +
         '<button type="button" class="button-outline" data-action="retailer-availability" data-open="' + (!open) + '">' + (open ? "Close store" : "Open store") + '</button></div></form>';
-      return dashboardPage("Store profile", "Manage your campus storefront details and availability.", form);
+      return dashboardPage("Store profile", "Manage your campus storefront details, availability and pickup location.", form);
     }
     if (section === "products") {
       const products = await apiFetch("/retailers/me/products");
@@ -1609,6 +1628,34 @@
       const reason = button.dataset.status === "reject" ? prompt("Reason for rejecting this fulfilment (optional):") : null;
       await apiFetch(`/retailers/me/fulfillments/${encodeURIComponent(button.dataset.id)}/${button.dataset.status}`, { method: "POST", body: JSON.stringify(reason ? { reason } : {}) });
       showToast(button.dataset.status === "reject" ? "Fulfilment rejected." : button.dataset.status === "confirm" ? "Fulfilment confirmed." : `Fulfilment marked ${button.dataset.status}.`);
+      return renderDashboard();
+    }
+    if (action === "retailer-current-location") {
+      if (!navigator.geolocation) throw new Error("Your browser does not provide location services.");
+      const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true, timeout: 15000, maximumAge: 30000
+      }));
+      const latitude = Number(position.coords.latitude);
+      const longitude = Number(position.coords.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) throw new Error("The browser returned an invalid location.");
+      const campuses = await apiFetch("/locations/campuses");
+      const campus = campuses.find(item => item.slug === "main-campus") || campuses[0];
+      if (!campus) throw new Error("No WEWE campus is configured.");
+      const profile = await apiFetch("/retailers/me");
+      await apiFetch("/retailers/me/pickup-location", {
+        method: "POST",
+        body: JSON.stringify({
+          campus_id: campus.id,
+          kind: "PICKUP_POINT",
+          name: profile.business_name + " pickup",
+          directions: "Exact location captured from the retailer's device",
+          latitude,
+          longitude,
+          google_place_id: null,
+          is_private: true
+        })
+      });
+      showToast("Exact pickup location saved.");
       return renderDashboard();
     }
     if (action === "retailer-availability") {
