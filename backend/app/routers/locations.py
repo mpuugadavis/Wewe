@@ -1,6 +1,8 @@
 from uuid import UUID
+from urllib.error import HTTPError, URLError
+from urllib.request import Request as UrlRequest, urlopen
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -10,6 +12,46 @@ from app.models import Block, Campus, DeliveryPoint, Hall, PickupPoint, Universi
 from app.schemas import LocationCreate, LocationOut
 
 router = APIRouter(prefix="/locations", tags=["locations"])
+
+
+@router.get("/map-tile/{z}/{x}/{y}.png", response_class=Response)
+def map_tile(z: int, x: int, y: int, request: Request) -> Response:
+    """Relay only the tiles visible in the checkout viewport through WEWE.
+
+    This avoids browser-side localhost/referrer edge cases while preserving the
+    original browser referrer for OpenStreetMap and identifying WEWE directly.
+    It is intentionally bounded to normal Web-Mercator tile coordinates.
+    """
+    if not (0 <= z <= 19):
+        raise HTTPException(status_code=400, detail="Invalid map zoom.")
+    limit = 2 ** z
+    if not (0 <= x < limit and 0 <= y < limit):
+        raise HTTPException(status_code=400, detail="Invalid map tile.")
+    upstream_url = f"https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    headers = {
+        "User-Agent": "WEWE-Campus-Shop/1.0 (+https://github.com/mpuugadavis/Wewe)",
+        "Accept": "image/avif,image/webp,image/png,image/*,*/*;q=0.8",
+    }
+    referer = request.headers.get("referer")
+    if referer:
+        headers["Referer"] = referer
+    try:
+        with urlopen(UrlRequest(upstream_url, headers=headers), timeout=8) as upstream:
+            body = upstream.read()
+            content_type = upstream.headers.get("Content-Type", "image/png")
+            cache_control = upstream.headers.get("Cache-Control", "public, max-age=604800")
+            etag = upstream.headers.get("ETag")
+    except HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Map tile provider returned HTTP {exc.code}.") from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        raise HTTPException(status_code=502, detail="Map tile provider is temporarily unreachable.") from exc
+    response_headers = {
+        "Cache-Control": cache_control,
+        "X-WEWE-Map-Provider": "OpenStreetMap",
+    }
+    if etag:
+        response_headers["ETag"] = etag
+    return Response(content=body, media_type=content_type, headers=response_headers)
 
 
 @router.get("/maps-config")
