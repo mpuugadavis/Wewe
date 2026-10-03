@@ -679,9 +679,12 @@
         zoomControl: true
       }).setView(defaultCenter, 15);
 
+      // Use the canonical HTTPS OSM tile endpoint instead of the a/b/c
+      // subdomain pattern. This is more reliable from localhost and avoids
+      // browser/referrer handling problems seen with some tile subdomains.
       const tileSources = [
         {
-          url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
           attribution: '&copy; OpenStreetMap contributors'
         },
         {
@@ -690,19 +693,25 @@
         }
       ];
 
-      const tileLayer = window.L.tileLayer(tileSources[0].url, {
+      const tileOptions = {
         maxZoom: 19,
         crossOrigin: true,
+        referrerPolicy: "strict-origin",
         attribution: tileSources[0].attribution
-      }).addTo(state.checkoutMap);
+      };
 
-      // If the primary OSM tile server cannot be reached, switch to CARTO.
+      const tileLayer = window.L.tileLayer(tileSources[0].url, tileOptions)
+        .addTo(state.checkoutMap);
+
+      // If OSM rejects/fails the tile requests, switch to a second
+      // OpenStreetMap-based provider without leaving a blank blue map.
       let fallbackLayer = null;
       const activateTileFallback = () => {
         if (fallbackLayer) return;
         fallbackLayer = window.L.tileLayer(tileSources[1].url, {
           maxZoom: 19,
           crossOrigin: true,
+          referrerPolicy: "strict-origin",
           attribution: tileSources[1].attribution
         }).addTo(state.checkoutMap);
         mapElement.dataset.tileFallback = "carto";
