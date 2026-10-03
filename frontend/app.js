@@ -709,8 +709,7 @@
         if (fallbackLayer) return;
         fallbackLayer = window.L.tileLayer(tileSources[1].url, {
           maxZoom: 19,
-          crossOrigin: true,
-          referrerPolicy: "strict-origin",
+            referrerPolicy: "strict-origin",
           attribution: tileSources[1].attribution
         }).addTo(state.checkoutMap);
         mapElement.dataset.tileFallback = "carto";
