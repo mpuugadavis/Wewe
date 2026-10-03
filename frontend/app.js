@@ -637,13 +637,11 @@
 
     for (const source of sources) {
       try {
-        if (!document.querySelector('link[data-wewe-leaflet-css]')) {
-          const css = document.createElement("link");
-          css.rel = "stylesheet";
-          css.href = source.css;
-          css.dataset.weweLeafletCss = "true";
-          document.head.appendChild(css);
-        }
+        const css = document.createElement("link");
+        css.rel = "stylesheet";
+        css.href = source.css;
+        css.dataset.weweLeafletCss = "true";
+        document.head.appendChild(css);
         await loadScript(source.js);
         if (window.L?.map) return true;
       } catch {
@@ -670,107 +668,83 @@
     const mapElement = $("#checkoutMap");
     if (!mapElement) return;
     try {
-      // Google Maps is optional. A missing/blocked/invalid Google key must
-      // never prevent the free OpenStreetMap/Leaflet checkout map from opening.
-      let loaded = false;
-      try {
-        loaded = await loadGoogleMaps();
-      } catch {
-        loaded = false;
-      }
-      if (!loaded) {
-        const leafletLoaded = await loadLeafletMap();
-        if (!leafletLoaded) throw new Error("Campus map could not be loaded.");
-        const defaultCenter = [0.3350, 32.5700];
-        state.checkoutMap = window.L.map(mapElement, { scrollWheelZoom: false }).setView(defaultCenter, 15);
-        window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      // Leaflet/OpenStreetMap is the primary checkout map. This deliberately
+      // avoids a configured-but-broken Google Maps key producing a blank/blue
+      // Google canvas. Google remains available only for future enhancements.
+      const leafletLoaded = await loadLeafletMap();
+      if (!leafletLoaded) throw new Error("Campus map could not be loaded.");
+      const defaultCenter = [0.3350, 32.5700];
+      state.checkoutMap = window.L.map(mapElement, {
+        scrollWheelZoom: true,
+        zoomControl: true
+      }).setView(defaultCenter, 15);
+
+      const tileSources = [
+        {
+          url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          attribution: '&copy; OpenStreetMap contributors'
+        },
+        {
+          url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+          attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        }
+      ];
+
+      const tileLayer = window.L.tileLayer(tileSources[0].url, {
+        maxZoom: 19,
+        crossOrigin: true,
+        attribution: tileSources[0].attribution
+      }).addTo(state.checkoutMap);
+
+      // If the primary OSM tile server cannot be reached, switch to CARTO.
+      let fallbackLayer = null;
+      const activateTileFallback = () => {
+        if (fallbackLayer) return;
+        fallbackLayer = window.L.tileLayer(tileSources[1].url, {
           maxZoom: 19,
           crossOrigin: true,
-          attribution: '&copy; OpenStreetMap contributors'
+          attribution: tileSources[1].attribution
         }).addTo(state.checkoutMap);
-        // Leaflet sometimes initializes inside a hidden modal. Force a size
-        // recalculation after the modal has painted.
-        setTimeout(() => state.checkoutMap?.invalidateSize?.(), 100);
-        const usable = points.filter(point => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)));
-        usable.forEach(point => {
-          const marker = window.L.marker([Number(point.latitude), Number(point.longitude)]).addTo(state.checkoutMap);
-          marker.bindTooltip(point.name, { direction: "top" });
-          marker.on("click", () => selectCheckoutPoint(point.id));
-        });
-        if (usable[0]) centerCheckoutMap(usable[0]);
-        mapElement.dataset.mapProvider = "openstreetmap";
-        return;
-      }
-      const { Map } = await google.maps.importLibrary("maps");
-      const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
-      const defaultCenter = { lat: 0.3350, lng: 32.5700 };
-      state.checkoutMap = new Map(mapElement, {
-        center: defaultCenter,
-        zoom: 15,
-        mapId: "DEMO_MAP_ID",
-        disableDefaultUI: false,
-        streetViewControl: false,
-        fullscreenControl: true
-      });
-      const usable = points.filter(point => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)));
+        mapElement.dataset.tileFallback = "carto";
+      };
+      tileLayer.on("tileerror", activateTileFallback);
+
+      const usable = points.filter(point =>
+        Number.isFinite(Number(point.latitude)) &&
+        Number.isFinite(Number(point.longitude)) &&
+        Math.abs(Number(point.latitude)) <= 90 &&
+        Math.abs(Number(point.longitude)) <= 180
+      );
+
       usable.forEach(point => {
-        const marker = new AdvancedMarkerElement({
-          map: state.checkoutMap,
-          position: { lat: Number(point.latitude), lng: Number(point.longitude) },
-          title: point.name
-        });
-        marker.addListener("click", () => selectCheckoutPoint(point.id));
+        const marker = window.L.marker([Number(point.latitude), Number(point.longitude)])
+          .addTo(state.checkoutMap);
+        marker.bindTooltip(point.name || "Delivery point", { direction: "top" });
+        marker.on("click", () => selectCheckoutPoint(point.id));
       });
-      if (usable[0]) {
-        state.checkoutMap.setCenter({ lat: Number(usable[0].latitude), lng: Number(usable[0].longitude) });
+
+      if (usable.length === 1) {
+        centerCheckoutMap(usable[0]);
+      } else if (usable.length > 1) {
+        const bounds = window.L.latLngBounds(usable.map(point => [
+          Number(point.latitude), Number(point.longitude)
+        ]));
+        state.checkoutMap.fitBounds(bounds.pad(0.15), { maxZoom: 17 });
       }
-      try {
-        const { PlaceAutocompleteElement } = await google.maps.importLibrary("places");
-        const host = $("#checkoutAutocomplete");
-        if (host) {
-          state.checkoutAutocomplete = new PlaceAutocompleteElement({ placeholder: "Search a hostel, hall or address" });
-          state.checkoutAutocomplete.setAttribute("included-region-codes", "ug");
-          host.replaceChildren(state.checkoutAutocomplete);
-          state.checkoutAutocomplete.addEventListener("gmp-select", async ({ placePrediction }) => {
-            const place = placePrediction.toPlace();
-            await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "id"] });
-            if (!place.location) return;
-            const campusId = state.campuses?.find(item => item.slug === "main-campus")?.id || state.campuses?.[0]?.id;
-            if (!campusId) throw new Error("No WEWE campus is configured.");
-            const point = await apiFetch("/locations/me/delivery-points", {
-              method: "POST",
-              body: JSON.stringify({
-                campus_id: campusId,
-                kind: "OTHER",
-                name: place.displayName || "Selected Google Maps location",
-                directions: place.formattedAddress || "",
-                latitude: place.location.lat(),
-                longitude: place.location.lng(),
-                google_place_id: place.id || null,
-                is_private: true
-              })
-            });
-            state.checkoutPoints = [...state.checkoutPoints.filter(item => item.id !== point.id), point];
-            const select = $('form[data-form="checkout"]')?.elements.delivery_point_id;
-            if (select) {
-              const option = document.createElement("option");
-              option.value = point.id;
-              option.textContent = point.name;
-              select.appendChild(option);
-              select.value = point.id;
-            }
-            state.checkoutMap.setCenter({ lat: Number(point.latitude), lng: Number(point.longitude) });
-            state.checkoutMap.setZoom(17);
-            const label = $("#selectedDeliveryLocation");
-            if (label) label.textContent = point.name + (point.directions ? " · " + point.directions : "");
-            await updateCheckoutQuote();
-          });
-        }
-      } catch {
-        // The map remains fully usable without Places autocomplete.
-      }
+
+      mapElement.dataset.mapProvider = "openstreetmap";
+      mapElement.dataset.locationCount = String(usable.length);
+
+      // Modals can report zero dimensions while opening. Recalculate after
+      // paint, after layout, and once more after external tiles begin loading.
+      [100, 350, 900].forEach(delay => {
+        setTimeout(() => state.checkoutMap?.invalidateSize?.({ pan: false }), delay);
+      });
+
+      return;
     } catch (error) {
-      mapElement.innerHTML = '<div class="map-unavailable"><b>Map unavailable</b><span>' + escapeHtml(error.message) + '</span></div>';
+      mapElement.innerHTML = '<div class="map-unavailable"><b>Map unavailable</b><span>' +
+        escapeHtml(error.message) + '</span></div>';
     }
   }
 
