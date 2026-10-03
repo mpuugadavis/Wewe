@@ -1102,15 +1102,16 @@
     ]);
     if (section === "profile") {
       const open = profile.status === "ACTIVE";
-      const [campuses, publicPoints] = await Promise.all([
-        apiFetch("/locations/campuses"),
-        apiFetch("/locations/campuses").then(async campuses => {
-          const mainCampus = campuses.find(item => item.slug === "main-campus") || campuses[0];
-          return mainCampus ? apiFetch("/locations/delivery-points?campus_id=" + encodeURIComponent(mainCampus.id)) : [];
-        })
-      ]);
+      const campuses = await apiFetch("/locations/campuses");
+      const mainCampus = campuses.find(item => item.slug === "main-campus") || campuses[0];
+      const publicPoints = mainCampus
+        ? await apiFetch("/locations/delivery-points?campus_id=" + encodeURIComponent(mainCampus.id))
+        : [];
       const selectedLocation = profile.location_id ? profile.location : null;
-      const locationOptions = publicPoints.map(point =>
+      const selectedPrivateOption = selectedLocation && !publicPoints.some(point => point.id === selectedLocation.id)
+        ? '<option value="' + escapeHtml(selectedLocation.id) + '" selected>' + escapeHtml(selectedLocation.name) + (selectedLocation.directions ? ' — ' + escapeHtml(selectedLocation.directions) : '') + '</option>'
+        : '';
+      const locationOptions = selectedPrivateOption + publicPoints.map(point =>
         '<option value="' + escapeHtml(point.id) + '" ' + (profile.location_id === point.id ? 'selected' : '') + '>' +
         escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : '') + '</option>'
       ).join("");
