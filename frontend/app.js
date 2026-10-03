@@ -682,14 +682,25 @@
       // Use the canonical HTTPS OSM tile endpoint instead of the a/b/c
       // subdomain pattern. This is more reliable from localhost and avoids
       // browser/referrer handling problems seen with some tile subdomains.
+      // Prefer the WEWE backend relay. This keeps browser tile requests
+      // same-origin with the API and lets the backend identify WEWE to OSM.
+      // Direct OSM remains the first external fallback for deployments where
+      // the backend cannot reach the public tile service.
       const tileSources = [
         {
+          id: "wewe-relay",
+          url: API_BASE + "/locations/map-tile/{z}/{x}/{y}.png",
+          attribution: '&copy; OpenStreetMap contributors'
+        },
+        {
+          id: "openstreetmap",
           url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
           attribution: '&copy; OpenStreetMap contributors'
         },
         {
-          url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-          attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+          id: "esri",
+          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+          attribution: 'Sources: Esri, HERE, Garmin, USGS, Intermap, &copy; OpenStreetMap contributors, GIS User Community'
         }
       ];
 
@@ -741,7 +752,7 @@
         state.checkoutMap.fitBounds(bounds.pad(0.15), { maxZoom: 17 });
       }
 
-      mapElement.dataset.mapProvider = "openstreetmap";
+      mapElement.dataset.mapProvider = tileSources[0].id;
       mapElement.dataset.locationCount = String(usable.length);
 
       // Modals can report zero dimensions while opening. Recalculate after
