@@ -117,8 +117,20 @@ def seed() -> None:
                 latitude=latitude,
                 longitude=longitude,
             )
+        hostel_coordinates = {
+            "Makerere International Students Hostel": ("0.334990", "32.560500"),
+            "Muhika Hostel": ("0.333190", "32.562550"),
+            "JJ Hostel": ("0.333050", "32.562700"),
+        }
         for hostel_name in ("Makerere International Students Hostel", "Muhika Hostel", "JJ Hostel"):
-            public_point(hostel_name, kind="BUILDING", directions="Near Makerere University Main Campus")
+            latitude, longitude = hostel_coordinates.get(hostel_name, (None, None))
+            public_point(
+                hostel_name,
+                kind="BUILDING",
+                directions="Near Makerere University Main Campus",
+                latitude=latitude,
+                longitude=longitude,
+            )
         pickup_location = public_point("Main Library pickup desk", kind="PICKUP_POINT", directions="Ground floor reception", latitude="0.327000", longitude="32.580600")
         pickup = db.get(PickupPoint, pickup_location.id)
         if pickup is None:
