@@ -695,7 +695,6 @@
 
       const tileOptions = {
         maxZoom: 19,
-        crossOrigin: true,
         referrerPolicy: "strict-origin",
         attribution: tileSources[0].attribution
       };
