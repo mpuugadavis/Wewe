@@ -81,16 +81,42 @@ def seed() -> None:
                 point = DeliveryPoint(campus_id=campus.id, hall_id=hall_id, kind=kind, name=name, directions=directions, latitude=latitude, longitude=longitude, is_private=False)
                 db.add(point)
                 db.flush()
+            else:
+                # Keep existing seed data usable after routing coordinates are
+                # introduced. Never overwrite a deliberately customized point.
+                if latitude is not None and point.latitude is None:
+                    point.latitude = latitude
+                if longitude is not None and point.longitude is None:
+                    point.longitude = longitude
+                if hall_id is not None and point.hall_id is None:
+                    point.hall_id = hall_id
+                db.flush()
             return point
 
         shop_point = public_point("Kikoni shopfront", directions="Opposite the main campus gate", latitude="0.335300", longitude="32.571300")
-        # Curated campus destinations. Their coordinates may be supplied later
-        # from Google Place Details; until then Google routing geocodes the
-        # descriptive campus address rather than inventing coordinates.
+        curated_coordinates = {
+            "Africa Hall": ("0.337890", "32.568910"),
+            "Complex Hall": ("0.329530", "32.569750"),
+            "Livingstone Hall": ("0.338770", "32.567990"),
+            "Lumumba Hall": ("0.331960", "32.566610"),
+            "Mary Stuart Hall": ("0.330580", "32.566590"),
+            "Mitchell Hall": ("0.332530", "32.570580"),
+            "Nkrumah Hall": ("0.335840", "32.569380"),
+            "Nsibirwa Hall": ("0.336080", "32.569900"),
+            "University Hall": ("0.332897", "32.572208"),
+        }
         for curated_hall in hall_records.values():
             if curated_hall.kind != "HALL":
                 continue
-            public_point(curated_hall.name, kind="BUILDING", hall_id=curated_hall.id, directions="Makerere University Main Campus")
+            latitude, longitude = curated_coordinates.get(curated_hall.name, (None, None))
+            public_point(
+                curated_hall.name,
+                kind="BUILDING",
+                hall_id=curated_hall.id,
+                directions="Makerere University Main Campus",
+                latitude=latitude,
+                longitude=longitude,
+            )
         for hostel_name in ("Makerere International Students Hostel", "Muhika Hostel", "JJ Hostel"):
             public_point(hostel_name, kind="BUILDING", directions="Near Makerere University Main Campus")
         pickup_location = public_point("Main Library pickup desk", kind="PICKUP_POINT", directions="Ground floor reception", latitude="0.327000", longitude="32.580600")
@@ -149,6 +175,10 @@ def seed() -> None:
         if private_room is None:
             private_room = DeliveryPoint(campus_id=campus.id, hall_id=hall_records["Livingstone Hall"].id, block_id=block.id, owner_user_id=customer.id, kind="ROOM", name="Room 12", directions="Livingstone Hall, Block A", latitude="0.331700", longitude="32.574400", is_private=True)
             db.add(private_room)
+            db.flush()
+        elif private_room.latitude is None or private_room.longitude is None:
+            private_room.latitude = private_room.latitude or "0.331700"
+            private_room.longitude = private_room.longitude or "32.574400"
             db.flush()
         customer_profile.preferred_delivery_point_id = private_room.id
 
