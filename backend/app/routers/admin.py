@@ -262,7 +262,21 @@ def list_retailers(
         if verification_status not in {"PENDING", "VERIFIED", "REJECTED"}:
             raise HTTPException(status_code=422, detail={"code": "invalid_status", "message": "Verification status is invalid."})
         query = query.where(Retailer.verification_status == verification_status)
-    return [{"id": r.id, "retailer_id": r.id, "user_id": r.user_id, "business_name": r.business_name, "phone": r.phone, "verification_status": r.verification_status, "status": r.status} for r in db.scalars(query.order_by(Retailer.created_at.desc()).offset(offset).limit(limit)).all()]
+    rows = db.scalars(query.order_by(Retailer.created_at.desc()).offset(offset).limit(limit)).all()
+    return [
+        {
+            "id": r.id,
+            "retailer_id": r.id,
+            "user_id": r.user_id,
+            "business_name": r.business_name,
+            "phone": r.phone,
+            "location_id": r.location_id,
+            "location_name": db.get(DeliveryPoint, r.location_id).name if r.location_id and db.get(DeliveryPoint, r.location_id) else None,
+            "verification_status": r.verification_status,
+            "status": r.status,
+        }
+        for r in rows
+    ]
 
 
 @router.patch("/retailers/{retailer_id}/verification")
@@ -276,6 +290,24 @@ def verify_retailer(
     if retailer is None:
         raise HTTPException(status_code=404, detail={"code": "retailer_not_found", "message": "Retailer was not found."})
     previous = retailer.verification_status
+    if payload.status == "VERIFIED" and retailer.location_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "pickup_location_required",
+                "message": "Set the retailer pickup location before verification.",
+            },
+        )
+    if retailer.location_id is not None:
+        location = db.get(DeliveryPoint, retailer.location_id)
+        if location is None or not location.is_active or location.latitude is None or location.longitude is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "pickup_location_invalid",
+                    "message": "The retailer pickup location must be active and have coordinates for road routing.",
+                },
+            )
     retailer.verification_status = payload.status
     retailer.status = "ACTIVE" if payload.status == "VERIFIED" else retailer.status
     _audit(db, principal.user.id, "RETAILER_VERIFICATION_CHANGED", "retailer", retailer.id, {"from": previous, "to": payload.status, "reason": payload.reason})
