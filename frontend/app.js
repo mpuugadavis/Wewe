@@ -670,7 +670,14 @@
     const mapElement = $("#checkoutMap");
     if (!mapElement) return;
     try {
-      const loaded = await loadGoogleMaps();
+      // Google Maps is optional. A missing/blocked/invalid Google key must
+      // never prevent the free OpenStreetMap/Leaflet checkout map from opening.
+      let loaded = false;
+      try {
+        loaded = await loadGoogleMaps();
+      } catch {
+        loaded = false;
+      }
       if (!loaded) {
         const leafletLoaded = await loadLeafletMap();
         if (!leafletLoaded) throw new Error("Campus map could not be loaded.");
@@ -678,8 +685,12 @@
         state.checkoutMap = window.L.map(mapElement, { scrollWheelZoom: false }).setView(defaultCenter, 15);
         window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           maxZoom: 19,
+          crossOrigin: true,
           attribution: '&copy; OpenStreetMap contributors'
         }).addTo(state.checkoutMap);
+        // Leaflet sometimes initializes inside a hidden modal. Force a size
+        // recalculation after the modal has painted.
+        setTimeout(() => state.checkoutMap?.invalidateSize?.(), 100);
         const usable = points.filter(point => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)));
         usable.forEach(point => {
           const marker = window.L.marker([Number(point.latitude), Number(point.longitude)]).addTo(state.checkoutMap);
