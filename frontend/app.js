@@ -757,7 +757,6 @@
         state.checkoutMap.fitBounds(bounds.pad(0.15), { maxZoom: 17 });
       }
 
-      mapElement.dataset.mapProvider = tileSources[0].id;
       mapElement.dataset.locationCount = String(usable.length);
 
       // Modals can report zero dimensions while opening. Recalculate after
