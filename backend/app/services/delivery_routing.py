@@ -88,22 +88,28 @@ def _coordinate_for_point(db: Session, provider, point: DeliveryPoint, label: st
 
 
 def _coordinate_for_retailer(db: Session, provider, retailer: Retailer, destination: DeliveryPoint) -> GeoCoordinate:
-    if retailer.location_id:
-        origin = db.get(DeliveryPoint, retailer.location_id)
-        if origin is not None and origin.is_active:
-            return _coordinate_for_point(db, provider, origin, f"{retailer.business_name}'s pickup location")
-    campus = db.get(Campus, destination.campus_id)
-    address = retailer.business_name + (f", {campus.name}" if campus else "") + ", Uganda"
-    try:
-        coordinate = provider.geocode(address)
-    except RoutingProviderError as exc:
-        raise _unavailable("Delivery routing is temporarily unavailable. Please try pickup instead.") from exc
-    if coordinate is None:
+    """Resolve a retailer pickup point for road routing.
+
+    A retailer must have an explicit, active pickup location. We deliberately
+    do not geocode the retailer business name as a fallback because a business
+    name is not a reliable physical origin and can resolve to the wrong place.
+    """
+    if not retailer.location_id:
         raise DeliveryRoutingError(
-            "retailer_location_unresolved",
-            f"WEWE could not locate {retailer.business_name}. Choose pickup or contact the retailer.",
+            "retailer_location_required",
+            f"{retailer.business_name} has no pickup location configured. Choose pickup or contact the retailer.",
+            status_code=409,
         )
-    return coordinate
+
+    origin = db.get(DeliveryPoint, retailer.location_id)
+    if origin is None or not origin.is_active:
+        raise DeliveryRoutingError(
+            "retailer_location_invalid",
+            f"{retailer.business_name} has an unavailable pickup location. Choose pickup or contact the retailer.",
+            status_code=409,
+        )
+
+    return _coordinate_for_point(db, provider, origin, f"{retailer.business_name}'s pickup location")
 
 
 def resolve_route_distances(
