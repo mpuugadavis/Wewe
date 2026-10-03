@@ -17,7 +17,7 @@ from app.models import (
     RetailerProduct,
     User,
 )
-from app.schemas import CustomerProfileUpdate, DeliveryAgentProfileUpdate, LocationCreate, RetailerAvailabilityUpdate, RetailerProfileUpdate
+from app.schemas import CustomerProfileUpdate, DeliveryAgentProfileUpdate, LocationCreate, LocationOut, RetailerAvailabilityUpdate, RetailerProfileUpdate
 
 router = APIRouter(tags=["profiles", "retailers"])
 
@@ -180,7 +180,7 @@ def update_retailer_profile(
     return {"id": retailer.id, "business_name": retailer.business_name, "slug": retailer.slug, "description": retailer.description, "phone": retailer.phone, "location_id": retailer.location_id, "verification_status": retailer.verification_status, "status": retailer.status}
 
 
-@router.post("/retailers/me/pickup-location", response_model=DeliveryPoint, status_code=201)
+@router.post("/retailers/me/pickup-location", response_model=LocationOut, status_code=201)
 def create_retailer_pickup_location(
     payload: LocationCreate,
     principal: Principal = Depends(require_roles("RETAILER")),
