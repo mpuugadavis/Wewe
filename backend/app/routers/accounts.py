@@ -121,6 +121,7 @@ def get_retailer_profile(
     retailer = db.scalar(select(Retailer).where(Retailer.user_id == principal.user.id))
     if retailer is None:
         raise HTTPException(status_code=404, detail={"code": "retailer_profile_missing", "message": "Retailer profile was not found."})
+    location = db.get(DeliveryPoint, retailer.location_id) if retailer.location_id else None
     return {
         "id": retailer.id,
         "business_name": retailer.business_name,
@@ -128,6 +129,14 @@ def get_retailer_profile(
         "description": retailer.description,
         "phone": retailer.phone,
         "location_id": retailer.location_id,
+        "location": {
+            "id": location.id,
+            "name": location.name,
+            "directions": location.directions,
+            "latitude": float(location.latitude) if location and location.latitude is not None else None,
+            "longitude": float(location.longitude) if location and location.longitude is not None else None,
+            "is_private": location.is_private,
+        } if location else None,
         "verification_status": retailer.verification_status,
         "status": retailer.status,
     }
@@ -143,10 +152,18 @@ def update_retailer_profile(
     if retailer is None:
         raise HTTPException(status_code=404, detail={"code": "retailer_profile_missing", "message": "Retailer profile was not found."})
     changes = payload.model_dump(exclude_unset=True)
-    if changes.get("location_id") is not None:
-        point = db.get(DeliveryPoint, changes["location_id"])
-        if point is None or not point.is_active or point.is_private:
-            raise HTTPException(status_code=422, detail={"code": "invalid_location", "message": "Choose an active public shop location."})
+    if "location_id" in changes:
+        location_id = changes["location_id"]
+        if location_id is None:
+            raise HTTPException(status_code=422, detail={"code": "pickup_location_required", "message": "A pickup location is required for every retailer."})
+        point = db.get(DeliveryPoint, location_id)
+        if (
+            point is None
+            or not point.is_active
+            or point.kind == "ROOM"
+            or (point.is_private and point.owner_user_id != principal.user.id)
+        ):
+            raise HTTPException(status_code=422, detail={"code": "invalid_location", "message": "Choose an active campus pickup location or create your own retailer pickup point."})
     if changes.get("phone") is not None:
         changes["phone"] = _validate_phone(changes["phone"])
     if changes.get("business_name"):
@@ -163,6 +180,46 @@ def update_retailer_profile(
     return {"id": retailer.id, "business_name": retailer.business_name, "slug": retailer.slug, "description": retailer.description, "phone": retailer.phone, "location_id": retailer.location_id, "verification_status": retailer.verification_status, "status": retailer.status}
 
 
+@router.post("/retailers/me/pickup-location", response_model=DeliveryPoint, status_code=201)
+def create_retailer_pickup_location(
+    payload: LocationCreate,
+    principal: Principal = Depends(require_roles("RETAILER")),
+    db: Session = Depends(get_db),
+) -> DeliveryPoint:
+    """Create an exact retailer-owned pickup point and assign it to the store."""
+    if payload.kind == "ROOM":
+        raise HTTPException(status_code=422, detail={"code": "invalid_pickup_location_type", "message": "Retailers cannot use a room as a pickup location."})
+    if payload.latitude is None or payload.longitude is None:
+        raise HTTPException(status_code=422, detail={"code": "pickup_coordinates_required", "message": "Provide the pickup location coordinates so WEWE can calculate road delivery fees."})
+    from app.routers.locations import validate_hierarchy
+    validate_hierarchy(db, payload)
+    retailer = db.scalar(select(Retailer).where(Retailer.user_id == principal.user.id).with_for_update())
+    if retailer is None:
+        raise HTTPException(status_code=404, detail={"code": "retailer_profile_missing", "message": "Retailer profile was not found."})
+    previous = db.get(DeliveryPoint, retailer.location_id) if retailer.location_id else None
+    point = DeliveryPoint(
+        campus_id=payload.campus_id,
+        hall_id=payload.hall_id,
+        block_id=payload.block_id,
+        owner_user_id=principal.user.id,
+        kind="PICKUP_POINT",
+        name=payload.name.strip(),
+        directions=payload.directions,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        google_place_id=payload.google_place_id,
+        is_private=True,
+    )
+    db.add(point)
+    db.flush()
+    retailer.location_id = point.id
+    if previous is not None and previous.owner_user_id == principal.user.id and previous.id != point.id:
+        previous.is_active = False
+    db.commit()
+    db.refresh(point)
+    return point
+
+
 @router.patch("/retailers/me/availability")
 def update_retailer_availability(
     payload: RetailerAvailabilityUpdate,
@@ -174,6 +231,8 @@ def update_retailer_availability(
         raise HTTPException(status_code=404, detail={"code": "retailer_profile_missing", "message": "Retailer profile was not found."})
     if payload.is_open and retailer.verification_status != "VERIFIED":
         raise HTTPException(status_code=403, detail={"code": "retailer_not_verified", "message": "Only verified retailers can open their shop."})
+    if payload.is_open and retailer.location_id is None:
+        raise HTTPException(status_code=409, detail={"code": "pickup_location_required", "message": "Set your pickup location before opening your shop."})
     retailer.status = "ACTIVE" if payload.is_open else "INACTIVE"
     db.commit()
     return {"is_open": retailer.status == "ACTIVE"}
