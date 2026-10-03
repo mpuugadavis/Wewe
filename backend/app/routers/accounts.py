@@ -17,7 +17,7 @@ from app.models import (
     RetailerProduct,
     User,
 )
-from app.schemas import CustomerProfileUpdate, DeliveryAgentProfileUpdate, RetailerAvailabilityUpdate, RetailerProfileUpdate
+from app.schemas import CustomerProfileUpdate, DeliveryAgentProfileUpdate, LocationCreate, RetailerAvailabilityUpdate, RetailerProfileUpdate
 
 router = APIRouter(tags=["profiles", "retailers"])
 
