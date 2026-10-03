@@ -26,6 +26,7 @@
     mapsApiKey: null,
     checkoutMap: null,
     checkoutMarker: null,
+    checkoutTileLayer: null,
     checkoutAutocomplete: null,
     refreshPromise: null,
     riderLocationWatchId: null,
@@ -681,6 +682,7 @@
         try { state.checkoutMap.remove(); } catch {}
         state.checkoutMap = null;
       }
+      state.checkoutTileLayer = null;
       mapElement.replaceChildren();
       delete mapElement.dataset.mapProvider;
       delete mapElement.dataset.tileStatus;
@@ -715,24 +717,36 @@
 
       let tileIndex = 0;
       let tileLayer = null;
+      let tileErrors = 0;
       const activateTileProvider = index => {
         const source = tileSources[index];
-        if (!source) return;
+        if (!source || !state.checkoutMap) return;
         tileIndex = index;
+        tileErrors = 0;
         if (tileLayer) state.checkoutMap.removeLayer(tileLayer);
         tileLayer = window.L.tileLayer(source.url, {
           maxZoom: 19,
+          keepBuffer: 4,
+          updateWhenZooming: false,
+          updateWhenIdle: true,
           referrerPolicy: "strict-origin-when-cross-origin",
           attribution: source.attribution
         }).addTo(state.checkoutMap);
+        state.checkoutTileLayer = tileLayer;
         mapElement.dataset.mapProvider = source.id;
         mapElement.dataset.tileFallback = index > 0 ? source.id : "";
-        tileLayer.once("tileload", () => {
+        tileLayer.on("tileload", () => {
+          tileErrors = 0;
           mapElement.dataset.tileStatus = "ready";
         });
-        tileLayer.once("tileerror", () => {
-          mapElement.dataset.tileStatus = "error";
-          if (index + 1 < tileSources.length) activateTileProvider(index + 1);
+        tileLayer.on("tileerror", () => {
+          tileErrors += 1;
+          // A single failed tile is normal on a moving map. Only switch
+          // providers after several failures in the same viewport.
+          if (tileErrors >= 8 && index + 1 < tileSources.length) {
+            mapElement.dataset.tileStatus = "error";
+            activateTileProvider(index + 1);
+          }
         });
       };
       activateTileProvider(0);
@@ -790,16 +804,30 @@
     const label = $("#selectedDeliveryLocation");
     if (label) label.textContent = point.name + (point.directions ? " · " + point.directions : "");
     centerCheckoutMap(point);
+    requestAnimationFrame(() => state.checkoutMap?.invalidateSize?.({ pan: false }));
+    setTimeout(() => state.checkoutMap?.invalidateSize?.({ pan: false }), 200);
     updateCheckoutQuote().catch(error => showToast(error.message));
   }
 
   async function useCurrentLocation() {
+    if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+      throw new Error("Current location requires HTTPS (or localhost). Open WEWE through your local web server, not a plain file.");
+    }
     if (!navigator.geolocation) throw new Error("Your browser does not provide location services.");
-    const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 30000
-    }));
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, error => {
+        const messages = {
+          1: "Location permission was denied. Allow location access for WEWE in your browser and try again.",
+          2: "Your device could not determine its location. Check that location services are enabled.",
+          3: "Location lookup timed out. Move to an area with better GPS/network reception and try again."
+        };
+        reject(new Error(messages[error.code] || "Unable to determine your current location."));
+      }, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 30000
+      });
+    });
     const latitude = Number(position.coords.latitude);
     const longitude = Number(position.coords.longitude);
     const campuses = state.campuses || await apiFetch("/locations/campuses");
