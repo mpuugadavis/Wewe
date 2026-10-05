@@ -56,4 +56,28 @@ if (!/safeImage\(product\.images\?\.\[0\]\)/.test(app)) {
   throw new Error("Catalog product images must use safeImage() before HTML rendering.");
 }
 
-console.log("WEWE frontend contract and security smoke checks passed.");
+if (!/function initializeCheckoutMap\(points\)/.test(app)) {
+  throw new Error("Checkout must contain the Leaflet map initialization path.");
+}
+
+if (!/https:\/\/tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/.test(app)) {
+  throw new Error("Checkout map must use OpenStreetMap tiles as its primary provider.");
+}
+
+if (!/https:\/\/server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Street_Map/.test(app)) {
+  throw new Error("Checkout map must retain a secondary tile provider.");
+}
+
+if (!/\/locations\/map-tile\/\{z\}\/\{x\}\/\{y\}\.png/.test(app)) {
+  throw new Error("Checkout map must retain the WEWE tile-relay fallback.");
+}
+
+if (!/invalidateSize/.test(app) || !/setView\(defaultCenter, 15\)/.test(app)) {
+  throw new Error("Checkout map must handle modal sizing and initialize around Makerere.");
+}
+
+if (!/route_distance_km/.test(app) || !/delivery_fee_ugx/.test(app)) {
+  throw new Error("Checkout must render server-authoritative road distance and delivery fee.");
+}
+
+console.log("WEWE checkout map and delivery-quote smoke checks passed.");
