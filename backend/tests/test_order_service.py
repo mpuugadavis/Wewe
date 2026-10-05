@@ -63,12 +63,37 @@ def marketplace_fixture(session):
     owner = User(name="Shop owner", email="shop@test.invalid", phone="+256700000002", password_hash=hash_password("strong-test-password-42"), role="RETAILER", status="ACTIVE")
     session.add_all([customer, owner])
     session.flush()
-    point = DeliveryPoint(campus_id=campus.id, owner_user_id=customer.id, kind="ROOM", name="Room 1", is_private=True)
+    point = DeliveryPoint(
+        campus_id=campus.id,
+        owner_user_id=customer.id,
+        kind="ROOM",
+        name="Room 1",
+        is_private=True,
+        latitude="0.327400",
+        longitude="32.579500",
+    )
+    retailer_pickup = DeliveryPoint(
+        campus_id=campus.id,
+        kind="PICKUP_POINT",
+        name="Test Books pickup",
+        directions="Test retailer pickup",
+        is_private=False,
+        latitude="0.335300",
+        longitude="32.571300",
+    )
     category = Category(name="Books", slug="books")
-    session.add_all([point, category])
+    session.add_all([point, retailer_pickup, category])
     session.flush()
     session.add(CustomerProfile(user_id=customer.id, preferred_delivery_point_id=point.id))
-    retailer = Retailer(user_id=owner.id, business_name="Test Books", slug="test-books", phone=owner.phone, verification_status="VERIFIED", status="ACTIVE")
+    retailer = Retailer(
+        user_id=owner.id,
+        business_name="Test Books",
+        slug="test-books",
+        phone=owner.phone,
+        location_id=retailer_pickup.id,
+        verification_status="VERIFIED",
+        status="ACTIVE",
+    )
     session.add(retailer)
     session.flush()
     product = Product(category_id=category.id, name="Notebook", description="Test product", status="ACTIVE")
