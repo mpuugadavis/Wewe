@@ -824,3 +824,28 @@ def test_committed_order_total_is_used_for_online_payment_creation(client, datab
     assert response.status_code == 201
     assert response.json()["amount_ugx"] == 14_000
     assert response.json()["amount_ugx"] == order.subtotal_ugx + order.delivery_fee_ugx
+
+def test_missing_retailer_pickup_location_refuses_delivery_checkout(database, fake_routing) -> None:
+    """A delivery quote must never guess a retailer location from its business name."""
+
+    fixture = pricing_fixture(database, retailer_count=1)
+    retailer = fixture["retailers"][0]
+    retailer.location_id = None
+    database.commit()
+
+    with pytest.raises(HTTPException) as error:
+        create_order(
+            database,
+            fixture["customer"],
+            CheckoutIn(
+                delivery_method="DELIVERY",
+                delivery_point_id=fixture["point"].id,
+            ),
+            "missing-retailer-location-key",
+        )
+
+    assert error.value.status_code == 409
+    assert error.value.detail["code"] == "retailer_location_required"
+    assert "pickup location" in error.value.detail["message"].lower()
+    assert fake_routing.route_calls == []
+
