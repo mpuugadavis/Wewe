@@ -1095,6 +1095,15 @@ def test_rejecting_one_retailer_fulfillment_preserves_other_retailer_reservation
     )
     database.add(second_owner)
     database.flush()
+    second_pickup = DeliveryPoint(
+        name="Other Shop pickup",
+        point_type="PICKUP",
+        latitude=0.335300,
+        longitude=32.571300,
+        is_active=True,
+    )
+    database.add(second_pickup)
+    database.flush()
     second_retailer = Retailer(
         user_id=second_owner.id,
         business_name="Other Shop",
@@ -1102,6 +1111,7 @@ def test_rejecting_one_retailer_fulfillment_preserves_other_retailer_reservation
         phone=second_owner.phone,
         verification_status="VERIFIED",
         status="ACTIVE",
+        location_id=second_pickup.id,
     )
     database.add(second_retailer)
     database.flush()
