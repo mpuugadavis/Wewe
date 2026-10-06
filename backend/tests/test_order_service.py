@@ -305,6 +305,9 @@ def test_rejecting_multiple_retailers_removes_one_delivery_fee_each_time(databas
         currency="UGX",
         subtotal_ugx=300,
         delivery_fee_ugx=10_500,
+        gross_delivery_fee_ugx=10_500,
+        multi_retailer_discount_ugx=0,
+        multi_retailer_discount_percent=0,
         total_ugx=10_800,
         status="PENDING",
     )
