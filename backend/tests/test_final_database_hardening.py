@@ -58,6 +58,9 @@ def _order(
         currency="UGX",
         subtotal_ugx=subtotal_ugx,
         delivery_fee_ugx=delivery_fee_ugx,
+        gross_delivery_fee_ugx=\2,
+        multi_retailer_discount_ugx=0,
+        multi_retailer_discount_percent=0,
         total_ugx=total_ugx,
         status="PENDING",
         payment_status="UNPAID",
@@ -69,6 +72,9 @@ def test_order_destination_must_match_delivery_method(database: Session) -> None
     database.add_all(
         [
             _order(customer, "DELIVERY", delivery_point_id=point.id, total_ugx=1250, delivery_fee_ugx=250),
+        gross_delivery_fee_ugx=\2,
+        multi_retailer_discount_ugx=0,
+        multi_retailer_discount_percent=0,
             _order(customer, "PICKUP", pickup_point_id=pickup.delivery_point_id),
         ]
     )
@@ -89,7 +95,10 @@ def test_order_destination_must_match_delivery_method(database: Session) -> None
 
 def test_order_total_must_equal_subtotal_plus_delivery_fee(database: Session) -> None:
     customer, point, _pickup = _create_order_references(database)
-    database.add(_order(customer, "DELIVERY", delivery_point_id=point.id, subtotal_ugx=1000, delivery_fee_ugx=250, total_ugx=1250))
+    database.add(_order(customer, "DELIVERY", delivery_point_id=point.id, subtotal_ugx=1000, delivery_fee_ugx=250,
+        gross_delivery_fee_ugx=\2,
+        multi_retailer_discount_ugx=0,
+        multi_retailer_discount_percent=0, total_ugx=1250))
     database.flush()
 
     with pytest.raises(IntegrityError):
@@ -102,6 +111,9 @@ def test_order_total_must_equal_subtotal_plus_delivery_fee(database: Session) ->
                     subtotal_ugx=1000,
                     delivery_fee_ugx=250,
         gross_delivery_fee_ugx=250,
+        gross_delivery_fee_ugx=\2,
+        multi_retailer_discount_ugx=0,
+        multi_retailer_discount_percent=0,
         multi_retailer_discount_ugx=0,
         multi_retailer_discount_percent=0,
                     total_ugx=1000,
