@@ -50,7 +50,10 @@ def _seed(session: Session, *, payment_status="SUCCESSFUL"):
     order = Order(
         id=uuid4(), order_number=f"ORD-{suffix}", customer_id=customer.id,
         delivery_point_id=point.id, delivery_method="DELIVERY", currency="UGX",
-        subtotal_ugx=10000, delivery_fee_ugx=2000, total_ugx=12000,
+        subtotal_ugx=10000, delivery_fee_ugx=2000,
+        gross_delivery_fee_ugx=2000,
+        multi_retailer_discount_ugx=0,
+        multi_retailer_discount_percent=0, total_ugx=12000,
     )
     fulfillment = RetailerFulfillment(
         id=uuid4(), order_id=order.id, retailer_id=retailer.id,
