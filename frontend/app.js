@@ -874,7 +874,7 @@
     }
     state.checkoutSelectedExternal = null;
     const label = $("#selectedDeliveryLocation");
-    if (label) label.textContent = "My current location · GPS coordinates";
+    if (label) label.textContent = "My current location · GPS ±" + Math.round(accuracyMeters) + " m";
     if (state.checkoutMap) {
       centerCheckoutMap(point);
       if (state.checkoutMap.setView && window.L?.marker) {
