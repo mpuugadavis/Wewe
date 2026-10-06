@@ -263,6 +263,17 @@ def test_distance_pricing_follows_the_approved_formula() -> None:
     assert TEST_CONFIG.delivery_fee(Decimal("5")) == 3500
 
 
+def test_muhika_scale_distances_produce_distance_dependent_fees() -> None:
+    config = APPROVED_DELIVERY_PRICING_CONFIG
+
+    # This guards the real checkout symptom: a 2.7 km route must not price
+    # the same as an 8.1 km route. The approved UGX 500 increment is retained,
+    # so the expected values are 2.9 -> 3.0k and 5.55 -> 5.5k.
+    assert config.delivery_fee(Decimal("2.7")) == 3000
+    assert config.delivery_fee(Decimal("8.1")) == 5500
+    assert config.delivery_fee(Decimal("2.7")) < config.delivery_fee(Decimal("8.1"))
+
+
 def test_longer_distance_never_costs_less() -> None:
     fees = [
         APPROVED_DELIVERY_PRICING_CONFIG.delivery_fee(Decimal(distance))
