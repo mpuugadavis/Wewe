@@ -1096,6 +1096,7 @@ def test_rejecting_one_retailer_fulfillment_preserves_other_retailer_reservation
     database.add(second_owner)
     database.flush()
     second_pickup = DeliveryPoint(
+        campus_id=point.campus_id,
         name="Other Shop pickup",
         kind="PICKUP_POINT",
         latitude=0.335300,
