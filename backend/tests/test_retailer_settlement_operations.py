@@ -36,7 +36,10 @@ def _seed(session: Session):
     order = Order(
         id=uuid4(), order_number=f"ORD-{suffix}", customer_id=customer.id,
         delivery_point_id=point.id, delivery_method="DELIVERY", currency="UGX",
-        subtotal_ugx=10000, delivery_fee_ugx=2500, total_ugx=12500,
+        subtotal_ugx=10000, delivery_fee_ugx=2500,
+        gross_delivery_fee_ugx=2500,
+        multi_retailer_discount_ugx=0,
+        multi_retailer_discount_percent=0, total_ugx=12500,
     )
     fulfillment = RetailerFulfillment(id=uuid4(), order_id=order.id, retailer_id=retailer.id)
     session.add_all([university, campus, customer, retailer_user, point, retailer, order, fulfillment])
