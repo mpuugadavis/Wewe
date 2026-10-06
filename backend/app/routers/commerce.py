@@ -638,13 +638,10 @@ def _adjust_order_after_rejection(db: Session, order: Order, fulfillment: Retail
         fee_share = order.delivery_fee_ugx // fulfillment_count if order.delivery_method == "DELIVERY" else 0
     order.delivery_fee_ugx = max(0, order.delivery_fee_ugx - fee_share)
     order.total_ugx = order.subtotal_ugx + order.delivery_fee_ugx
-    for payment in payments:
-        if payment.method == "CASH" and payment.status == "PENDING":
-            if order.total_ugx:
-                payment.amount_ugx = order.total_ugx
-            else:
-                payment.status = "FAILED"
-                order.payment_status = "FAILED"
+    # WEWE is online-payment-only. Rejection adjusts the order amount, but it
+    # never mutates a cash payment because CASH is not a valid payment method.
+    # Any existing online payment attempt must be resolved/refunded before the
+    # fulfillment can be rejected (enforced above).
 
 
 @router.post("/orders/{order_id}/pickup-confirm", response_model=OrderOut)
