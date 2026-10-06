@@ -184,7 +184,7 @@ class DeliveryPricingConfig:
                 f"Unknown delivery pricing configuration fields: {', '.join(sorted(unknown))}.",
             )
         required_fields = [
-            field for field in _CONFIG_FIELDS if field not in {"version", "rounding_tie_break"}
+            field for field in _CONFIG_FIELDS if field not in {"version", "rounding_tie_break", "multi_retailer_discount_percent"}
         ]
         missing = sorted(field for field in required_fields if field not in value)
         if missing:
