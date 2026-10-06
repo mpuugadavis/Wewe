@@ -39,8 +39,14 @@ def map_tile(z: int, x: int, y: int, request: Request) -> Response:
         headers["Referer"] = referer
     try:
         with urlopen(UrlRequest(upstream_url, headers=headers), timeout=8) as upstream:
-            body = upstream.read()
             content_type = upstream.headers.get("Content-Type", "image/png")
+            if not content_type.lower().startswith("image/"):
+                raise HTTPException(status_code=502, detail="Map tile provider returned an invalid content type.")
+            # A normal OSM tile is tiny. Cap the response so the relay cannot
+            # buffer an unexpectedly large upstream response into API memory.
+            body = upstream.read(2_000_001)
+            if len(body) > 2_000_000:
+                raise HTTPException(status_code=502, detail="Map tile provider returned an oversized tile.")
             cache_control = upstream.headers.get("Cache-Control", "public, max-age=604800")
             etag = upstream.headers.get("ETag")
     except HTTPError as exc:
