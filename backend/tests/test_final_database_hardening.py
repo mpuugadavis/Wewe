@@ -101,6 +101,9 @@ def test_order_total_must_equal_subtotal_plus_delivery_fee(database: Session) ->
                     delivery_point_id=point.id,
                     subtotal_ugx=1000,
                     delivery_fee_ugx=250,
+        gross_delivery_fee_ugx=250,
+        multi_retailer_discount_ugx=0,
+        multi_retailer_discount_percent=0,
                     total_ugx=1000,
                 )
             )
