@@ -97,8 +97,6 @@ def _dispatch_fixture(database):
         gross_delivery_fee_ugx=1000,
         multi_retailer_discount_ugx=0,
         multi_retailer_discount_percent=0,
-        multi_retailer_discount_ugx=0,
-        multi_retailer_discount_percent=0,
         total_ugx=11000,
         status="READY",
         payment_status="PAID",
