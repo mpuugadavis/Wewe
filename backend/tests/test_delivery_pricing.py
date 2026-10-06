@@ -610,9 +610,13 @@ def test_checkout_prices_each_retailer_leg_from_the_routing_service(database, fa
     assert quotes[fixture["retailers"][0].id].route_distance_km == Decimal("2")
     assert quotes[fixture["retailers"][1].id].route_distance_km == Decimal("5")
     assert {quote.distance_source for quote in quotes.values()} == {fake_routing.source}
-    # 2 km -> UGX 2,500 and 5 km -> UGX 4,000 under the approved parameters.
-    assert order.delivery_fee_ugx == 6500
-    assert order.total_ugx == order.subtotal_ugx + 6500
+    # 2 km -> UGX 2,500 and 5 km -> UGX 4,000; the combined UGX 6,500
+    # delivery fee receives one 15% multi-retailer consolidation discount.
+    assert order.gross_delivery_fee_ugx == 6500
+    assert order.multi_retailer_discount_ugx == 975
+    assert order.multi_retailer_discount_percent == Decimal("15")
+    assert order.delivery_fee_ugx == 5525
+    assert order.total_ugx == order.subtotal_ugx + 5525
 
 
 def test_client_supplied_distances_never_reach_pricing(database, fake_routing) -> None:
