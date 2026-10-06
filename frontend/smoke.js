@@ -76,7 +76,7 @@ if (!/invalidateSize/.test(app) || !/setView\(defaultCenter, 15\)/.test(app)) {
   throw new Error("Checkout map must handle modal sizing and initialize around Makerere.");
 }
 
-if (!/route_distance_km/.test(app) || !/delivery_fee_ugx/.test(app)) {
+if (!/route_distance_km/.test(app) || !/delivery_fee_ugx/.test(app) || !/multi_retailer_discount_ugx/.test(app) || !/gross_delivery_fee_ugx/.test(app)) {
   throw new Error("Checkout must render server-authoritative road distance and delivery fee.");
 }
 
