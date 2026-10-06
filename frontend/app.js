@@ -815,21 +815,38 @@
     }
     if (!navigator.geolocation) throw new Error("Your browser does not provide location services.");
     const position = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, error => {
-        const messages = {
-          1: "Location permission was denied. Allow location access for WEWE in your browser and try again.",
-          2: "Your device could not determine its location. Check that location services are enabled.",
-          3: "Location lookup timed out. Move to an area with better GPS/network reception and try again."
-        };
-        reject(new Error(messages[error.code] || "Unable to determine your current location."));
-      }, {
+      const options = {
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 30000
-      });
+        timeout: 20000,
+        maximumAge: 0
+      };
+      const messages = {
+        1: "Location permission was denied. Allow location access for WEWE in your browser and try again.",
+        2: "Your device could not determine its location. Check that location services are enabled.",
+        3: "Location lookup timed out. Move to an area with better GPS/network reception and try again."
+      };
+      navigator.geolocation.getCurrentPosition(resolve, error => {
+        reject(new Error(messages[error.code] || "Unable to determine your current location."));
+      }, options);
     });
     const latitude = Number(position.coords.latitude);
     const longitude = Number(position.coords.longitude);
+    const accuracyMeters = Number(position.coords.accuracy);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+        latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      throw new Error("Your browser returned invalid GPS coordinates. Choose a delivery point manually.");
+    }
+    // Desktop browsers can return a coarse Wi-Fi/IP position. Never silently
+    // turn a low-confidence location into a delivery address.
+    if (!Number.isFinite(accuracyMeters) || accuracyMeters > 1000) {
+      const accuracyText = Number.isFinite(accuracyMeters)
+        ? Math.round(accuracyMeters).toLocaleString("en-UG") + " m"
+        : "unknown";
+      throw new Error(
+        "Your current location is too inaccurate for delivery (" + accuracyText +
+        "). Turn on Windows/browser location services or choose your hall/hostel on the map."
+      );
+    }
     const campuses = state.campuses || await apiFetch("/locations/campuses");
     const campus = campuses.find(item => item.slug === "main-campus") || campuses[0];
     if (!campus) throw new Error("No WEWE campus is configured.");
@@ -839,7 +856,7 @@
         campus_id: campus.id,
         kind: "OTHER",
         name: "My current location",
-        directions: "Browser GPS location",
+        directions: "Browser GPS location (accuracy ±" + Math.round(accuracyMeters) + " m)",
         latitude,
         longitude,
         google_place_id: null,
