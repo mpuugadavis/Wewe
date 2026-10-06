@@ -5,6 +5,10 @@ Implements the approved Phase 4A COM-FEE rules (Phase 4B.3):
     raw_delivery_fee = max(minimum_fee, base_fee + (route_distance_km x price_per_km))
     delivery_fee     = raw_delivery_fee rounded to the nearest configured UGX increment
 
+For orders containing multiple retailer fulfillments, the individual fees are
+still calculated and snapshotted, then one configurable consolidation discount
+is applied to the combined gross delivery fee.
+
 Design boundaries:
 
 * Road-route distance is an **input**. This module never calls Google Maps,
@@ -12,8 +16,9 @@ Design boundaries:
   derives a "road distance" from straight-line/Haversine coordinates. Those
   lookups live in :mod:`app.services.routing`, which supplies the distance and
   the ``distance_source`` recorded on every quote.
-* Every fulfillment is priced independently (COM-FEE-002); an order delivery
-  fee is the sum of its fulfillment fees.
+* Every fulfillment is priced independently (COM-FEE-002), preserving each
+  retailer's route and fee as an auditable quote. Multi-retailer orders then
+  receive one configurable consolidation discount at order level.
 * Pickup pricing is UGX 0 (COM-FEE-003) with no route distance.
 * Pricing parameters are configuration, not permanent constants
   (COM-FEE-008). ``APPROVED_DELIVERY_PRICING_CONFIG`` holds the values approved
@@ -67,6 +72,7 @@ _CONFIG_FIELDS = (
     "max_route_distance_km",
     "rounding_tie_break",
     "version",
+    "multi_retailer_discount_percent",
 )
 
 
@@ -121,6 +127,7 @@ class DeliveryPricingConfig:
     rounding_tie_break: str = "UP"
     currency: str = "UGX"
     version: str = APPROVED_PRICING_VERSION
+    multi_retailer_discount_percent: Decimal = Decimal("15")
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "base_fee_ugx", _as_amount(self.base_fee_ugx, "base_fee_ugx"))
@@ -149,6 +156,10 @@ class DeliveryPricingConfig:
                 "invalid_pricing_configuration",
                 "rounding_tie_break must be one of UP, DOWN or EVEN.",
             )
+        discount_percent = _as_decimal(self.multi_retailer_discount_percent, "multi_retailer_discount_percent")
+        if discount_percent < 0 or discount_percent > 100:
+            raise DeliveryPricingError("invalid_pricing_configuration", "multi_retailer_discount_percent must be between 0 and 100.")
+        object.__setattr__(self, "multi_retailer_discount_percent", discount_percent)
         if self.currency != "UGX":
             raise DeliveryPricingError(
                 "invalid_pricing_configuration", "Delivery pricing currently supports UGX only."
@@ -190,6 +201,7 @@ class DeliveryPricingConfig:
             max_route_distance_km=value["max_route_distance_km"],
             rounding_tie_break=value.get("rounding_tie_break", "UP"),
             version=version,
+            multi_retailer_discount_percent=value.get("multi_retailer_discount_percent", 15),
         )
 
     def delivery_fee(self, route_distance_km: Decimal | int | str | float) -> int:
@@ -330,9 +342,37 @@ def build_delivery_quote(
     )
 
 
-def total_delivery_fee(quotes: Iterable[DeliveryPriceQuote]) -> int:
-    """Order-level delivery fee: the sum of independent fulfillment fees."""
+@dataclass(frozen=True)
+class MultiRetailerDeliveryTotal:
+    """Order-level delivery total after one consolidation discount."""
+    gross_delivery_fee_ugx: int
+    multi_retailer_discount_ugx: int
+    delivery_fee_ugx: int
+    retailer_count: int
+    discount_percent: Decimal
 
+
+def calculate_multi_retailer_delivery_total(
+    quotes: Iterable[DeliveryPriceQuote], config: DeliveryPricingConfig
+) -> MultiRetailerDeliveryTotal:
+    """Combine retailer fees and apply one order-level consolidation discount."""
+    quote_list = list(quotes)
+    gross = sum(quote.delivery_fee_ugx for quote in quote_list)
+    retailer_count = len(quote_list)
+    discount = 0
+    if retailer_count >= 2 and gross > 0 and config.multi_retailer_discount_percent > 0:
+        discount = int((Decimal(gross) * config.multi_retailer_discount_percent / Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    return MultiRetailerDeliveryTotal(
+        gross_delivery_fee_ugx=gross,
+        multi_retailer_discount_ugx=discount,
+        delivery_fee_ugx=gross - discount,
+        retailer_count=retailer_count,
+        discount_percent=(config.multi_retailer_discount_percent if retailer_count >= 2 else Decimal("0")),
+    )
+
+
+def total_delivery_fee(quotes: Iterable[DeliveryPriceQuote]) -> int:
+    """Backward-compatible sum of independent fulfillment fees."""
     return sum(quote.delivery_fee_ugx for quote in quotes)
 
 
