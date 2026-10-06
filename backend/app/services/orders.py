@@ -37,7 +37,7 @@ from app.services.delivery_pricing import (
     commit_delivery_quote,
     committed_quotes_for_order,
     resolve_delivery_pricing_config,
-    total_delivery_fee,
+    calculate_multi_retailer_delivery_total,
 )
 from app.services.delivery_routing import DeliveryRoutingError, resolve_route_distances
 
@@ -188,7 +188,8 @@ def create_order(db: Session, customer: User, checkout: CheckoutIn, idempotency_
         subtotal += line_total
         grouped[retailer.id].append((cart_item, listing, product, retailer))
     quotes, _routing_provider = _checkout_delivery_quotes(db, checkout, list(grouped), delivery_point)
-    delivery_fee = total_delivery_fee(quotes.values())
+    pricing_config = _resolve_pricing_config_or_unavailable(db)
+    delivery_total = calculate_multi_retailer_delivery_total(quotes.values(), pricing_config)
     delivery_confirmation_codes: dict[str, str] = {}
     order = Order(
         order_number=f"WW-{secrets.token_hex(5).upper()}",
@@ -198,8 +199,11 @@ def create_order(db: Session, customer: User, checkout: CheckoutIn, idempotency_
         delivery_method=checkout.delivery_method,
         currency="UGX",
         subtotal_ugx=subtotal,
-        delivery_fee_ugx=delivery_fee,
-        total_ugx=subtotal + delivery_fee,
+        gross_delivery_fee_ugx=delivery_total.gross_delivery_fee_ugx,
+        multi_retailer_discount_ugx=delivery_total.multi_retailer_discount_ugx,
+        multi_retailer_discount_percent=delivery_total.discount_percent,
+        delivery_fee_ugx=delivery_total.delivery_fee_ugx,
+        total_ugx=subtotal + delivery_total.delivery_fee_ugx,
         status="PENDING",
         idempotency_key=idempotency_key,
     )
@@ -303,14 +307,18 @@ def preview_checkout_quote(db: Session, customer: User, checkout: CheckoutIn) ->
 
     delivery_point, _pickup_point = _resolve_checkout_destination(db, customer, checkout)
     quotes, routing_provider = _checkout_delivery_quotes(db, checkout, retailer_ids, delivery_point)
-    delivery_fee = total_delivery_fee(quotes.values())
+    pricing_config = _resolve_pricing_config_or_unavailable(db)
+    delivery_total = calculate_multi_retailer_delivery_total(quotes.values(), pricing_config)
     return {
         "currency": "UGX",
         "delivery_method": checkout.delivery_method,
         "routing_provider": routing_provider,
         "subtotal_ugx": subtotal,
-        "delivery_fee_ugx": delivery_fee,
-        "total_ugx": subtotal + delivery_fee,
+        "gross_delivery_fee_ugx": delivery_total.gross_delivery_fee_ugx,
+        "multi_retailer_discount_ugx": delivery_total.multi_retailer_discount_ugx,
+        "multi_retailer_discount_percent": str(delivery_total.discount_percent),
+        "delivery_fee_ugx": delivery_total.delivery_fee_ugx,
+        "total_ugx": subtotal + delivery_total.delivery_fee_ugx,
         "fulfillments": [
             {
                 "retailer_id": retailer_id,
@@ -344,6 +352,9 @@ def order_payload(db: Session, order: Order) -> dict:
         "delivery_method": order.delivery_method,
         "currency": order.currency,
         "subtotal_ugx": order.subtotal_ugx,
+        "gross_delivery_fee_ugx": order.gross_delivery_fee_ugx,
+        "multi_retailer_discount_ugx": order.multi_retailer_discount_ugx,
+        "multi_retailer_discount_percent": str(order.multi_retailer_discount_percent),
         "delivery_fee_ugx": order.delivery_fee_ugx,
         "total_ugx": order.total_ugx,
         "status": order.status,
