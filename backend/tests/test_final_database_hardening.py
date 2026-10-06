@@ -48,6 +48,9 @@ def _order(
     subtotal_ugx: int = 1000,
     delivery_fee_ugx: int = 0,
     total_ugx: int = 1000,
+    gross_delivery_fee_ugx: int | None = None,
+    multi_retailer_discount_ugx: int = 0,
+    multi_retailer_discount_percent: float = 0,
 ) -> Order:
     return Order(
         order_number=f"WW-{uuid4().hex[:10].upper()}",
@@ -58,8 +61,9 @@ def _order(
         currency="UGX",
         subtotal_ugx=subtotal_ugx,
         delivery_fee_ugx=delivery_fee_ugx,
-        multi_retailer_discount_ugx=0,
-        multi_retailer_discount_percent=0,
+        gross_delivery_fee_ugx=delivery_fee_ugx if gross_delivery_fee_ugx is None else gross_delivery_fee_ugx,
+        multi_retailer_discount_ugx=multi_retailer_discount_ugx,
+        multi_retailer_discount_percent=multi_retailer_discount_percent,
         total_ugx=total_ugx,
         status="PENDING",
         payment_status="UNPAID",
@@ -71,8 +75,6 @@ def test_order_destination_must_match_delivery_method(database: Session) -> None
     database.add_all(
         [
             _order(customer, "DELIVERY", delivery_point_id=point.id, total_ugx=1250, delivery_fee_ugx=250),
-        multi_retailer_discount_ugx=0,
-        multi_retailer_discount_percent=0,
             _order(customer, "PICKUP", pickup_point_id=pickup.delivery_point_id),
         ]
     )
@@ -107,11 +109,9 @@ def test_order_total_must_equal_subtotal_plus_delivery_fee(database: Session) ->
                     delivery_point_id=point.id,
                     subtotal_ugx=1000,
                     delivery_fee_ugx=250,
-        gross_delivery_fee_ugx=250,
-        multi_retailer_discount_ugx=0,
-        multi_retailer_discount_percent=0,
-        multi_retailer_discount_ugx=0,
-        multi_retailer_discount_percent=0,
+                    gross_delivery_fee_ugx=250,
+                    multi_retailer_discount_ugx=0,
+                    multi_retailer_discount_percent=0,
                     total_ugx=1000,
                 )
             )
