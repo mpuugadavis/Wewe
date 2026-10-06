@@ -126,8 +126,6 @@ def _tracking_fixture(database, client: TestClient):
         gross_delivery_fee_ugx=1000,
         multi_retailer_discount_ugx=0,
         multi_retailer_discount_percent=0,
-        multi_retailer_discount_ugx=0,
-        multi_retailer_discount_percent=0,
         total_ugx=11000,
         status="OUT_FOR_DELIVERY",
         payment_status="PAID",
