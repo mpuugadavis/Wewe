@@ -753,8 +753,10 @@ def test_checkout_without_caller_supplied_distances_uses_routing(database, fake_
     database.commit()
 
     # The caller never supplies distances; checkout obtains one road route per retailer.
-    assert order.delivery_fee_ugx == 6500
-    assert order.total_ugx == order.subtotal_ugx + 6500
+    assert order.gross_delivery_fee_ugx == 6500
+    assert order.multi_retailer_discount_ugx == 975
+    assert order.delivery_fee_ugx == 5525
+    assert order.total_ugx == order.subtotal_ugx + 5525
     assert len(database.scalars(select(DeliveryQuote)).all()) == 2
 
     assert total_delivery_fee([]) == 0
@@ -778,8 +780,10 @@ def test_rejected_fulfillment_removes_only_its_own_committed_fee(database, fake_
         "rejection-quote-key",
     )
     database.commit()
-    assert order.delivery_fee_ugx == 6500
-    assert order.total_ugx == order.subtotal_ugx + 6500
+    assert order.gross_delivery_fee_ugx == 6500
+    assert order.multi_retailer_discount_ugx == 975
+    assert order.delivery_fee_ugx == 5525
+    assert order.total_ugx == order.subtotal_ugx + 5525
 
     fulfillments = {
         fulfillment.retailer_id: fulfillment
