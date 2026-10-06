@@ -58,6 +58,9 @@ def _seed_order(session: Session):
         currency="UGX",
         subtotal_ugx=10000,
         delivery_fee_ugx=2500,
+        gross_delivery_fee_ugx=2500,
+        multi_retailer_discount_ugx=0,
+        multi_retailer_discount_percent=0,
         total_ugx=12500,
     )
     fulfillment = RetailerFulfillment(
