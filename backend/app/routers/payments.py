@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import ValidationError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -33,20 +34,64 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 @limiter.limit("120/minute")
 async def provider_webhook(
     provider: str,
-    payload: PaymentWebhookIn,
+    payload: dict,
     request: Request,
     signature: str | None = Header(default=None, alias="X-Webhook-Signature"),
+    verif_hash: str | None = Header(default=None, alias="verif-hash"),
     db: Session = Depends(get_db),
 ) -> dict:
-    if not signature:
-        raise HTTPException(status_code=503, detail={"code": "webhook_unconfigured", "message": "Payment callbacks are not configured."})
     provider_name = provider.upper().replace("-", "_")
     try:
         adapter = payment_providers.get(provider_name)
     except PaymentProviderUnavailable:
         raise HTTPException(status_code=503, detail={"code": "payment_provider_unavailable", "message": "This payment provider is not configured."}) from None
-    if not adapter.verify_webhook(await request.body(), signature):
+    received_signature = verif_hash if provider_name == "FLUTTERWAVE" else signature
+    if not received_signature:
+        raise HTTPException(status_code=401, detail={"code": "invalid_signature", "message": "Payment callback signature is missing."})
+    raw_body = await request.body()
+    if not adapter.verify_webhook(raw_body, received_signature):
         raise HTTPException(status_code=401, detail={"code": "invalid_signature", "message": "Payment callback signature is invalid."})
+
+    if provider_name == "FLUTTERWAVE":
+        event_type = payload.get("event")
+        data = payload.get("data")
+        if event_type != "charge.completed" or not isinstance(data, dict):
+            return {"received": True, "ignored": True}
+        transaction_id = data.get("id")
+        if transaction_id is None:
+            raise HTTPException(status_code=422, detail={"code": "invalid_provider_event", "message": "Flutterwave transaction ID is missing."})
+        try:
+            verified = adapter.verify_transaction(transaction_id)
+        except Exception:
+            # Return a retryable status when authoritative verification is unavailable.
+            raise HTTPException(status_code=503, detail={"code": "payment_verification_unavailable", "message": "Payment verification is temporarily unavailable; Flutterwave may retry."}) from None
+        verified_status = str(verified.get("status", "")).upper()
+        if verified_status not in {"SUCCESSFUL", "FAILED"}:
+            raise HTTPException(status_code=503, detail={"code": "payment_not_resolved", "message": "Flutterwave has not provided an authoritative final status yet."})
+        if str(verified.get("tx_ref", "")) != str(data.get("tx_ref", "")):
+            raise HTTPException(status_code=422, detail={"code": "payment_reference_mismatch", "message": "Flutterwave transaction reference does not match the webhook."})
+        if str(verified.get("id", transaction_id)) != str(transaction_id):
+            raise HTTPException(status_code=422, detail={"code": "payment_id_mismatch", "message": "Flutterwave transaction ID does not match the verified transaction."})
+        try:
+            verified_amount = float(verified.get("amount"))
+            if not verified_amount.is_integer() or verified_amount <= 0:
+                raise ValueError
+            normalized = {
+                "provider_reference": str(verified["tx_ref"]),
+                "provider_event_id": f"{transaction_id}:{verified_status}",
+                "amount_ugx": int(verified_amount),
+                "currency": str(verified.get("currency", "")).upper(),
+                "status": verified_status,
+            }
+            payload = PaymentWebhookIn.model_validate(normalized)
+        except (KeyError, TypeError, ValueError, ValidationError):
+            raise HTTPException(status_code=422, detail={"code": "invalid_provider_event", "message": "Flutterwave verification response is incomplete or invalid."}) from None
+    else:
+        try:
+            payload = PaymentWebhookIn.model_validate(payload)
+        except ValidationError:
+            raise HTTPException(status_code=422, detail={"code": "invalid_provider_event", "message": "Payment callback payload is invalid."}) from None
+
     event_id = f"{provider_name}:{payload.provider_event_id}"
     prior_event = db.scalar(
         select(PaymentEvent).where(PaymentEvent.provider_event_id == event_id)
