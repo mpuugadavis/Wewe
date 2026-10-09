@@ -51,7 +51,11 @@ def test_system_health_is_admin_only(client: TestClient, database) -> None:
     assert response.status_code == 403
 
 
-def test_system_health_reports_workers_and_storage(client: TestClient, database) -> None:
+def test_system_health_reports_workers_and_storage(client: TestClient, database, monkeypatch) -> None:
+    from app.config import get_settings
+
+    settings = get_settings().model_copy(update={"storage_provider": "DISABLED"})
+    monkeypatch.setattr("app.config.get_settings", lambda: settings)
     headers = _admin_headers(client, database)
     now = utcnow()
     database.add_all([
