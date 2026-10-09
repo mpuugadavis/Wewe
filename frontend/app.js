@@ -978,7 +978,8 @@
     try {
       const paymentBody = {
         method: form.elements.payment_method.value,
-        phone: form.elements.phone.value.trim()
+        phone: form.elements.phone.value.trim(),
+        email: form.elements.email.value.trim()
       };
       form.dataset.paymentIdempotencyKey ||= crypto.randomUUID();
       payment = await apiFetch(`/orders/${encodeURIComponent(order.id)}/payments`, { method: "POST", headers: { "Idempotency-Key": form.dataset.paymentIdempotencyKey }, body: JSON.stringify(paymentBody) });
