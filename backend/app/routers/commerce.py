@@ -762,6 +762,9 @@ def create_payment(
                     currency="UGX",
                     phone=payload.phone or "",
                     callback_url=f"{get_settings().payment_callback_url}/{provider.name}",
+                    method=payload.method,
+                    customer_email=payload.email or principal.user.email,
+                    customer_name=principal.user.name,
                 )
             )
             payment.provider_reference = initiation.provider_reference
