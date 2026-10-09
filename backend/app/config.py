@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     payment_callback_url: str = "http://localhost:8000/api/v1/payments/webhooks"
     payment_webhook_secret: SecretStr | None = None
     payment_mode: Literal["DISABLED", "SIMULATED", "EXTERNAL"] = "DISABLED"
+    flutterwave_secret_key: SecretStr | None = None
+    flutterwave_webhook_secret_hash: SecretStr | None = None
+    flutterwave_redirect_url: str | None = None
+    flutterwave_api_base_url: str = "https://api.flutterwave.com/v3"
     rate_limit_storage_uri: str = "memory://"
     email_from: str = "no-reply@example.invalid"
     smtp_host: str | None = None
@@ -190,6 +194,12 @@ class Settings(BaseSettings):
             raise ValueError("PAYMENT_MODE=SIMULATED is forbidden in production")
         if self.app_env == "production" and self.payment_mode == "EXTERNAL" and not self.payment_webhook_secret:
             raise ValueError("PAYMENT_WEBHOOK_SECRET must be configured in production")
+        if self.payment_mode == "EXTERNAL" and (not self.flutterwave_secret_key or not self.flutterwave_webhook_secret_hash or not self.flutterwave_redirect_url):
+            raise ValueError("FLUTTERWAVE_SECRET_KEY, FLUTTERWAVE_WEBHOOK_SECRET_HASH and FLUTTERWAVE_REDIRECT_URL are required when PAYMENT_MODE=EXTERNAL")
+        if self.flutterwave_secret_key and ("replace" in self.flutterwave_secret_key.get_secret_value().lower() or len(self.flutterwave_secret_key.get_secret_value()) < 20):
+            raise ValueError("FLUTTERWAVE_SECRET_KEY must be a real secret key or be left empty")
+        if self.flutterwave_webhook_secret_hash and ("replace" in self.flutterwave_webhook_secret_hash.get_secret_value().lower() or len(self.flutterwave_webhook_secret_hash.get_secret_value()) < 16):
+            raise ValueError("FLUTTERWAVE_WEBHOOK_SECRET_HASH must be a real webhook secret hash or be left empty")
         if self.payment_webhook_secret:
             webhook_secret = self.payment_webhook_secret.get_secret_value()
             if len(webhook_secret) < 32 or "replace" in webhook_secret.lower():
