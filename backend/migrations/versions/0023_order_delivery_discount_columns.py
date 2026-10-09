@@ -1,12 +1,6 @@
-"""Add order delivery-fee components required by current order pricing.
-
-Revision ID: 0023_order_delivery_discount_columns
-Revises: 0022_retailer_pickup_location_backfill
-"""
-
+"""Add the delivery-fee components expected by the order model."""
 from alembic import op
 import sqlalchemy as sa
-
 
 revision = "0023_order_delivery_discount_columns"
 down_revision = "0022_retailer_pickup_location_backfill"
@@ -15,78 +9,38 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Replace the original amount check because the current model includes the
-    # gross fee and discount components in that invariant.
-    op.drop_constraint("ck_order_amounts", "orders", type_="check")
+    with op.batch_alter_table("orders") as batch:
+        batch.add_column(sa.Column("gross_delivery_fee_ugx", sa.BigInteger(), server_default="0", nullable=False))
+        batch.add_column(sa.Column("multi_retailer_discount_ugx", sa.BigInteger(), server_default="0", nullable=False))
+        batch.add_column(sa.Column("multi_retailer_discount_percent", sa.Numeric(7, 3), server_default="0", nullable=False))
 
-    op.add_column(
-        "orders",
-        sa.Column(
-            "gross_delivery_fee_ugx",
-            sa.BigInteger(),
-            server_default="0",
-            nullable=False,
-        ),
-    )
-    op.add_column(
-        "orders",
-        sa.Column(
-            "multi_retailer_discount_ugx",
-            sa.BigInteger(),
-            server_default="0",
-            nullable=False,
-        ),
-    )
-    op.add_column(
-        "orders",
-        sa.Column(
-            "multi_retailer_discount_percent",
-            sa.Numeric(precision=7, scale=3),
-            server_default="0",
-            nullable=False,
-        ),
-    )
+    op.execute(sa.text(
+        "UPDATE orders SET gross_delivery_fee_ugx = delivery_fee_ugx, "
+        "multi_retailer_discount_ugx = 0, multi_retailer_discount_percent = 0"
+    ))
 
-    # Preserve existing order totals: historically delivery_fee_ugx stored the
-    # final fee, so treat it as the gross fee and record no legacy discount.
-    op.execute(
-        sa.text(
-            "UPDATE orders "
-            "SET gross_delivery_fee_ugx = delivery_fee_ugx, "
-            "multi_retailer_discount_ugx = 0, "
-            "multi_retailer_discount_percent = 0"
+    with op.batch_alter_table("orders") as batch:
+        batch.drop_constraint("ck_order_amounts", type_="check")
+        batch.create_check_constraint(
+            "ck_order_amounts",
+            "subtotal_ugx >= 0 AND gross_delivery_fee_ugx >= 0 AND "
+            "multi_retailer_discount_ugx >= 0 AND delivery_fee_ugx >= 0 AND total_ugx >= 0",
         )
-    )
-
-    op.create_check_constraint(
-        "ck_order_amounts",
-        "orders",
-        "subtotal_ugx >= 0 AND gross_delivery_fee_ugx >= 0 "
-        "AND multi_retailer_discount_ugx >= 0 "
-        "AND delivery_fee_ugx >= 0 AND total_ugx >= 0",
-    )
-    op.create_check_constraint(
-        "ck_order_delivery_discount_matches_components",
-        "orders",
-        "multi_retailer_discount_ugx <= gross_delivery_fee_ugx "
-        "AND delivery_fee_ugx = gross_delivery_fee_ugx - multi_retailer_discount_ugx",
-    )
+        batch.create_check_constraint(
+            "ck_order_delivery_discount_matches_components",
+            "multi_retailer_discount_ugx <= gross_delivery_fee_ugx AND "
+            "delivery_fee_ugx = gross_delivery_fee_ugx - multi_retailer_discount_ugx",
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "ck_order_delivery_discount_matches_components",
-        "orders",
-        type_="check",
-    )
-    op.drop_constraint("ck_order_amounts", "orders", type_="check")
-
-    op.drop_column("orders", "multi_retailer_discount_percent")
-    op.drop_column("orders", "multi_retailer_discount_ugx")
-    op.drop_column("orders", "gross_delivery_fee_ugx")
-
-    op.create_check_constraint(
-        "ck_order_amounts",
-        "orders",
-        "subtotal_ugx >= 0 AND delivery_fee_ugx >= 0 AND total_ugx >= 0",
-    )
+    with op.batch_alter_table("orders") as batch:
+        batch.drop_constraint("ck_order_delivery_discount_matches_components", type_="check")
+        batch.drop_constraint("ck_order_amounts", type_="check")
+        batch.drop_column("multi_retailer_discount_percent")
+        batch.drop_column("multi_retailer_discount_ugx")
+        batch.drop_column("gross_delivery_fee_ugx")
+        batch.create_check_constraint(
+            "ck_order_amounts",
+            "subtotal_ugx >= 0 AND delivery_fee_ugx >= 0 AND total_ugx >= 0",
+        )
