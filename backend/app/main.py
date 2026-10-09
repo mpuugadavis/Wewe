@@ -24,6 +24,11 @@ from app.services.worker_health import worker_snapshot
 from app.routers import accounts, admin, auth, catalog, commerce, locations, operations, payments
 
 settings = get_settings()
+if settings.payment_mode == "EXTERNAL":
+    flutterwave_provider = build_flutterwave_provider()
+    payment_providers.register("MTN_MOMO", flutterwave_provider)
+    payment_providers.register("AIRTEL_MONEY", flutterwave_provider)
+    payment_providers.register("FLUTTERWAVE", flutterwave_provider)
 configure_logging(settings.log_level)
 logger = logging.getLogger("wewe.api")
 
