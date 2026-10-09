@@ -124,3 +124,4 @@ def configure_flutterwave_provider() -> None:
 
     payment_providers.register("MTN_MOMO", provider)
     payment_providers.register("AIRTEL_MONEY", provider)
+    payment_providers.register("FLUTTERWAVE", provider)
