@@ -211,6 +211,10 @@ class Settings(BaseSettings):
                 raise ValueError("PAYMENT_WEBHOOK_SECRET must be a unique secret of at least 32 characters")
         if self.app_env == "production" and urlsplit(self.payment_callback_url).scheme != "https":
             raise ValueError("PAYMENT_CALLBACK_URL must use HTTPS in production")
+        if self.app_env == "production" and urlsplit(self.payment_return_url).scheme != "https":
+            raise ValueError("PAYMENT_RETURN_URL must use HTTPS in production")
+        if urlsplit(self.flutterwave_api_base_url).scheme != "https":
+            raise ValueError("FLUTTERWAVE_API_BASE_URL must use HTTPS")
         if self.routing_provider == "GOOGLE_MAPS" and not self.google_maps_api_key:
             raise ValueError("GOOGLE_MAPS_API_KEY is required when ROUTING_PROVIDER is GOOGLE_MAPS")
         if self.app_env == "production" and self.storage_provider != "S3":
