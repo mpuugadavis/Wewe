@@ -199,6 +199,8 @@ class Settings(BaseSettings):
             raise ValueError("FLUTTERWAVE_SECRET_KEY, FLUTTERWAVE_WEBHOOK_SECRET_HASH and FLUTTERWAVE_REDIRECT_URL are required when PAYMENT_MODE=EXTERNAL")
         if self.flutterwave_secret_key and ("replace" in self.flutterwave_secret_key.get_secret_value().lower() or len(self.flutterwave_secret_key.get_secret_value()) < 20):
             raise ValueError("FLUTTERWAVE_SECRET_KEY must be a real secret key or be left empty")
+        if self.payment_mode == "EXTERNAL" and self.flutterwave_environment == "SANDBOX" and "TEST" not in self.flutterwave_secret_key.get_secret_value().upper():
+            raise ValueError("Sandbox mode requires a Flutterwave test secret key (FLWSECK_TEST-...).")
         if self.flutterwave_webhook_secret_hash and ("replace" in self.flutterwave_webhook_secret_hash.get_secret_value().lower() or len(self.flutterwave_webhook_secret_hash.get_secret_value()) < 16):
             raise ValueError("FLUTTERWAVE_WEBHOOK_SECRET_HASH must be a real webhook secret hash or be left empty")
         if self.payment_webhook_secret:
