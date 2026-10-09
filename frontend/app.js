@@ -1039,7 +1039,7 @@
     const payment = await apiFetch(`/orders/${encodeURIComponent(orderId)}/payments`, {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify({ method, phone, email: state.user?.email || "" })
+      body: JSON.stringify({ method, phone, email })
     });
     const checkoutUrl = safeImage(payment?.checkout_url);
     $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Payment retry</div><h2>Continue payment</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${escapeHtml(payment?.status || "Payment initiated")}</p>${checkoutUrl ? `<p><a class="button-primary" href="${escapeHtml(checkoutUrl)}" target="_blank" rel="noopener noreferrer">Continue mobile payment</a></p>` : ""}<button class="button-outline" data-action="close-modal">Close</button>`;
