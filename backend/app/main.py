@@ -18,11 +18,13 @@ from app.db import engine
 from app.limiter import limiter
 from app.observability import configure_logging
 from app.services.media_uploads import build_media_storage
+from app.services.flutterwave import configure_flutterwave_provider
 from app.services.worker_health import worker_snapshot
 from app.routers import accounts, admin, auth, catalog, commerce, locations, operations, payments
 
 settings = get_settings()
 configure_logging(settings.log_level)
+configure_flutterwave_provider()
 logger = logging.getLogger("wewe.api")
 
 
