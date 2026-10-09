@@ -1031,9 +1031,10 @@
     if (current) current.textContent = "Still waiting for confirmation. You can close this window; the payment status remains on the order.";
   }
 
-  async function retryOnlinePayment(orderId, method, phone) {
+  async function retryOnlinePayment(orderId, method, phone, email) {
     if (!["MTN_MOMO", "AIRTEL_MONEY"].includes(method)) throw new Error("Choose an online mobile-money payment method.");
     if (!phone) throw new Error("Enter the mobile-money phone number.");
+    if (!email) throw new Error("Enter an email address for the payment receipt.");
     const idempotencyKey = crypto.randomUUID();
     const payment = await apiFetch(`/orders/${encodeURIComponent(orderId)}/payments`, {
       method: "POST",
