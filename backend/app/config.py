@@ -20,8 +20,13 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5500,http://127.0.0.1:5500"
     trusted_hosts: str = "localhost,127.0.0.1,testserver"
     max_request_body_bytes: int = 2_000_000
+    # Payment return URL is the browser redirect after hosted checkout. Webhooks use the API endpoint separately.
     payment_callback_url: str = "http://localhost:8000/api/v1/payments/webhooks"
+    payment_return_url: str = "http://localhost:5500/?payment=complete"
     payment_webhook_secret: SecretStr | None = None
+    flutterwave_secret_key: SecretStr | None = None
+    flutterwave_webhook_secret_hash: SecretStr | None = None
+    flutterwave_api_base_url: str = "https://api.flutterwave.com/v3"
     payment_mode: Literal["DISABLED", "SIMULATED", "EXTERNAL"] = "DISABLED"
     rate_limit_storage_uri: str = "memory://"
     email_from: str = "no-reply@example.invalid"
@@ -190,6 +195,16 @@ class Settings(BaseSettings):
             raise ValueError("PAYMENT_MODE=SIMULATED is forbidden in production")
         if self.app_env == "production" and self.payment_mode == "EXTERNAL" and not self.payment_webhook_secret:
             raise ValueError("PAYMENT_WEBHOOK_SECRET must be configured in production")
+        if self.app_env == "production" and self.payment_mode == "EXTERNAL" and not self.flutterwave_secret_key:
+            raise ValueError("FLUTTERWAVE_SECRET_KEY must be configured when external payments are enabled")
+        if self.app_env == "production" and self.payment_mode == "EXTERNAL" and not self.flutterwave_webhook_secret_hash:
+            raise ValueError("FLUTTERWAVE_WEBHOOK_SECRET_HASH must be configured when external payments are enabled")
+        if self.flutterwave_secret_key and "replace" in self.flutterwave_secret_key.get_secret_value().lower():
+            raise ValueError("FLUTTERWAVE_SECRET_KEY must be a real key or be left empty")
+        if self.flutterwave_webhook_secret_hash:
+            flutterwave_hash = self.flutterwave_webhook_secret_hash.get_secret_value()
+            if len(flutterwave_hash) < 32 or "replace" in flutterwave_hash.lower():
+                raise ValueError("FLUTTERWAVE_WEBHOOK_SECRET_HASH must be a unique secret of at least 32 characters")
         if self.payment_webhook_secret:
             webhook_secret = self.payment_webhook_secret.get_secret_value()
             if len(webhook_secret) < 32 or "replace" in webhook_secret.lower():
