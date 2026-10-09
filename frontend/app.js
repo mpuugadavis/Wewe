@@ -1624,7 +1624,7 @@
     if (action === "retry-delivery-quote") return updateCheckoutQuote();
     if (action === "new-address") return showNewAddress();
     if (action === "retailer-details") return showRetailer(button.dataset.retailerSlug);
-    if (action === "retry-online-payment") return retryOnlinePayment(button.dataset.orderId, button.dataset.method, button.dataset.phone);
+    if (action === "retry-online-payment") return retryOnlinePayment(button.dataset.orderId, button.dataset.method, button.dataset.phone, button.dataset.email || state.user?.email || "");
     if (action === "order-details") return showOrder(button.dataset.id);
     if (action === "cancel-order") {
       await apiFetch(`/orders/${encodeURIComponent(button.dataset.id)}/cancel`, { method: "POST", body: JSON.stringify({}) });
