@@ -727,6 +727,8 @@ def create_payment(
     )
     if blocking_attempt:
         raise HTTPException(status_code=409, detail={"code": "payment_pending", "message": "A payment attempt is already pending for this order."})
+    if not (payload.email or principal.user.email):
+        raise HTTPException(status_code=422, detail={"code": "payment_email_required", "message": "Add an email address for the Flutterwave payment receipt before paying."})
     # Online payment only: WEWE is online-payment-only and cash is out of scope
     # (COM-PAY-004 / COM-MULTI-001), so a configured provider adapter is
     # required before any charge is created.
