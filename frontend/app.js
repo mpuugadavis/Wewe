@@ -665,6 +665,18 @@
     }
   }
 
+  function checkoutMarkerIcon() {
+    // Use an inline SVG instead of Leaflet's default marker PNG files. This
+    // avoids broken-image alt text ("mark") when a CDN's image paths fail.
+    return window.L.divIcon({
+      className: "wewe-map-marker-icon",
+      html: '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="44" viewBox="0 0 34 44" aria-hidden="true"><path d="M17 1.5C8.44 1.5 1.5 8.44 1.5 17c0 11.2 15.5 25.1 15.5 25.1S32.5 28.2 32.5 17C32.5 8.44 25.56 1.5 17 1.5Z" fill="#6c3df4" stroke="#fff" stroke-width="2.5"/><circle cx="17" cy="17" r="6" fill="#fff"/></svg>',
+      iconSize: [34, 44],
+      iconAnchor: [17, 43],
+      tooltipAnchor: [0, -36]
+    });
+  }
+
   async function initializeCheckoutMap(points) {
     const mapElement = $("#checkoutMap");
     if (!mapElement) return;
@@ -764,7 +776,7 @@
       );
 
       usable.forEach(point => {
-        const marker = window.L.marker([Number(point.latitude), Number(point.longitude)])
+        const marker = window.L.marker([Number(point.latitude), Number(point.longitude)], { icon: checkoutMarkerIcon() })
           .addTo(state.checkoutMap);
         marker.bindTooltip(point.name || "Delivery point", { direction: "top" });
         marker.on("click", () => selectCheckoutPoint(point.id));
@@ -879,7 +891,7 @@
       centerCheckoutMap(point);
       if (state.checkoutMap.setView && window.L?.marker) {
         if (state.checkoutMarker) state.checkoutMap.removeLayer(state.checkoutMarker);
-        state.checkoutMarker = window.L.marker([latitude, longitude]).addTo(state.checkoutMap).bindTooltip("My current location", { direction: "top" }).openTooltip();
+        state.checkoutMarker = window.L.marker([latitude, longitude], { icon: checkoutMarkerIcon() }).addTo(state.checkoutMap).bindTooltip("My current location", { direction: "top" }).openTooltip();
       } else if (window.google?.maps) {
         const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
         state.checkoutMarker = new AdvancedMarkerElement({ map: state.checkoutMap, position: { lat: latitude, lng: longitude }, title: "My current location" });
