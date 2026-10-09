@@ -734,6 +734,12 @@ def create_payment(
         provider = payment_providers.get(payload.method)
     except PaymentProviderUnavailable:
         raise HTTPException(status_code=503, detail={"code": "payment_provider_unavailable", "message": "This payment method is not configured yet."}) from None
+    customer_email = payload.email or principal.user.email
+    if provider.name == "FLUTTERWAVE" and not customer_email:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "payment_email_required", "message": "Add an email address to your account or provide one for Flutterwave checkout."},
+        )
     now = utcnow()
     internal_reference = f"{order.order_number}-{secrets.token_hex(8).upper()}"
     payment = Payment(
@@ -761,7 +767,8 @@ def create_payment(
                     amount_ugx=payment.amount_ugx,
                     currency="UGX",
                     phone=payload.phone or "",
-                    callback_url=f"{get_settings().payment_callback_url}/{provider.name}",
+                    callback_url=get_settings().payment_return_url,
+                    email=customer_email,
                 )
             )
             payment.provider_reference = initiation.provider_reference
