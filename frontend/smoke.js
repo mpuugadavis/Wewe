@@ -58,6 +58,10 @@ if (!/safeImage\(product\.images\?\.\[0\]\)/.test(app)) {
   throw new Error("Catalog product images must use safeImage() before HTML rendering.");
 }
 
+if (!/function checkoutMarkerIcon\(\)/.test(app) || !/L\.divIcon\(/.test(app) || !/icon: checkoutMarkerIcon\(\)/.test(app)) {
+  throw new Error("Checkout map markers must use the inline SVG icon instead of external Leaflet marker PNGs.");
+}
+
 if (!/function initializeCheckoutMap\(points\)/.test(app)) {
   throw new Error("Checkout must contain the Leaflet map initialization path.");
 }
