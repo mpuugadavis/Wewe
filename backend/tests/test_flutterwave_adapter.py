@@ -1,6 +1,4 @@
 import json
-from io import BytesIO
-
 import pytest
 
 from app.services.flutterwave import FlutterwaveError, FlutterwaveProvider
