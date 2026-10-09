@@ -6,9 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app/backend
 COPY pyproject.toml ./
 COPY app ./app
+COPY tests ./tests
+COPY scripts ./scripts
 COPY migrations ./migrations
 COPY alembic.ini ./
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[test]"
 RUN useradd --create-home --uid 10001 wewe && chown -R wewe:wewe /app
 USER wewe
 EXPOSE 8000
