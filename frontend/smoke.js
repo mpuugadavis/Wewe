@@ -1,8 +1,10 @@
 const fs = require("node:fs");
+const path = require("node:path");
 
-const app = fs.readFileSync("frontend/app.js", "utf8");
-const media = fs.readFileSync("frontend/retailer-media.js", "utf8");
-const html = fs.readFileSync("frontend/index.html", "utf8");
+const frontendDir = __dirname;
+const app = fs.readFileSync(path.join(frontendDir, "app.js"), "utf8");
+const media = fs.readFileSync(path.join(frontendDir, "retailer-media.js"), "utf8");
+const html = fs.readFileSync(path.join(frontendDir, "index.html"), "utf8");
 
 const required = [
   ["frontend/app.js", app, "window.weweApiFetch = apiFetch;"],
