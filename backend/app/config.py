@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     flutterwave_webhook_secret_hash: SecretStr | None = None
     flutterwave_redirect_url: str | None = None
     flutterwave_api_base_url: str = "https://api.flutterwave.com/v3"
+    flutterwave_environment: Literal["SANDBOX", "LIVE"] = "SANDBOX"
     rate_limit_storage_uri: str = "memory://"
     email_from: str = "no-reply@example.invalid"
     smtp_host: str | None = None
