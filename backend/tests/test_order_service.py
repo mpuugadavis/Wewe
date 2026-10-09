@@ -1312,6 +1312,7 @@ def test_payment_idempotency_key_rejects_changed_amount(client, database, monkey
     )
     database.commit()
     first = _start_payment(client, database, order, customer, "changed-amount-key")
+    order.gross_delivery_fee_ugx += 1000
     order.delivery_fee_ugx += 1000
     order.total_ugx += 1000
     database.commit()
