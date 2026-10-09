@@ -63,7 +63,7 @@ async def flutterwave_webhook(request: Request, db: Session = Depends(get_db)) -
         amount = Decimal(str(verified.get("amount")))
     except (InvalidOperation, TypeError):
         raise HTTPException(status_code=422, detail={"code": "invalid_verified_amount", "message": "Flutterwave returned an invalid transaction amount."}) from None
-    if not tx_ref or str(data.get("tx_ref", "")) != str(tx_ref) or currency != "UGX" or not amount.is_finite() or amount != amount.to_integral_value() or amount <= 0:
+    if str(verified.get("id", "")) != transaction_id or not tx_ref or str(data.get("tx_ref", "")) != str(tx_ref) or currency != "UGX" or not amount.is_finite() or amount != amount.to_integral_value() or amount <= 0:
         raise HTTPException(status_code=422, detail={"code": "transaction_details_mismatch", "message": "Flutterwave transaction details did not match the webhook."})
     outcome = str(verified.get("status", "")).lower()
     if outcome not in {"successful", "failed"}:
