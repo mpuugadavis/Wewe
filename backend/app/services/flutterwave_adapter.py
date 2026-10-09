@@ -69,6 +69,7 @@ class FlutterwaveProvider:
                 "amount": request.amount_ugx,
                 "currency": "UGX",
                 "email": email,
+                "redirect_url": self.settings.flutterwave_redirect_url,
                 "tx_ref": request.reference,
                 "fullname": request.customer_name or "WEWE customer",
                 "meta": {"wewe_payment_reference": request.reference, "wewe_method": request.method},
