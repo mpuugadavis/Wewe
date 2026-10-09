@@ -798,6 +798,9 @@ def test_rejected_fulfillment_removes_only_its_own_committed_fee(database, fake_
     database.commit()
 
     quotes = {quote.retailer_id: quote for quote in database.scalars(select(DeliveryQuote)).all()}
+    assert order.gross_delivery_fee_ugx == 4000
+    assert order.multi_retailer_discount_ugx == 0
+    assert order.multi_retailer_discount_percent == 0
     assert order.delivery_fee_ugx == 4000
     assert order.total_ugx == order.subtotal_ugx + 4000
     assert quotes[result["retailers"][0].id].removed_at is not None
