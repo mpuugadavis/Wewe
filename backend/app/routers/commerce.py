@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 import logging
 import secrets
 from uuid import UUID
@@ -625,18 +626,51 @@ def _adjust_order_after_rejection(db: Session, order: Order, fulfillment: Retail
     committed_fee = remove_committed_delivery_quote(db, fulfillment.id)
     if committed_fee is not None:
         # The fulfillment owns its own committed, routing-priced delivery fee.
-        fee_share = committed_fee
+        gross_fee_share = committed_fee
     else:
-        # Orders created before per-fulfillment quote snapshots have no committed
-        # fee; they keep the existing equal-share behaviour.
+        # Legacy orders without quote snapshots use an equal share of the
+        # original gross fee, then recompute the order-level discount.
         fulfillment_count = db.scalar(
             select(func.count(RetailerFulfillment.id)).where(
                 RetailerFulfillment.order_id == order.id,
                 RetailerFulfillment.status.not_in(["REJECTED", "CANCELLED"]),
             )
         ) or 1
-        fee_share = order.delivery_fee_ugx // fulfillment_count if order.delivery_method == "DELIVERY" else 0
-    order.delivery_fee_ugx = max(0, order.delivery_fee_ugx - fee_share)
+        gross_fee_share = (
+            order.gross_delivery_fee_ugx // fulfillment_count
+            if order.delivery_method == "DELIVERY"
+            else 0
+        )
+
+    order.gross_delivery_fee_ugx = max(
+        0, order.gross_delivery_fee_ugx - gross_fee_share
+    )
+    remaining_fulfillments = db.scalar(
+        select(func.count(RetailerFulfillment.id)).where(
+            RetailerFulfillment.order_id == order.id,
+            RetailerFulfillment.id != fulfillment.id,
+            RetailerFulfillment.status.not_in(["REJECTED", "CANCELLED"]),
+        )
+    ) or 0
+
+    # The consolidation discount is an order-level discount. Recalculate it
+    # against the remaining gross fee; a single remaining retailer receives no
+    # multi-retailer discount.
+    discount_percent = (
+        Decimal(str(order.multi_retailer_discount_percent or 0))
+        if remaining_fulfillments >= 2
+        else Decimal("0")
+    )
+    discount_amount = int(
+        (
+            Decimal(order.gross_delivery_fee_ugx)
+            * discount_percent
+            / Decimal("100")
+        ).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    )
+    order.multi_retailer_discount_percent = discount_percent
+    order.multi_retailer_discount_ugx = discount_amount
+    order.delivery_fee_ugx = order.gross_delivery_fee_ugx - discount_amount
     order.total_ugx = order.subtotal_ugx + order.delivery_fee_ugx
     # WEWE is online-payment-only. Rejection adjusts the order amount, but it
     # never mutates a cash payment because CASH is not a valid payment method.
