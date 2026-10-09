@@ -201,6 +201,12 @@ class Settings(BaseSettings):
             raise ValueError("FLUTTERWAVE_SECRET_KEY must be a real secret key or be left empty")
         if self.payment_mode == "EXTERNAL" and self.flutterwave_environment == "SANDBOX" and "TEST" not in self.flutterwave_secret_key.get_secret_value().upper():
             raise ValueError("Sandbox mode requires a Flutterwave test secret key (FLWSECK_TEST-...).")
+        if self.app_env == "production" and self.payment_mode == "EXTERNAL" and self.flutterwave_environment == "SANDBOX":
+            raise ValueError("Flutterwave sandbox payments are forbidden in production.")
+        if self.payment_mode == "EXTERNAL" and self.flutterwave_environment == "LIVE" and "TEST" in self.flutterwave_secret_key.get_secret_value().upper():
+            raise ValueError("Live mode requires a live Flutterwave secret key.")
+        if self.app_env == "production" and self.payment_mode == "EXTERNAL" and self.flutterwave_redirect_url and urlsplit(self.flutterwave_redirect_url).scheme != "https":
+            raise ValueError("FLUTTERWAVE_REDIRECT_URL must use HTTPS in production.")
         if self.flutterwave_webhook_secret_hash and ("replace" in self.flutterwave_webhook_secret_hash.get_secret_value().lower() or len(self.flutterwave_webhook_secret_hash.get_secret_value()) < 16):
             raise ValueError("FLUTTERWAVE_WEBHOOK_SECRET_HASH must be a real webhook secret hash or be left empty")
         if self.payment_webhook_secret:
