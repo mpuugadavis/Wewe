@@ -97,7 +97,21 @@ async def request_id_middleware(request: Request, call_next):
             response.headers["X-Request-ID"] = request_id
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["X-Frame-Options"] = "DENY"
-            response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+            if request.url.path == "/docs":
+                response.headers["Content-Security-Policy"] = (
+                    "default-src 'none'; "
+                    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                    "img-src 'self' data: https://fastapi.tiangolo.com; "
+                    "font-src 'self' data: https://cdn.jsdelivr.net; "
+                    "connect-src 'self'; "
+                    "frame-ancestors 'none'; "
+                    "base-uri 'self'"
+                )
+            else:
+                response.headers["Content-Security-Policy"] = (
+                    "default-src 'none'; frame-ancestors 'none'"
+                )
             if request.url.path.startswith(settings.api_prefix + "/auth"):
                 response.headers["Cache-Control"] = "no-store"
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
