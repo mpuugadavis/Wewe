@@ -684,6 +684,7 @@
         state.checkoutMap = null;
       }
       state.checkoutTileLayer = null;
+      state.checkoutMarker = null;
       mapElement.replaceChildren();
       delete mapElement.dataset.mapProvider;
       delete mapElement.dataset.tileStatus;
@@ -913,7 +914,7 @@
     const profile = await apiFetch("/users/me/profile");
     const hallPoints = state.checkoutPoints.filter(point => state.checkoutHallKinds.get(point.hall_id) === "HALL");
     const hostelPoints = state.checkoutPoints.filter(point => state.checkoutHallKinds.get(point.hall_id) === "HOSTEL");
-    const areaPoints = state.checkoutPoints.filter(point => !point.hall_id);
+    const areaPoints = state.checkoutPoints.filter(point => !point.hall_id && !point.is_private);
     const savedPoints = state.checkoutPoints.filter(point => point.is_private && !point.hall_id);
     const option = point => '<option value="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : "") + '</option>';
     const deliveryOptions =
@@ -934,7 +935,8 @@
       $('select[name="delivery_point_id"]').value = profile.preferred_delivery_point_id;
     }
     toggleCheckoutFields();
-    initializeCheckoutMap(state.checkoutPoints);
+    await initializeCheckoutMap(state.checkoutPoints);
+    if (profile.preferred_delivery_point_id) selectCheckoutPoint(profile.preferred_delivery_point_id);
   }
 
   function toggleCheckoutFields() {
@@ -1889,7 +1891,10 @@
     });
 
     on("#modalContent", "change", event => {
-      if (event.target.closest('form[data-form="checkout"]')) toggleCheckoutFields();
+      if (event.target.closest('form[data-form="checkout"]')) {
+        toggleCheckoutFields();
+        if (event.target.name === "delivery_point_id") selectCheckoutPoint(event.target.value);
+      }
       if (event.target.closest('form[data-form="register"]')) updateRegistrationFields();
     });
 
