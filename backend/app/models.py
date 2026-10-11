@@ -344,12 +344,14 @@ class RetailerProduct(TimestampMixin, Base):
         UniqueConstraint("retailer_id", "product_id", name="uq_retailer_product"),
         UniqueConstraint("id", "product_id", "retailer_id", name="uq_listing_inventory_reference"),
         CheckConstraint("price_ugx >= 0", name="ck_retailer_products_price_nonnegative"),
+        CheckConstraint("original_price_ugx IS NULL OR original_price_ugx > price_ugx", name="ck_retailer_products_original_price_gt_current"),
     )
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     retailer_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("retailers.id", ondelete="RESTRICT"), index=True)
     product_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"), index=True)
     sku: Mapped[str | None] = mapped_column(String(100))
     price_ugx: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    original_price_ugx: Mapped[int | None] = mapped_column(BigInteger)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
 
 
