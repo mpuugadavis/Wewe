@@ -36,15 +36,16 @@ class Settings(BaseSettings):
     mtn_momo_api_secret: SecretStr | None = None
     airtel_money_api_key: SecretStr | None = None
     airtel_money_api_secret: SecretStr | None = None
-    #: Road-route distance for delivery pricing (COM-FEE-004). Google Maps is
-    #: opt-in because it requires a billed Cloud project/key. OSRM is the
-    #: safe local-development default and still uses a real road route.
-    routing_provider: Literal["GOOGLE_MAPS", "OSRM"] = "OSRM"
+    #: Road-route distance for delivery pricing (COM-FEE-004).
+    #: OpenRouteService is the default hosted routing provider. Google Maps and
+    #: OSRM remain available as explicit alternatives.
+    routing_provider: Literal["OPENROUTESERVICE", "GOOGLE_MAPS", "OSRM"] = "OPENROUTESERVICE"
+    openrouteservice_api_key: SecretStr | None = None
     google_maps_api_key: SecretStr | None = None
     #: Browser-restricted key used only by the Maps JavaScript API in the WEWE frontend.
     google_maps_browser_api_key: str | None = None
-    #: Optional override of the routing service base URL (proxy or self-hosted
-    #: OSRM instance). When unset the provider's public endpoint is used.
+    #: Optional provider base URL override. For OpenRouteService this should
+    #: normally be left empty so the current HeiGIT endpoint is used.
     routing_base_url: str | None = None
     routing_timeout_seconds: float = 12.0
     routing_user_agent: str = "WEWE-campus-delivery/1.0"
@@ -198,6 +199,12 @@ class Settings(BaseSettings):
             raise ValueError("PAYMENT_CALLBACK_URL must use HTTPS in production")
         if self.routing_provider == "GOOGLE_MAPS" and not self.google_maps_api_key:
             raise ValueError("GOOGLE_MAPS_API_KEY is required when ROUTING_PROVIDER is GOOGLE_MAPS")
+        if self.routing_provider == "OPENROUTESERVICE" and not self.openrouteservice_api_key:
+            raise ValueError(
+                "OPENROUTESERVICE_API_KEY is required when ROUTING_PROVIDER is OPENROUTESERVICE"
+            )
+        if self.openrouteservice_api_key and "replace" in self.openrouteservice_api_key.get_secret_value().lower():
+            raise ValueError("OPENROUTESERVICE_API_KEY must be a real key or be left empty")
         if self.app_env == "production" and self.storage_provider != "S3":
             raise ValueError("STORAGE_PROVIDER=S3 is required in production")
         if self.storage_provider == "S3":
