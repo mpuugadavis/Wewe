@@ -69,6 +69,8 @@ def _listing_rows(db: Session, product_ids: list[UUID]) -> dict[UUID, list[dict]
                 "retailer_name": retailer.business_name,
                 "retailer_slug": retailer.slug,
                 "price_ugx": listing.price_ugx,
+                "original_price_ugx": listing.original_price_ugx,
+                "discount_percent": round(((listing.original_price_ugx - listing.price_ugx) / listing.original_price_ugx) * 100) if listing.original_price_ugx and listing.original_price_ugx > listing.price_ugx else 0,
                 "sku": listing.sku,
                 "stock_available": available,
             }
@@ -315,6 +317,7 @@ def create_product(
         product_id=product.id,
         sku=payload.sku,
         price_ugx=payload.price_ugx,
+        original_price_ugx=payload.original_price_ugx,
         is_active=True,
     )
     db.add(listing)
@@ -583,6 +586,10 @@ def update_product(
             setattr(product, key, changes[key].strip() if key == "name" and changes[key] else changes[key])
     if "price_ugx" in changes:
         listing.price_ugx = changes["price_ugx"]
+    if "original_price_ugx" in changes:
+        listing.original_price_ugx = changes["original_price_ugx"]
+    if listing.original_price_ugx is not None and listing.original_price_ugx <= listing.price_ugx:
+        raise HTTPException(status_code=422, detail={"code": "invalid_discount_price", "message": "Original price must be higher than the current price."})
     if "sku" in changes:
         listing.sku = changes["sku"]
     if "is_active" in changes:
