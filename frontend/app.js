@@ -1317,6 +1317,7 @@
         ? '<div class="retailer-location-status"><b>Pickup location set</b><span>' + escapeHtml(selectedLocation.name) + (selectedLocation.directions ? ' · ' + escapeHtml(selectedLocation.directions) : '') + '</span></div>'
         : '<div class="retailer-location-warning"><b>Pickup location required</b><span>Set your pickup point before opening your store or requesting verification.</span></div>';
       const form = '<form data-form="retailer-profile" class="api-form dashboard-form">' +
+        '<div style="display:flex;align-items:center;gap:14px;padding:12px;border:1px solid #e7e0ef;border-radius:14px;background:#faf8fd"><div style="width:64px;height:64px;border-radius:16px;overflow:hidden;display:grid;place-items:center;background:#eee8fa;color:#6c3df4;font-weight:900;font-size:23px;flex:none">' + (safeImage(profile.profile_image_url) ? '<img src="' + escapeHtml(safeImage(profile.profile_image_url)) + '" alt="Store profile picture" style="width:100%;height:100%;object-fit:cover">' : '<span>' + escapeHtml((profile.business_name || "W").slice(0, 1).toUpperCase()) + '</span>') + '</div><div><b>Store profile picture</b><small class="muted">Upload a clear photo or logo students can recognize.</small><label class="button-outline" style="display:inline-flex;margin-top:7px;cursor:pointer">Choose picture<input data-profile-image type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div></div>' +
         '<label class="field">Business name<input name="business_name" value="' + escapeHtml(profile.business_name) + '" required></label>' +
         '<label class="field">Description<textarea name="description">' + escapeHtml(profile.description || "") + '</textarea></label>' +
         '<label class="field">Phone<input name="phone" value="' + escapeHtml(profile.phone || "") + '" required></label>' +
@@ -1498,7 +1499,7 @@
     if (section === "profile") {
       const profile = await profilePromise;
       const available = profile.availability_status === "AVAILABLE";
-      return dashboardPage("Rider profile","Keep your contact and transport details ready for delivery work.",`<div class="rider-profile-grid"><div class="rider-profile-card"><div class="rider-avatar-large">${escapeHtml((state.user.name || "?").slice(0,1).toUpperCase())}</div><div><h3>${escapeHtml(state.user.name)}</h3><span>${escapeHtml(profile.verification_status || "PENDING")} verification</span></div></div>
+      return dashboardPage("Rider profile","Keep your contact and transport details ready for delivery work.",`<div class="rider-profile-grid"><div class="rider-profile-card"><div class="rider-avatar-large" style="overflow:hidden">${safeImage(profile.profile_image_url) ? '<img src="' + escapeHtml(safeImage(profile.profile_image_url)) + '" alt="Rider profile picture" style="width:100%;height:100%;object-fit:cover">' : escapeHtml((state.user.name || "?").slice(0,1).toUpperCase())}</div><div><h3>${escapeHtml(state.user.name)}</h3><span>${escapeHtml(profile.verification_status || "PENDING")} verification</span></div><label class="button-outline" style="display:inline-flex;cursor:pointer">Choose picture<input data-profile-image type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div>
       <form data-form="agent-profile" class="api-form dashboard-form rider-form"><label class="field">Phone<input name="phone" value="${escapeHtml(profile.phone || "")}" autocomplete="tel"></label><label class="field">Transport mode<input name="transport_mode" value="${escapeHtml(profile.transport_mode || "")}" placeholder="Bicycle, motorcycle, car…" maxlength="40"></label><button class="rider-primary-action">Save rider profile</button></form>
       <div class="rider-status-panel"><div><small>WORK STATUS</small><strong>${available ? "You are online" : "You are offline"}</strong><span>${available ? "New delivery offers can reach you." : "Go online when you are ready to receive work."}</span></div><button class="${available ? "rider-offline-button" : "rider-online-button"}" data-action="agent-availability" data-status="${available ? "OFFLINE" : "AVAILABLE"}">${available ? "Go offline" : "Go online"}</button></div></div>`);
     }
@@ -1845,6 +1846,19 @@
     showToast("Store profile saved.");
   }
 
+  async function uploadProfileImage(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Only JPEG, PNG and WebP profile pictures are supported.");
+    if (file.size > 5 * 1024 * 1024) throw new Error("Profile picture must be 5 MiB or smaller.");
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    const endpoint = state.user?.role === "RETAILER" ? "/retailers/me/profile-image" : "/deliveries/me/profile-image";
+    await apiFetch(endpoint, { method: "POST", body: formData });
+    showToast("Profile picture updated.");
+    await renderDashboard();
+  }
+
   async function saveAgentProfile(form) {
     const values = Object.fromEntries(new FormData(form));
     await apiFetch("/deliveries/me/profile", { method: "PATCH", body: JSON.stringify(values) });
@@ -2160,7 +2174,21 @@
       if (target === $("#modalBackdrop")) closeModal();
     });
 
-    document.addEventListener("submit", event => {
+    document.addEventListener("change", async event => {
+    const input = event.target.closest("[data-profile-image]");
+    if (!input) return;
+    try {
+      input.disabled = true;
+      await uploadProfileImage(input);
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      input.disabled = false;
+      input.value = "";
+    }
+  });
+
+  document.addEventListener("submit", event => {
       const form = event.target instanceof Element ? event.target.closest("form[data-form]") : null;
       if (!form) return;
       event.preventDefault();
