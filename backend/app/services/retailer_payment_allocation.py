@@ -167,7 +167,7 @@ def allocate_successful_payment_for_order(
         raise RetailerPaymentAllocationError("payment order has no retailer fulfillments")
 
     allocations: list[RetailerPaymentAllocation] = []
-    allocated_total = 0
+    merchandise_by_fulfillment: list[tuple[RetailerFulfillment, int]] = []
     for fulfillment in fulfillments:
         merchandise = session.scalar(
             select(func.coalesce(func.sum(OrderItem.line_total_ugx), 0)).where(
@@ -176,12 +176,24 @@ def allocate_successful_payment_for_order(
             )
         )
         merchandise_ugx = int(merchandise or 0)
-        if merchandise_ugx <= 0:
-            continue
-        commission = int(
-            (Decimal(merchandise_ugx) * order_obj.platform_commission_percent / Decimal("100"))
-            .quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-        )
+        if merchandise_ugx > 0:
+            merchandise_by_fulfillment.append((fulfillment, merchandise_ugx))
+
+    if not merchandise_by_fulfillment:
+        raise RetailerPaymentAllocationError("payment order has no merchandise fulfillments")
+
+    remaining_commission = order_obj.platform_commission_ugx
+    allocated_total = 0
+    for index, (fulfillment, merchandise_ugx) in enumerate(merchandise_by_fulfillment):
+        if index == len(merchandise_by_fulfillment) - 1:
+            commission = remaining_commission
+        else:
+            commission = int(
+                (Decimal(merchandise_ugx) * order_obj.platform_commission_percent / Decimal("100"))
+                .quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            )
+            commission = min(commission, remaining_commission)
+        remaining_commission -= commission
         payable = merchandise_ugx - commission
         if payable <= 0:
             continue
@@ -195,6 +207,8 @@ def allocate_successful_payment_for_order(
         allocated_total += payable
 
     expected = order_obj.subtotal_ugx - order_obj.platform_commission_ugx
+    if remaining_commission != 0:
+        raise RetailerPaymentAllocationError("commission allocation did not reconcile to the order snapshot")
     if allocated_total != expected:
         raise RetailerPaymentAllocationError(
             f"retailer allocations total {allocated_total} UGX but expected {expected} UGX"
