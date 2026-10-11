@@ -18,6 +18,7 @@ from app.models import (
     User,
 )
 from app.schemas import CustomerProfileUpdate, DeliveryAgentProfileUpdate, LocationCreate, LocationOut, RetailerAvailabilityUpdate, RetailerProfileUpdate
+from app.services.retailer_income import retailer_income_payload
 
 router = APIRouter(tags=["profiles", "retailers"])
 
@@ -140,6 +141,21 @@ def get_retailer_profile(
         "verification_status": retailer.verification_status,
         "status": retailer.status,
     }
+
+
+@router.get("/retailers/me/earnings")
+def get_retailer_earnings(
+    principal: Principal = Depends(require_roles("RETAILER")),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return the retailer's live WEWE payable position and payout history."""
+    retailer = db.scalar(select(Retailer).where(Retailer.user_id == principal.user.id))
+    if retailer is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "retailer_profile_missing", "message": "Retailer profile was not found."},
+        )
+    return retailer_income_payload(db, retailer.id)
 
 
 @router.patch("/retailers/me")
