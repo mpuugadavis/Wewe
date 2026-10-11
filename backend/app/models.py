@@ -593,7 +593,8 @@ class DeliveryEarning(Base):
     amount_ugx: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="UGX", nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="PENDING", nullable=False, index=True)
-    payout_reference: Mapped[str | None] = mapped_column(String(180), unique=True)
+    # A single payout reference may cover many rider earnings in one batch.
+    payout_reference: Mapped[str | None] = mapped_column(String(180))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
