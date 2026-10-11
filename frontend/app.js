@@ -346,7 +346,7 @@
           <div class="product-seller">${escapeHtml(listing.retailer_name || "Campus retailer")}</div>
           <button class="product-title" data-action="product-details" data-product-id="${productId}">${escapeHtml(product.name)}</button>
           <div class="product-meta"><span class="stock-pill ${stockClass}">${stockLabel}</span><span class="muted">Campus listing</span></div>
-          <div class="product-price-row"><strong>${money(listing.price_ugx)}</strong><button class="add-button" data-action="add-cart" data-listing-id="${listingId}" ${stock < 1 ? "disabled" : ""}>${stock < 1 ? "Unavailable" : "Add to cart"}</button></div>
+          <div class="product-price-row"><div class="product-price">${priceMarkup(listing)}</div><button class="add-button" data-action="add-cart" data-listing-id="${listingId}" ${stock < 1 ? "disabled" : ""}>${stock < 1 ? "Unavailable" : "Add to cart"}</button></div>
         </div>
       </article>`;
     }).join("") : '<div class="empty-state"><div class="empty-icon">⌕</div><h3>No products found</h3><p>Try another search, category or availability filter.</p><button class="button-outline" data-action="clear-search">Clear filters</button></div>';
@@ -424,6 +424,33 @@
     await ensureCart();
   }
 
+  function passwordField(name, label, autocomplete, minlength = "1") {
+    return '<label class="field password-field">' +
+      escapeHtml(label) +
+      '<span class="password-input-wrap"><input name="' + escapeHtml(name) + '" type="password" required minlength="' + minlength + '" autocomplete="' + escapeHtml(autocomplete) + '"><button type="button" class="password-toggle" data-action="toggle-password" aria-label="Show password" title="Show password">◉</button></span>' +
+      '</label>';
+  }
+
+  function togglePassword(button) {
+    const input = button.closest(".password-input-wrap")?.querySelector("input");
+    if (!input) return;
+    const visible = input.type === "text";
+    input.type = visible ? "password" : "text";
+    button.textContent = visible ? "◉" : "○";
+    button.setAttribute("aria-label", visible ? "Show password" : "Hide password");
+    button.title = visible ? "Show password" : "Hide password";
+  }
+
+  function priceMarkup(listing) {
+    const current = Number(listing.price_ugx || 0);
+    const original = Number(listing.original_price_ugx || 0);
+    const discount = Number(listing.discount_percent || 0);
+    if (original > current && discount > 0) {
+      return '<span class="price-current">' + money(current) + '</span><span class="price-old">' + money(original) + '</span><span class="discount-badge">-' + discount + '%</span>';
+    }
+    return '<span class="price-current">' + money(current) + '</span>';
+  }
+
   function showAuth(register = false, role = "CUSTOMER") {
     const title = register ? "Create your WEWE account" : "Welcome back";
     setModal(`<div class="modal-head"><div><div class="section-kicker">WEWE account</div><h2>${title}</h2></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div>
@@ -432,7 +459,7 @@
         ${register ? `<label class="field">Account type<select name="role"><option value="CUSTOMER" selected>Customer</option><option value="RETAILER">Retailer</option></select></label>` : ""}
         <label class="field">Email or phone<input name="email" type="text" required autocomplete="username"></label>
         ${register ? '<label class="field">Phone<input name="phone" type="tel" autocomplete="tel"></label><label class="field hidden" data-register-business>Business name<input name="business_name" maxlength="180"></label><label class="field hidden" data-register-transport>Transport mode<input name="transport_mode" maxlength="40"></label>' : ""}
-        <label class="field">Password<input name="password" type="password" required minlength="${register ? "12" : "1"}" autocomplete="${register ? "new-password" : "current-password"}"></label>
+        ${passwordField("password", register ? "Create password" : "Password", register ? "new-password" : "current-password", register ? "12" : "1")}
         <p class="form-message" aria-live="polite"></p><button class="button-primary" type="submit">${register ? "Create account" : "Sign in"}</button>
       </form><button class="text-link" data-action="${register ? "show-login" : "show-register"}">${register ? "Already registered? Sign in" : "New to WEWE? Create an account"}</button>`, false);
     if (register) updateRegistrationFields();
@@ -446,7 +473,7 @@
         <label class="field">Email or phone<input name="email" required autocomplete="username"></label>
         <label class="field">Phone number<input name="phone" required type="tel" autocomplete="tel" placeholder="+256…"></label>
         <label class="field">Transport mode<select name="transport_mode" required><option value="">Choose transport</option><option>Walking</option><option>Bicycle</option><option>Motorcycle</option><option>Car</option><option>Other</option></select></label>
-        <label class="field">Create password<input name="password" required type="password" minlength="12" autocomplete="new-password"></label>
+        ${passwordField("password", "Create password", "new-password", "12")}
         <p class="form-message" aria-live="polite"></p><button class="button-primary" type="submit">Submit rider application</button>
       </form>
       <p class="rider-apply-note">Already a delivery agent? <button class="text-link" data-action="show-login">Sign in instead</button></p>`, true);
@@ -553,7 +580,7 @@
     if (!product) return;
     setModal(`<div class="product-modal"><div class="product-modal-image">${safeImage(product.images?.[0]) ? `<img src="${escapeHtml(safeImage(product.images[0]))}" alt="${escapeHtml(product.name)}">` : '<span>WEWE</span>'}</div><div class="product-modal-copy"><button class="close-modal" data-action="close-modal" aria-label="Close">×</button><div class="section-kicker">Campus marketplace</div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.description || "Details are provided by the retailer.")}</p><h3>Available listings</h3><label class="field detail-quantity-field">Quantity<input id="detailQuantity" type="number" min="1" max="100" value="1"></label><div id="productListings"><p class="api-state">Loading listings…</p></div><h3>Customer reviews</h3><div id="productReviews"><p class="api-state">Loading reviews…</p></div><div id="reviewFormSlot"></div></div></div>`, true);
     const listings = productListings(product);
-    $("#productListings").innerHTML = listings.length ? listings.map(listing => `<div class="listing-row"><span><b>${escapeHtml(listing.retailer_name)}</b><small>${Number(listing.stock_available) > 0 ? `${Number(listing.stock_available)} available` : "Out of stock"}</small></span><b>${money(listing.price_ugx)}</b><button class="add-button" data-action="add-cart" data-listing-id="${escapeHtml(listing.retailer_product_id)}" ${Number(listing.stock_available) < 1 ? "disabled" : ""}>Add</button></div>`).join("") : '<p>No active listings.</p>';
+    $("#productListings").innerHTML = listings.length ? listings.map(listing => `<div class="listing-row"><span><b>${escapeHtml(listing.retailer_name)}</b><small>${Number(listing.stock_available) > 0 ? `${Number(listing.stock_available)} available` : "Out of stock"}</small></span><span class="listing-price">${priceMarkup(listing)}</span><button class="add-button" data-action="add-cart" data-listing-id="${escapeHtml(listing.retailer_product_id)}" ${Number(listing.stock_available) < 1 ? "disabled" : ""}>Add</button></div>`).join("") : '<p>No active listings.</p>';
     try {
       const reviews = await apiFetch(`/products/${encodeURIComponent(productId)}/reviews`);
       const rows = Array.isArray(reviews) ? reviews : reviews.items || [];
@@ -1766,7 +1793,7 @@
 
   async function newProduct() {
     const categories = state.categories.length ? state.categories : await apiFetch("/categories");
-    setModal(`<div class="modal-head"><h2>Add a product</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-product" class="api-form"><label class="field">Product name<input name="name" required minlength="2" maxlength="220"></label><label class="field">Description<textarea name="description"></textarea></label><label class="field">Category<select name="category_id" required>${categories.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="field">Price (UGX)<input name="price_ugx" type="number" min="1" step="1" required></label><label class="field">Stock quantity<input name="stock_quantity" type="number" min="0" step="1" required></label><label class="field">Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple><small class="muted">JPEG, PNG or WebP · up to 12 photos · max 5 MiB each.</small></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Create product</button></form>`);
+    setModal(`<div class="modal-head"><h2>Add a product</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-product" class="api-form"><label class="field">Product name<input name="name" required minlength="2" maxlength="220"></label><label class="field">Description<textarea name="description"></textarea></label><label class="field">Category<select name="category_id" required>${categories.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" required></label><label class="field">Old price (UGX) <small class="muted">Optional — used to show a discount</small><input name="original_price_ugx" type="number" min="1" step="1" placeholder="e.g. 50000"></label><label class="field">Stock quantity<input name="stock_quantity" type="number" min="0" step="1" required></label><label class="field">Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple><small class="muted">JPEG, PNG or WebP · up to 12 photos · max 5 MiB each.</small></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Create product</button></form>`);
   }
 
   async function createProduct(form) {
@@ -1782,6 +1809,7 @@
       description: values.description || null,
       category_id: values.category_id,
       price_ugx: Number(values.price_ugx),
+      original_price_ugx: values.original_price_ugx ? Number(values.original_price_ugx) : null,
       stock_quantity: Number(values.stock_quantity),
       image_urls: []
     }) });
@@ -1805,13 +1833,16 @@
   }
 
   async function editRetailerProduct(button) {
-    setModal(`<div class="modal-head"><h2>Update listing</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="edit-retailer-product" data-listing-id="${escapeHtml(button.dataset.listingId)}" class="api-form"><p>${escapeHtml(button.dataset.name)}</p><label class="field">Price (UGX)<input name="price_ugx" type="number" min="1" step="1" value="${Number(button.dataset.price)}" required></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Save price</button></form>`);
+    setModal(`<div class="modal-head"><h2>Update listing</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="edit-retailer-product" data-listing-id="${escapeHtml(button.dataset.listingId)}" class="api-form"><p>${escapeHtml(button.dataset.name)}</p><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" value="${Number(button.dataset.price)}" required></label><label class="field">Old price (UGX) <small class="muted">Optional — must be higher than the current price</small><input name="original_price_ugx" type="number" min="1" step="1" value="${button.dataset.originalPrice ? Number(button.dataset.originalPrice) : ""}"></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Save pricing</button></form>`);
   }
 
   async function updateRetailerProduct(form) {
-    const price = Number(new FormData(form).get("price_ugx"));
-    await apiFetch(`/retailers/me/products/${encodeURIComponent(form.dataset.listingId)}`, { method: "PATCH", body: JSON.stringify({ price_ugx: price }) });
-    showToast("Product price updated.");
+    const values = Object.fromEntries(new FormData(form));
+    const price = Number(values.price_ugx);
+    const original = values.original_price_ugx ? Number(values.original_price_ugx) : null;
+    if (original !== null && original <= price) throw new Error("Old price must be higher than the current price.");
+    await apiFetch(`/retailers/me/products/${encodeURIComponent(form.dataset.listingId)}`, { method: "PATCH", body: JSON.stringify({ price_ugx: price, original_price_ugx: original }) });
+    showToast("Product pricing updated.");
     closeModal();
     await renderDashboard();
   }
@@ -1885,6 +1916,7 @@
   async function performAction(button) {
     const action = button.dataset.action;
     if (action === "close-modal") return closeModal();
+    if (action === "toggle-password") return togglePassword(button);
     if (action === "show-register") return showAuth(true);
     if (action === "become-rider") return showRiderApplication();
     if (action === "show-login") return showAuth(false);
