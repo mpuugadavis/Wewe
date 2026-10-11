@@ -932,6 +932,7 @@
       '<div data-checkout-delivery><label class="field">Delivery destination<select name="delivery_point_id">' + deliveryOptions + '</select></label><button type="button" class="text-link" data-action="new-address">Add a delivery point</button></div>' +
       '<div data-checkout-pickup class="hidden"><label class="field">Pickup point<select name="pickup_point_id">' + pickupPoints.map(point => '<option value="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : "") + '</option>').join("") + '</select></label></div>' +
       '<div class="field"><span>Payment method</span><div class="payment-options"><label class="payment-option selected"><input type="radio" name="payment_method" value="MTN_MOMO" checked> <b>MTN Mobile Money</b><small>Pay securely from your MTN line.</small></label><label class="payment-option"><input type="radio" name="payment_method" value="AIRTEL_MONEY"> <b>Airtel Money</b><small>Pay securely from your Airtel line.</small></label></div></div>' +
+      '<label class="field">Email for payment receipt<input name="payment_email" type="email" placeholder="you@example.com" required autocomplete="email"></label>' +
       '<label class="field" data-payment-phone>Mobile money phone<input name="phone" type="tel" placeholder="+256700000000" required autocomplete="tel"></label>' +
       '<div id="checkoutQuote" class="checkout-quote"><p class="api-state">Calculating delivery route…</p></div><p class="form-message" aria-live="polite"></p><button class="button-primary">Place order</button></form>';
     if (profile.preferred_delivery_point_id && $('select[name="delivery_point_id"]')) {
@@ -995,14 +996,16 @@
     try {
       const paymentBody = {
         method: form.elements.payment_method.value,
-        phone: form.elements.phone.value.trim()
+        phone: form.elements.phone.value.trim(),
+        email: form.elements.payment_email.value.trim()
       };
       form.dataset.paymentIdempotencyKey ||= crypto.randomUUID();
       payment = await apiFetch(`/orders/${encodeURIComponent(order.id)}/payments`, { method: "POST", headers: { "Idempotency-Key": form.dataset.paymentIdempotencyKey }, body: JSON.stringify(paymentBody) });
     } catch (error) {
       const method = form.elements.payment_method.value;
       const phone = form.elements.phone.value.trim();
-      $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Order created</div><h2>${escapeHtml(order.order_number)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>Your order was created and the server calculated its totals, but the online payment could not be started.</p><div class="checkout-totals"><p>Subtotal <b>${money(order.subtotal_ugx)}</b></p><p>Delivery <b>${money(order.delivery_fee_ugx)}</b></p><p>Total <b>${money(order.total_ugx)}</b></p></div><p class="api-error">Payment error: ${escapeHtml(error.message)}</p><button class="button-primary" data-action="retry-online-payment" data-order-id="${escapeHtml(order.id)}" data-method="${escapeHtml(method)}" data-phone="${escapeHtml(phone)}">Retry online payment</button>`;
+      const email = form.elements.payment_email.value.trim();
+      $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Order created</div><h2>${escapeHtml(order.order_number)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>Your order was created and the server calculated its totals, but the online payment could not be started.</p><div class="checkout-totals"><p>Subtotal <b>${money(order.subtotal_ugx)}</b></p><p>Delivery <b>${money(order.delivery_fee_ugx)}</b></p><p>Total <b>${money(order.total_ugx)}</b></p></div><p class="api-error">Payment error: ${escapeHtml(error.message)}</p><button class="button-primary" data-action="retry-online-payment" data-order-id="${escapeHtml(order.id)}" data-method="${escapeHtml(method)}" data-phone="${escapeHtml(phone)}" data-email="${escapeHtml(email)}">Retry online payment</button>`;
       await ensureCart();
       return;
     }
@@ -1047,14 +1050,15 @@
     if (current) current.textContent = "Still waiting for confirmation. You can close this window; the payment status remains on the order.";
   }
 
-  async function retryOnlinePayment(orderId, method, phone) {
+  async function retryOnlinePayment(orderId, method, phone, email) {
     if (!["MTN_MOMO", "AIRTEL_MONEY"].includes(method)) throw new Error("Choose an online mobile-money payment method.");
     if (!phone) throw new Error("Enter the mobile-money phone number.");
+    if (!email) throw new Error("Enter an email address for Flutterwave checkout.");
     const idempotencyKey = crypto.randomUUID();
     const payment = await apiFetch(`/orders/${encodeURIComponent(orderId)}/payments`, {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify({ method, phone })
+      body: JSON.stringify({ method, phone, email })
     });
     const checkoutUrl = safeImage(payment?.checkout_url);
     $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Payment retry</div><h2>Continue payment</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${escapeHtml(payment?.status || "Payment initiated")}</p>${checkoutUrl ? `<p><a class="button-primary" href="${escapeHtml(checkoutUrl)}" target="_blank" rel="noopener noreferrer">Continue mobile payment</a></p>` : ""}<button class="button-outline" data-action="close-modal">Close</button>`;
@@ -1639,7 +1643,7 @@
     if (action === "retry-delivery-quote") return updateCheckoutQuote();
     if (action === "new-address") return showNewAddress();
     if (action === "retailer-details") return showRetailer(button.dataset.retailerSlug);
-    if (action === "retry-online-payment") return retryOnlinePayment(button.dataset.orderId, button.dataset.method, button.dataset.phone);
+    if (action === "retry-online-payment") return retryOnlinePayment(button.dataset.orderId, button.dataset.method, button.dataset.phone, button.dataset.email);
     if (action === "order-details") return showOrder(button.dataset.id);
     if (action === "cancel-order") {
       await apiFetch(`/orders/${encodeURIComponent(button.dataset.id)}/cancel`, { method: "POST", body: JSON.stringify({}) });

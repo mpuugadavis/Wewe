@@ -13,6 +13,7 @@ class PaymentRequest:
     currency: str
     phone: str
     callback_url: str
+    email: str | None = None
 
 
 @dataclass(frozen=True)

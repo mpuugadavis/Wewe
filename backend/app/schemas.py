@@ -254,6 +254,22 @@ class PaymentCreate(BaseModel):
 
     method: Literal["MTN_MOMO", "AIRTEL_MONEY"]
     phone: str = Field(min_length=9, max_length=16)
+    email: str | None = Field(default=None, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def validate_payment_email(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        try:
+            validated = validate_email(
+                value.strip(),
+                check_deliverability=False,
+                test_environment=get_settings().app_env in {"development", "test"},
+            )
+        except EmailNotValidError as exc:
+            raise ValueError("Enter a valid email address for payment checkout") from exc
+        return validated.normalized
 
     @model_validator(mode="after")
     def require_mobile_number(self) -> "PaymentCreate":
