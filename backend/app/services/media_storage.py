@@ -82,6 +82,9 @@ class S3CompatibleMediaStorage:
             endpoint_url=endpoint or None,
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
+            # Cloudflare R2 implements the S3 API but uses its own regional
+            # endpoint semantics. "auto" is the documented R2 region value.
+            region_name="auto",
         )
 
     def put(self, *, key: str, content: BinaryIO, content_type: str, size_bytes: int) -> str:
