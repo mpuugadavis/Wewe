@@ -131,8 +131,18 @@
     const detail = payload?.detail;
     if (typeof detail === "string") return detail;
     if (detail?.message) return detail.message;
-    if (Array.isArray(detail)) return detail.map(item => item.msg).filter(Boolean).join("; ");
-    return payload?.message || `Request failed (${status}). Please try again.`;
+    if (Array.isArray(detail)) {
+      const messages = detail.map(item => {
+        const location = Array.isArray(item?.loc) ? item.loc.join(".") : "";
+        const message = item?.msg || item?.message;
+        return location && message ? `${location}: ${message}` : message;
+      }).filter(Boolean);
+      if (messages.length) return messages.join("; ");
+    }
+    if (payload?.message) return payload.message;
+    if (payload?.error?.message) return payload.error.message;
+    if (payload?.error?.code) return `Request failed (${status}): ${payload.error.code}`;
+    return `Request failed (${status}). Please try again.`;
   }
 
   function clearPrivateState() {
