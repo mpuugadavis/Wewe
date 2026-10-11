@@ -184,6 +184,16 @@ def build_product_object_key(product_id: UUID, content: bytes, extension: str) -
     return str(PurePosixPath("products") / str(product_id) / f"{digest}.{extension}")
 
 
+def build_profile_object_key(user_id: UUID, content: bytes, extension: str) -> str:
+    extension = extension.lower().lstrip(".")
+    if extension not in ALLOWED_IMAGE_EXTENSIONS:
+        raise MediaValidationError("Unsupported profile image extension.")
+    if not content:
+        raise MediaValidationError("Profile image content cannot be empty.")
+    digest = hashlib.sha256(content).hexdigest()
+    return str(PurePosixPath("profiles") / str(user_id) / f"{digest}.{extension}")
+
+
 def validate_uploaded_image_metadata(content_type: str, size_bytes: int, *, max_size_bytes: int) -> None:
     if max_size_bytes <= 0:
         raise ValueError("max_size_bytes must be positive")
