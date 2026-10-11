@@ -237,7 +237,7 @@ class FlutterwaveProvider:
         customer = customer_response.get("data") if isinstance(customer_response, dict) else None
         customer_id = customer.get("id") if isinstance(customer, dict) else None
         if customer_response.get("status") != "success" or not isinstance(customer_id, str):
-            raise FlutterwaveAPIError("Flutterwave did not create the customer profile.")
+            raise FlutterwaveAPIError("Flutterwave did not create the customer profile.", stage="/customers")
 
         method_response = self._request(
             "POST",
@@ -255,7 +255,7 @@ class FlutterwaveProvider:
         payment_method = method_response.get("data") if isinstance(method_response, dict) else None
         payment_method_id = payment_method.get("id") if isinstance(payment_method, dict) else None
         if method_response.get("status") != "success" or not isinstance(payment_method_id, str):
-            raise FlutterwaveAPIError("Flutterwave did not create the mobile-money payment method.")
+            raise FlutterwaveAPIError("Flutterwave did not create the mobile-money payment method.", stage="/payment-methods")
 
         charge_response = self._request(
             "POST",
@@ -276,7 +276,7 @@ class FlutterwaveProvider:
         data = charge_response.get("data") if isinstance(charge_response, dict) else None
         charge_id = data.get("id") if isinstance(data, dict) else None
         if charge_response.get("status") not in {"success", "pending"} or not isinstance(charge_id, str):
-            raise FlutterwaveAPIError("Flutterwave did not create the mobile-money charge.")
+            raise FlutterwaveAPIError("Flutterwave did not create the mobile-money charge.", stage="/charges")
 
         checkout_url = None
         next_action = data.get("next_action") if isinstance(data, dict) else None
