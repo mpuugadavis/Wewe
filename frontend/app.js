@@ -22,6 +22,7 @@
     dashboardSection: "overview",
     campuses: null,
     checkoutPoints: [],
+    checkoutHallKinds: new Map(),
     addressForCheckout: false,
     mapsApiKey: null,
     checkoutMap: null,
@@ -683,6 +684,7 @@
         state.checkoutMap = null;
       }
       state.checkoutTileLayer = null;
+      state.checkoutMarker = null;
       mapElement.replaceChildren();
       delete mapElement.dataset.mapProvider;
       delete mapElement.dataset.tileStatus;
@@ -763,22 +765,10 @@
         Math.abs(Number(point.longitude)) <= 180
       );
 
-      usable.forEach(point => {
-        const marker = window.L.marker([Number(point.latitude), Number(point.longitude)])
-          .addTo(state.checkoutMap);
-        marker.bindTooltip(point.name || "Delivery point", { direction: "top" });
-        marker.on("click", () => selectCheckoutPoint(point.id));
-      });
-
-      if (usable.length === 1) {
-        centerCheckoutMap(usable[0]);
-      } else if (usable.length > 1) {
-        const bounds = window.L.latLngBounds(usable.map(point => [
-          Number(point.latitude), Number(point.longitude)
-        ]));
-        state.checkoutMap.fitBounds(bounds.pad(0.15), { maxZoom: 17 });
-      }
-
+      // Deliberately do not render every destination as a marker. The
+      // catalogue can contain many halls, hostels and service areas, so
+      // rendering all of them makes the checkout map visually congested.
+      // The selected destination is rendered by selectCheckoutPoint().
       mapElement.dataset.locationCount = String(usable.length);
 
       // Modals can report zero dimensions while opening. Recalculate after
@@ -804,6 +794,15 @@
     const label = $("#selectedDeliveryLocation");
     if (label) label.textContent = point.name + (point.directions ? " · " + point.directions : "");
     centerCheckoutMap(point);
+    if (state.checkoutMap && Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)) && window.L?.marker) {
+      if (state.checkoutMarker) {
+        try { state.checkoutMap.removeLayer(state.checkoutMarker); } catch {}
+      }
+      state.checkoutMarker = window.L.marker([Number(point.latitude), Number(point.longitude)])
+        .addTo(state.checkoutMap)
+        .bindTooltip(point.name || "Delivery destination", { direction: "top" })
+        .openTooltip();
+    }
     requestAnimationFrame(() => state.checkoutMap?.invalidateSize?.({ pan: false }));
     setTimeout(() => state.checkoutMap?.invalidateSize?.({ pan: false }), 200);
     updateCheckoutQuote().catch(error => showToast(error.message));
@@ -901,6 +900,10 @@
         apiFetch("/locations/pickup-points")
       ]);
       const mainCampus = campuses.find(item => item.slug === "main-campus") || campuses[0];
+      const halls = mainCampus
+        ? await apiFetch("/locations/halls?campus_id=" + encodeURIComponent(mainCampus.id))
+        : [];
+      state.checkoutHallKinds = new Map(halls.map(hall => [hall.id, hall.kind]));
       publicPoints = mainCampus ? await apiFetch("/locations/delivery-points?campus_id=" + encodeURIComponent(mainCampus.id)) : [];
     } catch (error) {
       $("#checkoutContents").innerHTML = '<div class="api-state api-error">' + escapeHtml(error.message) + '<p><button class="button-outline" data-action="checkout">Try again</button></p></div>';
@@ -909,10 +912,21 @@
     state.campuses = campuses;
     state.checkoutPoints = [...new Map([...publicPoints, ...saved].map(point => [point.id, point])).values()];
     const profile = await apiFetch("/users/me/profile");
+    const hallPoints = state.checkoutPoints.filter(point => state.checkoutHallKinds.get(point.hall_id) === "HALL");
+    const hostelPoints = state.checkoutPoints.filter(point => state.checkoutHallKinds.get(point.hall_id) === "HOSTEL");
+    const areaPoints = state.checkoutPoints.filter(point => !point.hall_id && !point.is_private);
+    const savedPoints = state.checkoutPoints.filter(point => point.is_private && !point.hall_id);
+    const option = point => '<option value="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : "") + '</option>';
+    const deliveryOptions =
+      '<option value="">Choose a delivery destination</option>' +
+      (hallPoints.length ? '<optgroup label="Makerere University halls">' + hallPoints.map(option).join("") + '</optgroup>' : "") +
+      (hostelPoints.length ? '<optgroup label="Student hostels">' + hostelPoints.map(option).join("") + '</optgroup>' : "") +
+      (areaPoints.length ? '<optgroup label="Kampala service areas">' + areaPoints.map(option).join("") + '</optgroup>' : "") +
+      (savedPoints.length ? '<optgroup label="My saved locations">' + savedPoints.map(option).join("") + '</optgroup>' : "");
     $("#checkoutContents").innerHTML = '<form data-form="checkout" class="api-form">' +
-      '<div class="delivery-map-shell"><div class="map-toolbar"><div><b>Where should we deliver?</b><small>Choose a Makerere hall/hostel, search Google Maps, or use your current location.</small></div><button type="button" class="button-outline" data-action="use-current-location">Use my current location</button></div><div id="checkoutAutocomplete" class="checkout-autocomplete"></div><div id="checkoutMap" class="checkout-map"></div><p id="selectedDeliveryLocation" class="selected-location">Choose a delivery point</p></div>' +
+      '<div class="delivery-map-shell"><div class="map-toolbar"><div><b>Where should we deliver?</b><small>Select a hall, hostel or nearby Kampala service area from the list. The map shows only your selected destination.</small></div><button type="button" class="button-outline" data-action="use-current-location">Use my current location</button></div><div id="checkoutAutocomplete" class="checkout-autocomplete"></div><div id="checkoutMap" class="checkout-map"></div><p id="selectedDeliveryLocation" class="selected-location">Choose a delivery destination</p></div>' +
       '<label class="field">Fulfilment<select name="delivery_method"><option value="DELIVERY">Campus delivery</option><option value="PICKUP">Pickup</option></select></label>' +
-      '<div data-checkout-delivery><label class="field">Delivery point<select name="delivery_point_id"><option value="">Choose a hall, hostel or saved point</option>' + state.checkoutPoints.map(point => '<option value="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : "") + '</option>').join("") + '</select></label><div class="quick-location-grid">' + state.checkoutPoints.slice(0, 12).map(point => '<button type="button" class="location-chip" data-action="select-delivery-point" data-id="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + '</button>').join("") + '</div><button type="button" class="text-link" data-action="new-address">Add a delivery point</button></div>' +
+      '<div data-checkout-delivery><label class="field">Delivery destination<select name="delivery_point_id">' + deliveryOptions + '</select></label><button type="button" class="text-link" data-action="new-address">Add a delivery point</button></div>' +
       '<div data-checkout-pickup class="hidden"><label class="field">Pickup point<select name="pickup_point_id">' + pickupPoints.map(point => '<option value="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : "") + '</option>').join("") + '</select></label></div>' +
       '<div class="field"><span>Payment method</span><div class="payment-options"><label class="payment-option selected"><input type="radio" name="payment_method" value="MTN_MOMO" checked> <b>MTN Mobile Money</b><small>Pay securely from your MTN line.</small></label><label class="payment-option"><input type="radio" name="payment_method" value="AIRTEL_MONEY"> <b>Airtel Money</b><small>Pay securely from your Airtel line.</small></label></div></div>' +
       '<label class="field" data-payment-phone>Mobile money phone<input name="phone" type="tel" placeholder="+256700000000" required autocomplete="tel"></label>' +
@@ -921,7 +935,8 @@
       $('select[name="delivery_point_id"]').value = profile.preferred_delivery_point_id;
     }
     toggleCheckoutFields();
-    initializeCheckoutMap(state.checkoutPoints);
+    await initializeCheckoutMap(state.checkoutPoints);
+    if (profile.preferred_delivery_point_id) selectCheckoutPoint(profile.preferred_delivery_point_id);
   }
 
   function toggleCheckoutFields() {
@@ -1876,7 +1891,10 @@
     });
 
     on("#modalContent", "change", event => {
-      if (event.target.closest('form[data-form="checkout"]')) toggleCheckoutFields();
+      if (event.target.closest('form[data-form="checkout"]')) {
+        if (event.target.name === "delivery_point_id") selectCheckoutPoint(event.target.value);
+        else toggleCheckoutFields();
+      }
       if (event.target.closest('form[data-form="register"]')) updateRegistrationFields();
     });
 

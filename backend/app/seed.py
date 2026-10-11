@@ -60,7 +60,7 @@ def seed() -> None:
             db.flush()
 
         hall_records = {}
-        for name, kind in (("Africa Hall", "HALL"), ("Complex Hall", "HALL"), ("Livingstone Hall", "HALL"), ("Lumumba Hall", "HALL"), ("Mary Stuart Hall", "HALL"), ("Mitchell Hall", "HALL"), ("Nkrumah Hall", "HALL"), ("Nsibirwa Hall", "HALL"), ("University Hall", "HALL"), ("Makerere International Students Hostel", "HOSTEL"), ("Muhika Hostel", "HOSTEL"), ("JJ Hostel", "HOSTEL")):
+        for name, kind in (("Africa Hall", "HALL"), ("Complex Hall", "HALL"), ("Livingstone Hall", "HALL"), ("Lumumba Hall", "HALL"), ("Mary Stuart Hall", "HALL"), ("Mitchell Hall", "HALL"), ("Nkrumah Hall", "HALL"), ("Nsibirwa Hall", "HALL"), ("University Hall", "HALL"), ("Makerere International Students Hostel", "HOSTEL"), ("Muhika Hostel", "HOSTEL"), ("JJ Hostel", "HOSTEL"), ("Apex Girls Hostel", "HOSTEL"), ("Makerere Garden Courts", "HOSTEL"), ("Nana Hostel", "HOSTEL"), ("Galloway House", "HOSTEL")):
             hall = db.scalar(select(Hall).where(Hall.campus_id == campus.id, Hall.name == name))
             if hall is None:
                 hall = Hall(campus_id=campus.id, name=name, kind=kind)
@@ -82,13 +82,14 @@ def seed() -> None:
                 db.add(point)
                 db.flush()
             else:
-                # Keep existing seed data usable after routing coordinates are
-                # introduced. Never overwrite a deliberately customized point.
-                if latitude is not None and point.latitude is None:
+                # Canonical public destinations are maintained by the seed.
+                # Refresh their coordinates so an older development database
+                # cannot retain stale or approximate routing coordinates.
+                if latitude is not None:
                     point.latitude = latitude
-                if longitude is not None and point.longitude is None:
+                if longitude is not None:
                     point.longitude = longitude
-                if hall_id is not None and point.hall_id is None:
+                if hall_id is not None:
                     point.hall_id = hall_id
                 db.flush()
             return point
@@ -117,17 +118,45 @@ def seed() -> None:
                 latitude=latitude,
                 longitude=longitude,
             )
+        # Verified/publicly mapped student-hostel coordinates. These are
+        # stored as delivery destinations, not as routing distances. The
+        # University confirms these hostels are part of the Makerere student
+        # accommodation ecosystem; individual coordinates are sourced from
+        # public map records and kept to six decimal places.
         hostel_coordinates = {
             "Makerere International Students Hostel": ("0.334990", "32.560500"),
             "Muhika Hostel": ("0.333190", "32.562550"),
-            "JJ Hostel": ("0.333050", "32.562700"),
+            "JJ Hostel": ("0.337670", "32.561720"),
+            "Apex Girls Hostel": ("0.333050", "32.562700"),
+            "Makerere Garden Courts": ("0.331290", "32.562080"),
+            "Nana Hostel": ("0.325474", "32.566765"),
+            "Galloway House": ("0.338690", "32.577920"),
         }
-        for hostel_name in ("Makerere International Students Hostel", "Muhika Hostel", "JJ Hostel"):
-            latitude, longitude = hostel_coordinates.get(hostel_name, (None, None))
+        for hostel_name in hostel_coordinates:
+            latitude, longitude = hostel_coordinates[hostel_name]
             public_point(
                 hostel_name,
                 kind="BUILDING",
-                directions="Near Makerere University Main Campus",
+                directions="Makerere student accommodation area",
+                latitude=latitude,
+                longitude=longitude,
+            )
+
+        # Named surrounding service areas. They remain in the same main-campus
+        # delivery catalogue so customers can select a neighborhood without
+        # dropping a marker for every possible address.
+        service_areas = {
+            "Kikoni": ("0.335750", "32.562050"),
+            "Wandegeya": ("0.331112", "32.573600"),
+            "Kagugube": ("0.326810", "32.567820"),
+            "Mulago": ("0.342508", "32.576959"),
+            "Makerere": ("0.339656", "32.564142"),
+        }
+        for area_name, (latitude, longitude) in service_areas.items():
+            public_point(
+                area_name,
+                kind="OTHER",
+                directions="Kampala service area",
                 latitude=latitude,
                 longitude=longitude,
             )
