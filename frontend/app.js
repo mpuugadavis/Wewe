@@ -34,7 +34,8 @@
     riderLocationWatchId: null,
     riderOfferRefreshTimer: null,
     unreadNotifications: [],
-    orderTrackingTimer: null
+    orderTrackingTimer: null,
+    incomeRefreshTimer: null
   };
 
   class ApiError extends Error {
@@ -146,6 +147,7 @@
   }
 
   function clearPrivateState() {
+    stopIncomePolling();
     state.user = null;
     state.cart = null;
     state.wishlist.clear();
@@ -1206,7 +1208,7 @@
   function dashboardMenu(role) {
     const common = [["overview","Overview"]];
     if(role==="CUSTOMER") return [...common,["orders","Orders"],["wishlist","Saved items"],["addresses","Delivery points"],["notifications","Notifications"],["profile","Profile"]];
-    if(role==="RETAILER") return [...common,["products","Products"],["fulfillments","Fulfilments"],["profile","Store profile"]];
+    if(role==="RETAILER") return [...common,["overview","Overview"],["earnings","Earnings"],["products","Products"],["fulfillments","Fulfilments"],["profile","Store profile"]];
     if(role==="DELIVERY_AGENT") return [...common,["available","Delivery offers"],["active","Active delivery"],["history","Delivery history"],["earnings","Earnings"],["profile","Rider profile"]];
     return [...common,["analytics","Analytics"],["users","Users"],["retailers","Retailers"],["products","Products"],["categories","Categories"],["orders","Orders"],["agents","Delivery agents"],["reviews","Reviews"],["settlements","Settlements"],["settings","Settings"],["audit","Audit log"]];
   }
@@ -1228,6 +1230,21 @@
       role === "RETAILER" ? await retailerDashboard() :
       role === "DELIVERY_AGENT" ? await agentDashboard() : await adminDashboard();
     $("#dashboardContent").innerHTML = view;
+    syncIncomePolling();
+  }
+
+  function syncIncomePolling() {
+    if (state.incomeRefreshTimer) clearInterval(state.incomeRefreshTimer);
+    state.incomeRefreshTimer = null;
+    if (!["RETAILER", "DELIVERY_AGENT"].includes(state.user?.role)) return;
+    if (!["overview", "earnings"].includes(state.dashboardSection)) return;
+    state.incomeRefreshTimer = setInterval(() => {
+      if (!["RETAILER", "DELIVERY_AGENT"].includes(state.user?.role) || !["overview", "earnings"].includes(state.dashboardSection)) {
+        syncIncomePolling();
+        return;
+      }
+      renderDashboard().catch(() => {});
+    }, 15000);
   }
 
   async function customerDashboard() {
@@ -1248,10 +1265,36 @@
 
   async function retailerDashboard() {
     const section = state.dashboardSection;
-    const [profile, fulfillments] = await Promise.all([
+    const [profile, fulfillments, earnings] = await Promise.all([
       apiFetch("/retailers/me"),
-      apiFetch("/retailers/me/fulfillments")
+      apiFetch("/retailers/me/fulfillments"),
+      apiFetch("/retailers/me/earnings")
     ]);
+    if (section === "earnings") {
+      const entries = (earnings.entries || []).map(row =>
+        '<div class="dashboard-list-item"><div><b>' + escapeHtml(row.reason || "Income entry") + '</b><small>' +
+        escapeHtml(row.created_at ? new Date(row.created_at).toLocaleString() : "") + ' · ' + escapeHtml(row.entry_type) +
+        '</small></div><b>' + (row.entry_type === "DEBIT" ? "−" : "+") + money(row.amount_ugx) + '</b></div>'
+      ).join("");
+      const settlements = (earnings.settlements || []).map(row =>
+        '<div class="dashboard-list-item"><div><b>' + escapeHtml(row.settlement_reference || row.id) + '</b><small>' +
+        escapeHtml(row.status) + ' · ' + escapeHtml(row.created_at ? new Date(row.created_at).toLocaleDateString() : "") +
+        '</small></div><b>' + money(row.amount_ugx) + '</b></div>'
+      ).join("");
+      const notice = earnings.recovery_due_ugx > 0
+        ? '<div class="rider-info-card"><b>Account adjustment required</b><span>WEWE is tracking ' + money(earnings.recovery_due_ugx) + ' for recovery from future retailer earnings.</span></div>'
+        : earnings.eligible_for_settlement
+          ? '<div class="rider-info-card"><b>Eligible for scheduled settlement</b><span>Your available balance has reached the ' + money(earnings.minimum_settlement_ugx) + ' minimum.</span></div>'
+          : '<div class="rider-info-card"><b>Building toward payout</b><span>Available balance: ' + money(earnings.available_to_settle_ugx) + '. Minimum: ' + money(earnings.minimum_settlement_ugx) + '.</span></div>';
+      return dashboardPage("Retailer earnings","Live accounting view of what WEWE owes your store.",
+        '<div class="rider-earnings-grid"><div class="rider-earnings-card"><span>WEWE owes you</span><strong>' + money(earnings.owed_by_wewe_ugx) + '</strong><small>Net unpaid earnings</small></div>' +
+        '<div class="rider-earnings-card"><span>Available to settle</span><strong>' + money(earnings.available_to_settle_ugx) + '</strong><small>Not already in payout queue</small></div>' +
+        '<div class="rider-earnings-card"><span>Pending payout</span><strong>' + money(earnings.pending_payout_ugx) + '</strong><small>Scheduled or submitted</small></div>' +
+        '<div class="rider-earnings-card"><span>Paid out</span><strong>' + money(earnings.paid_out_ugx) + '</strong><small>Historical settled amount</small></div></div>' +
+        notice + '<div class="dashboard-grid-3"><section class="dashboard-panel dashboard-span-2"><div class="panel-head"><div><h2>Income activity</h2><small>Immutable retailer payable ledger</small></div></div>' +
+        (entries || dashboardEmpty("No income recorded yet.","Payable sales will appear here.")) + '</section><aside class="dashboard-panel"><h2>Settlement history</h2>' +
+        (settlements || dashboardEmpty("No settlements yet.","Scheduled retailer payouts will appear here.")) + '</aside></div>');
+    }
     if (section === "profile") {
       const open = profile.status === "ACTIVE";
       const campuses = await apiFetch("/locations/campuses");
@@ -1316,7 +1359,10 @@
       escapeHtml(profile.business_name) + ' <span class="role-pill">' + escapeHtml(profile.verification_status) +
       '</span></h2><p>Manage your campus store, listings and customer fulfilments.</p></div>' +
       '<button class="button-primary" data-action="dashboard-section" data-section="products">Manage products →</button></div>' +
-      '<div class="stat-grid dashboard-stat-grid"><div class="stat-card"><span>Store status</span><b class="stat-value stat-text">' +
+      '<div class="stat-grid dashboard-stat-grid"><div class="stat-card"><span>WEWE owes you</span><b class="stat-value">' +
+      money(earnings.owed_by_wewe_ugx) + '</b><small>Net unpaid retailer earnings</small></div><div class="stat-card"><span>Available to settle</span><b class="stat-value">' +
+      money(earnings.available_to_settle_ugx) + '</b><small>' + (earnings.eligible_for_settlement ? "Eligible for scheduled payout" : "Building toward minimum") + '</small></div>' +
+      '<div class="stat-card"><span>Pending payout</span><b class="stat-value">' + money(earnings.pending_payout_ugx) + '</b><small>In payout queue</small></div><div class="stat-card"><span>Store status</span><b class="stat-value stat-text">' +
       (profile.status === "ACTIVE" ? "Open" : "Closed") + '</b><small>Customer visibility</small></div>' +
       '<div class="stat-card"><span>Verification</span><b class="stat-value stat-text">' + escapeHtml(profile.verification_status) +
       '</b><small>Account review</small></div><div class="stat-card"><span>Listings</span><b class="stat-value">' + products.length +
@@ -1388,6 +1434,8 @@
     notificationRefreshTimer = null;
   }
 
+  function stopIncomePolling() { if (state.incomeRefreshTimer) clearInterval(state.incomeRefreshTimer); state.incomeRefreshTimer = null; }
+
   function stopRiderLocationTracking() {
     if (state.riderLocationWatchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(state.riderLocationWatchId);
     state.riderLocationWatchId = null;
@@ -1454,7 +1502,7 @@
     const [profile, earnings, active] = await Promise.all([profilePromise, apiFetch("/deliveries/me/earnings"), apiFetch("/deliveries/me")]);
     const activeJob = (active || []).find(row => row.status !== "DELIVERED" && row.status !== "CANCELLED");
     if (section === "earnings") {
-      return dashboardPage("Earnings","Your delivery earnings at a glance. Payment and payout rules remain controlled by WEWE's operational system.",`<div class="rider-earnings-grid"><div class="rider-earnings-card"><span>Paid</span><strong>${money(earnings.paid_ugx)}</strong><small>Recorded paid earnings</small></div><div class="rider-earnings-card"><span>Pending</span><strong>${money(earnings.pending_ugx)}</strong><small>Recorded pending earnings</small></div></div><div class="rider-info-card"><b>Keep delivering safely</b><span>Your earnings history is tied to completed delivery records.</span></div>`);
+      return dashboardPage("Earnings","Live view of what WEWE owes you from completed deliveries and what has already been paid.",`<div class="rider-earnings-grid"><div class="rider-earnings-card"><span>WEWE owes you</span><strong>${money(earnings.owed_by_wewe_ugx ?? earnings.pending_ugx)}</strong><small>Unpaid delivery earnings</small></div><div class="rider-earnings-card"><span>Paid</span><strong>${money(earnings.paid_ugx)}</strong><small>Recorded paid earnings</small></div></div><div class="rider-info-card"><b>${earnings.payout_status === "AWAITING_SCHEDULED_PAYOUT" ? "Awaiting scheduled payout" : "Up to date"}</b><span>Your earnings are tied to completed delivery records and payout records.</span></div>`);
     }
     if (section === "available") {
       if (profile.availability_status === "AVAILABLE") {
