@@ -40,6 +40,7 @@ from app.services.delivery_pricing import (
     calculate_multi_retailer_delivery_total,
 )
 from app.services.delivery_routing import DeliveryRoutingError, resolve_route_distances
+from app.services.platform_economics import snapshot_order_commission
 
 
 def _checkout_delivery_quotes(
@@ -207,6 +208,7 @@ def create_order(db: Session, customer: User, checkout: CheckoutIn, idempotency_
         status="PENDING",
         idempotency_key=idempotency_key,
     )
+    snapshot_order_commission(db, order)
     db.add(order)
     db.flush()
     fulfillment_ids: list[tuple[RetailerFulfillment, Retailer]] = []
