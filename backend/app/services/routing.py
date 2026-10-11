@@ -268,12 +268,11 @@ class OpenRouteServiceRoutingProvider:
         self._user_agent = user_agent or settings.routing_user_agent
 
     def geocode(self, address: str) -> GeoCoordinate | None:
-        query = urlencode({"text": address, "size": "1"})
+        query = urlencode({"text": address, "size": "1", "api_key": self._api_key})
         data = _get_json(
             f"{self._geocoder_base_url}{OPENROUTESERVICE_GEOCODING_PATH}?{query}",
             timeout=self._timeout,
             user_agent=self._user_agent,
-            headers={"Authorization": self._api_key},
         )
         features = data.get("features") if isinstance(data, dict) else None
         if not features:
