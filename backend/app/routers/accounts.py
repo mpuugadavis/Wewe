@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
 from app.dependencies import Principal, require_roles
 from app.models import (
@@ -30,7 +31,6 @@ from app.services.media_storage import (
 )
 from app.services.media_uploads import build_media_storage
 from app.services.retailer_income import retailer_income_payload
-from app.config import get_settings
 
 router = APIRouter(tags=["profiles", "retailers"])
 
