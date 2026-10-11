@@ -93,7 +93,7 @@ def _serialize_products(db: Session, products: list[Product]) -> list[dict]:
             "name": product.name,
             "description": product.description,
             "images": [
-                image.url if not image.storage_key else f"/api/v1/products/images/{image.id}"
+                image.url
                 for image in images
                 if image.product_id == product.id and (image.storage_key or image.url)
             ],
