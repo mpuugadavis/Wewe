@@ -683,7 +683,6 @@ def override_order_status(order_id: UUID, payload: AdminOrderStatusUpdate, princ
         select(Payment.id).where(
             Payment.order_id == order.id,
             Payment.status == "PENDING",
-            Payment.method != "CASH",
         )
     )
     if pending_mobile_payment:
