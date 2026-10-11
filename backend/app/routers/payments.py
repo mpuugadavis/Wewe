@@ -29,6 +29,54 @@ from app.services.state_transitions import aggregate_payment_status, is_payment_
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 
+@router.post("/flutterwave/webhook")
+@limiter.limit("120/minute")
+async def flutterwave_webhook(request: Request, db: Session = Depends(get_db)) -> dict:
+    """Verify Flutterwave's signature and authoritative transaction before applying an event."""
+    raw_body = await request.body()
+    signature = request.headers.get("verif-hash", "")
+    try:
+        payload = json.loads(raw_body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail={"code": "invalid_webhook", "message": "Webhook body must be valid JSON."}) from None
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+        raise HTTPException(status_code=400, detail={"code": "invalid_webhook", "message": "Flutterwave webhook payload is invalid."})
+    try:
+        adapter = payment_providers.get("FLUTTERWAVE")
+    except PaymentProviderUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "payment_provider_unavailable", "message": "Flutterwave is not configured."}) from None
+    if not adapter.verify_webhook(raw_body, signature):
+        raise HTTPException(status_code=401, detail={"code": "invalid_signature", "message": "Flutterwave webhook signature is invalid."})
+    data = payload["data"]
+    transaction_id = str(data.get("id", ""))
+    if payload.get("event") != "charge.completed" or not transaction_id.isdigit():
+        return {"received": True, "ignored": True}
+    try:
+        verified = adapter.verify_transaction(transaction_id)
+    except (ValueError, RuntimeError):
+        raise HTTPException(status_code=502, detail={"code": "transaction_verification_unavailable", "message": "Flutterwave transaction verification could not be completed."}) from None
+    tx_ref = verified.get("tx_ref")
+    currency = str(verified.get("currency", "")).upper()
+    try:
+        amount = Decimal(str(verified.get("amount")))
+    except (InvalidOperation, TypeError):
+        raise HTTPException(status_code=422, detail={"code": "invalid_verified_amount", "message": "Flutterwave returned an invalid transaction amount."}) from None
+    if str(verified.get("id", "")) != transaction_id or not tx_ref or str(data.get("tx_ref", "")) != str(tx_ref) or currency != "UGX" or not amount.is_finite() or amount != amount.to_integral_value() or amount <= 0:
+        raise HTTPException(status_code=422, detail={"code": "transaction_details_mismatch", "message": "Flutterwave transaction details did not match the webhook."})
+    outcome = str(verified.get("status", "")).lower()
+    if outcome not in {"successful", "failed"}:
+        return {"received": True, "status": "pending"}
+    normalized = PaymentWebhookIn(
+        provider_reference=str(tx_ref),
+        provider_event_id=transaction_id,
+        amount_ugx=int(amount),
+        currency="UGX",
+        status="SUCCESSFUL" if outcome == "successful" else "FAILED",
+    )
+    return await provider_webhook("FLUTTERWAVE", normalized, request, signature=signature, db=db)
+
+
+
 @router.post("/webhooks/{provider}")
 @limiter.limit("120/minute")
 async def provider_webhook(
