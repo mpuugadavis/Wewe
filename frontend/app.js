@@ -59,7 +59,10 @@
 
   function safeImage(value) {
     try {
-      const url = new URL(value, location.href);
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      if (raw.startsWith("/api/v1/")) return new URL(raw, API_BASE + "/").href;
+      const url = new URL(raw, location.href);
       const isHttps = url.protocol === "https:";
       const isLocalMinio = url.protocol === "http:" &&
         (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
@@ -370,7 +373,7 @@
 
   function renderRetailers() {
     $("#sellerRow").innerHTML = state.retailers.length ? state.retailers.map(retailer => {
-      const image = safeImage(retailer.logo_url || retailer.image_url);
+      const image = safeImage(retailer.profile_image_url || retailer.logo_url || retailer.image_url);
       return `<button class="seller-card" data-action="retailer-details" data-retailer-slug="${escapeHtml(retailer.slug)}"><span class="seller-avatar">${image ? `<img src="${escapeHtml(image)}" alt="">` : escapeHtml((retailer.business_name || "?").slice(0, 1))}</span><span><b>${escapeHtml(retailer.business_name)}</b><small>${escapeHtml(retailer.product_count ?? "Campus retailer")}</small></span></button>`;
     }).join("") : '<p class="api-state">No retailers are listed right now.</p>';
   }
@@ -1751,21 +1754,40 @@
 
   async function newProduct() {
     const categories = state.categories.length ? state.categories : await apiFetch("/categories");
-    setModal(`<div class="modal-head"><h2>Add a product</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-product" class="api-form"><label class="field">Product name<input name="name" required minlength="2" maxlength="220"></label><label class="field">Description<textarea name="description"></textarea></label><label class="field">Category<select name="category_id" required>${categories.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="field">Price (UGX)<input name="price_ugx" type="number" min="1" step="1" required></label><label class="field">Stock quantity<input name="stock_quantity" type="number" min="0" step="1" required></label><label class="field">Image URL (HTTPS)<input name="image_url" type="url" placeholder="https://…"></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Create product</button></form>`);
+    setModal(`<div class="modal-head"><h2>Add a product</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-product" class="api-form"><label class="field">Product name<input name="name" required minlength="2" maxlength="220"></label><label class="field">Description<textarea name="description"></textarea></label><label class="field">Category<select name="category_id" required>${categories.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="field">Price (UGX)<input name="price_ugx" type="number" min="1" step="1" required></label><label class="field">Stock quantity<input name="stock_quantity" type="number" min="0" step="1" required></label><label class="field">Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple><small class="muted">JPEG, PNG or WebP · up to 12 photos · max 5 MiB each.</small></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Create product</button></form>`);
   }
 
   async function createProduct(form) {
     const values = Object.fromEntries(new FormData(form));
-    const body = {
+    const files = [...(form.elements.images?.files || [])];
+    if (files.length > 12) throw new Error("Choose no more than 12 product photos.");
+    for (const file of files) {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Only JPEG, PNG and WebP product photos are supported.");
+      if (file.size > 5 * 1024 * 1024) throw new Error("Each product photo must be 5 MiB or smaller.");
+    }
+    const product = await apiFetch("/retailers/me/products", { method: "POST", body: JSON.stringify({
       name: values.name,
       description: values.description || null,
       category_id: values.category_id,
       price_ugx: Number(values.price_ugx),
       stock_quantity: Number(values.stock_quantity),
-      image_urls: values.image_url ? [values.image_url] : []
-    };
-    await apiFetch("/retailers/me/products", { method: "POST", body: JSON.stringify(body) });
-    showToast("Product created.");
+      image_urls: []
+    }) });
+    const listingId = product?.listings?.[0]?.retailer_product_id;
+    let uploadFailures = 0;
+    if (listingId) {
+      for (const file of files) {
+        try {
+          const formData = new FormData();
+          formData.append("file", file, file.name);
+          formData.append("alt_text", values.name);
+          await apiFetch(`/retailers/me/products/${encodeURIComponent(listingId)}/images`, { method: "POST", body: formData });
+        } catch {
+          uploadFailures += 1;
+        }
+      }
+    }
+    showToast(uploadFailures ? "Product created, but one or more photos failed to upload." : "Product created successfully.");
     closeModal();
     await renderDashboard();
   }
