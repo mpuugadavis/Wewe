@@ -1373,7 +1373,7 @@
         return '<div class="dashboard-list-item"><div class="dashboard-item-main"><span class="mini-product-image placeholder">W</span><span><b>' +
           escapeHtml(product.name || "Unnamed product") + '</b><small>' + money(price) + ' · ' + stock + ' available</small></span></div>' +
           '<div class="row-actions"><button data-action="edit-retailer-product" data-listing-id="' + escapeHtml(listingId) +
-          '" data-name="' + escapeHtml(product.name || "") + '" data-price="' + price + '">Edit</button>' +
+          '" data-name="' + escapeHtml(product.name || "") + '" data-price="' + price + '" data-original-price="' + Number(listing.original_price_ugx || 0) + '">Edit</button>' +
           '<button data-action="deactivate-retailer-product" data-listing-id="' + escapeHtml(listingId) + '">Deactivate</button></div></div>';
       }).filter(Boolean).join("");
       const content = '<div class="dashboard-toolbar"><span class="muted">' + products.length + ' listings</span><button class="button-primary" data-action="new-product">Add product</button></div>' +
