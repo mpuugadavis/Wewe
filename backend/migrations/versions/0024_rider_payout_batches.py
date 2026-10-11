@@ -17,26 +17,35 @@ depends_on = None
 def upgrade() -> None:
     # One payout reference represents one external payout/batch and therefore
     # may legitimately be shared by many delivery earnings.
+    #
     # The frozen initial schema used an unnamed UniqueConstraint, so PostgreSQL
-    # generated its own constraint name. Discover and remove the unique constraint
-    # by definition instead of assuming a particular generated name.
-    op.execute("""
-        DO $
-        DECLARE constraint_name text;
-        BEGIN
-            SELECT c.conname INTO constraint_name
-            FROM pg_constraint c
-            JOIN pg_class t ON t.oid = c.conrelid
-            WHERE t.relname = 'delivery_earnings'
+    # generated its own constraint name. Discover the actual constraint name
+    # through PostgreSQL's catalog, then drop it using Alembic. This avoids
+    # depending on a generated PostgreSQL identifier and avoids anonymous
+    # PL/pgSQL dollar-quoting inside SQLAlchemy.
+    bind = op.get_bind()
+    constraint_name = bind.execute(
+        sa.text(
+            """
+            SELECT c.conname
+            FROM pg_constraint AS c
+            JOIN pg_class AS t ON t.oid = c.conrelid
+            JOIN pg_namespace AS n ON n.oid = c.connamespace
+            WHERE n.nspname = current_schema()
+              AND t.relname = 'delivery_earnings'
               AND c.contype = 'u'
               AND pg_get_constraintdef(c.oid) = 'UNIQUE (payout_reference)'
-            LIMIT 1;
-            IF constraint_name IS NOT NULL THEN
-                EXECUTE format('ALTER TABLE delivery_earnings DROP CONSTRAINT %I', constraint_name);
-            END IF;
-        END
-        $;
-    """)
+            LIMIT 1
+            """
+        )
+    ).scalar_one_or_none()
+
+    if constraint_name:
+        op.drop_constraint(
+            constraint_name,
+            "delivery_earnings",
+            type_="unique",
+        )
 
     op.create_table(
         "delivery_payout_batches",
