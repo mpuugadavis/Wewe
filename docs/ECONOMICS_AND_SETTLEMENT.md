@@ -60,3 +60,45 @@ Rider earnings remain separate from retailer payables.
 | Flutterwave live transition | Deferred |
 
 The actual payout rail and payout-day operations remain an administrative/payment-provider concern; the accounting layer records the obligation and settlement result independently.
+
+
+## Rider payout batch controls
+
+Rider earnings are grouped into explicit payout batches rather than paid individually from the dashboard.
+
+Lifecycle:
+
+PENDING EARNINGS -> DRAFT -> SUBMITTED -> SETTLED
+
+Exception states:
+
+- FAILED — earnings remain pending and can be included in a later batch.
+- REVIEW_REQUIRED — earnings remain reserved until an administrator resolves the batch.
+
+The batch records:
+
+- rider
+- exact earning lines
+- total UGX amount
+- batch reference
+- idempotency key
+- authorizing administrator
+- submission timestamp
+- final payout reference
+- settlement timestamp
+
+A successful rider payout marks the exact earning lines PAID in the same database transaction. This prevents the dashboard from showing a payout as completed while individual earnings remain unpaid.
+
+## Financial reconciliation
+
+The admin reconciliation view exposes control totals for:
+
+- retailer ledger credits and debits
+- retailer settled payouts
+- retailer pending settlement instructions
+- rider pending earnings
+- rider paid earnings
+- rider pending payout batches
+- total tracked participant obligations
+
+These are accounting control totals. They are not a customer wallet balance and should be reconciled against the actual payment/payout provider records before and after every payout run.
