@@ -598,6 +598,46 @@ class DeliveryEarning(Base):
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class DeliveryPayoutBatch(Base):
+    """Controlled payout instruction grouping rider earnings."""
+    __tablename__ = "delivery_payout_batches"
+    __table_args__ = (
+        CheckConstraint("status IN ('DRAFT','SUBMITTED','SETTLED','FAILED','REVIEW_REQUIRED')", name="ck_delivery_payout_batch_status"),
+        CheckConstraint("amount_ugx > 0", name="ck_delivery_payout_batch_amount"),
+        CheckConstraint("currency = 'UGX'", name="ck_delivery_payout_batch_currency"),
+        UniqueConstraint("batch_reference", name="uq_delivery_payout_batch_reference"),
+        UniqueConstraint("idempotency_key", name="uq_delivery_payout_batch_idempotency"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    agent_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("delivery_agents.user_id", ondelete="RESTRICT"), index=True)
+    amount_ugx: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="UGX", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="DRAFT", nullable=False, index=True)
+    batch_reference: Mapped[str] = mapped_column(String(180), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(180), nullable=False)
+    payout_reference: Mapped[str | None] = mapped_column(String(180), unique=True)
+    authorized_by_user_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False)
+
+
+class DeliveryPayoutBatchLine(Base):
+    """Exact rider earnings reserved by a payout batch."""
+    __tablename__ = "delivery_payout_batch_lines"
+    __table_args__ = (
+        CheckConstraint("amount_ugx > 0", name="ck_delivery_payout_batch_line_amount"),
+        CheckConstraint("currency = 'UGX'", name="ck_delivery_payout_batch_line_currency"),
+        UniqueConstraint("batch_id", "assignment_id", name="uq_delivery_payout_batch_line_assignment"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    batch_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("delivery_payout_batches.id", ondelete="CASCADE"), index=True)
+    assignment_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("delivery_earnings.assignment_id", ondelete="RESTRICT"), index=True)
+    amount_ugx: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="UGX", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False)
+
+
 class DeliveryQuote(Base):
     """Committed delivery-pricing snapshot for one retailer fulfillment.
 
