@@ -71,5 +71,5 @@ def test_openrouteservice_geocodes_feature_coordinates():
         point = provider.geocode("Makerere University, Kampala")
 
     request = mocked_urlopen.call_args.args[0]
-    assert request.get_header("Authorization") == "test-ors-key"
+    assert "api_key=test-ors-key" in request.full_url
     assert point == routing.GeoCoordinate.from_values("-0.3441", "32.5747")
