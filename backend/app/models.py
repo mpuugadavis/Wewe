@@ -60,6 +60,15 @@ class User(TimestampMixin, Base):
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    profile_image_storage_key: Mapped[str | None] = mapped_column(String(500), unique=True)
+    profile_image_content_type: Mapped[str | None] = mapped_column(String(50))
+    profile_image_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    profile_image_width: Mapped[int | None] = mapped_column(Integer)
+    profile_image_height: Mapped[int | None] = mapped_column(Integer)
+
+    @property
+    def profile_image_url(self) -> str | None:
+        return f"/api/v1/profile-images/{self.id}" if self.profile_image_storage_key else None
 
 
 class CustomerProfile(TimestampMixin, Base):
