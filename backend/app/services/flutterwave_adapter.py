@@ -187,7 +187,6 @@ class FlutterwaveProvider:
                 "reference": request.reference,
                 "customer_id": customer_id,
                 "payment_method_id": payment_method_id,
-                "redirect_url": self.settings.flutterwave_redirect_url,
                 "meta": {
                     "wewe_payment_reference": request.reference,
                     "wewe_method": request.method,
