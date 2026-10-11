@@ -1208,7 +1208,7 @@
   function dashboardMenu(role) {
     const common = [["overview","Overview"]];
     if(role==="CUSTOMER") return [...common,["orders","Orders"],["wishlist","Saved items"],["addresses","Delivery points"],["notifications","Notifications"],["profile","Profile"]];
-    if(role==="RETAILER") return [...common,["overview","Overview"],["earnings","Earnings"],["products","Products"],["fulfillments","Fulfilments"],["profile","Store profile"]];
+    if(role==="RETAILER") return [...common,["earnings","Earnings"],["products","Products"],["fulfillments","Fulfilments"],["profile","Store profile"]];
     if(role==="DELIVERY_AGENT") return [...common,["available","Delivery offers"],["active","Active delivery"],["history","Delivery history"],["earnings","Earnings"],["profile","Rider profile"]];
     return [...common,["analytics","Analytics"],["users","Users"],["retailers","Retailers"],["products","Products"],["categories","Categories"],["orders","Orders"],["agents","Delivery agents"],["reviews","Reviews"],["settlements","Settlements"],["settings","Settings"],["audit","Audit log"]];
   }
