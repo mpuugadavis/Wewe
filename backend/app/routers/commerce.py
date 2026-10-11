@@ -36,6 +36,7 @@ from app.services.delivery_dispatch import dispatch_ready_fulfillment
 from app.services.delivery_pricing import remove_committed_delivery_quote
 from app.services.orders import create_order, order_payload, preview_checkout_quote, recompute_order_status
 from app.services.payment_attempts import record_reconciliation_unresolved, reserve_refund_attempt
+from app.services.flutterwave_adapter import FlutterwaveAPIError
 from app.services.payments import PaymentProviderUnavailable, PaymentRequest, payment_providers
 from app.services.state_transitions import (
     aggregate_payment_status,
@@ -773,6 +774,53 @@ def create_payment(
             checkout_url = initiation.checkout_url
             db.commit()
             db.refresh(payment)
+        except FlutterwaveAPIError as exc:
+            logger.warning(
+                "Flutterwave payment initiation rejected payment_id=%s diagnostics=%s",
+                payment.id,
+                exc.diagnostic(),
+            )
+            payment_id = payment.id
+            db.rollback()
+            locked_order = db.scalar(select(Order).where(Order.id == order_id).with_for_update())
+            locked_payment = db.scalar(select(Payment).where(Payment.id == payment_id).with_for_update())
+            if locked_order is None or locked_payment is None:
+                raise HTTPException(
+                    status_code=502,
+                    detail={
+                        "code": "payment_provider_error",
+                        "message": "Flutterwave rejected the payment request and the payment record could not be updated.",
+                        "payment_id": str(payment_id),
+                        "provider": exc.diagnostic(),
+                    },
+                ) from None
+            if locked_payment.status == "PENDING":
+                locked_payment.status = "FAILED"
+                db.flush()
+                locked_order.payment_status = aggregate_payment_status(
+                    db.scalars(select(Payment.status).where(Payment.order_id == locked_order.id)).all()
+                )
+                record_reconciliation_unresolved(
+                    db,
+                    locked_payment.id,
+                    evidence={
+                        "reason": "provider_validation_error",
+                        "provider": "FLUTTERWAVE",
+                        "stage": exc.stage,
+                        "provider_code": exc.provider_code,
+                        "request_id": exc.request_id,
+                    },
+                )
+                db.commit()
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "payment_provider_error",
+                    "message": "Flutterwave rejected the payment request.",
+                    "payment_id": str(payment_id),
+                    "provider": exc.diagnostic(),
+                },
+            ) from None
         except Exception as exc:
             logger.exception("Payment initiation outcome uncertain payment_id=%s", payment.id)
             payment_id = payment.id
