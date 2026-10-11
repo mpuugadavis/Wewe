@@ -83,9 +83,6 @@ def _serialize_products(db: Session, products: list[Product]) -> list[dict]:
     images = db.scalars(
         select(ProductImage).where(ProductImage.product_id.in_(ids)).order_by(ProductImage.sort_order)
     ).all()
-    images_by_product: dict[UUID, list[str]] = {}
-    for image in images:
-        images_by_product.setdefault(image.product_id, []).append(image.url)
     listings = _listing_rows(db, ids)
     return [
         {
