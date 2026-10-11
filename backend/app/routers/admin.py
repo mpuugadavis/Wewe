@@ -30,6 +30,7 @@ from app.models import (
     RefreshTokenFamily,
     Retailer,
     RetailerSettlement,
+    DeliveryPayoutBatch,
     RetailerFulfillment,
     RetailerFulfillmentEvent,
     Review,
@@ -65,6 +66,15 @@ from app.schemas import (
 )
 from app.services.orders import order_payload
 from app.services.delivery_dispatch import dispatch_ready_queue
+from app.services.rider_payout_batches import (
+    RiderPayoutBatchError,
+    RiderPayoutNotFoundError,
+    fail_rider_payout_batch,
+    generate_rider_payout_batches,
+    review_rider_payout_batch,
+    settle_rider_payout_batch,
+    submit_rider_payout_batch,
+)
 from app.services.retailer_settlement_batches import (
     RetailerNotFoundError,
     RetailerSettlementBatchError,
@@ -845,6 +855,134 @@ def update_setting(key: str, payload: AdminSettingUpdate, principal: Principal =
     _audit(db, principal.user.id, "PLATFORM_SETTING_CHANGED", "platform_setting", key, payload.value)
     db.commit()
     return {"key": key, "value": payload.value}
+
+
+@router.post("/rider-payouts/generate", status_code=status.HTTP_201_CREATED)
+def generate_admin_rider_payouts(
+    agent_id: UUID | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    results = generate_rider_payout_batches(db, agent_id=agent_id, limit=limit)
+    generated = []
+    for result in results:
+        if result.batch_id is not None:
+            _audit(
+                db, principal.user.id, "RIDER_PAYOUT_BATCH_GENERATED",
+                "delivery_payout_batch", result.batch_id,
+                {"agent_id": str(result.agent_id), "amount_ugx": result.amount_ugx},
+            )
+        generated.append({
+            "agent_id": result.agent_id,
+            "batch_id": result.batch_id,
+            "amount_ugx": result.amount_ugx,
+            "earning_count": result.earning_count,
+            "eligible": result.eligible,
+            "reason": result.reason,
+        })
+    db.commit()
+    return {"currency": "UGX", "generated_count": sum(1 for x in generated if x["batch_id"]), "results": generated}
+
+
+@router.get("/rider-payouts")
+def list_admin_rider_payouts(
+    agent_id: UUID | None = None,
+    payout_status: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    allowed = {"DRAFT", "SUBMITTED", "SETTLED", "FAILED", "REVIEW_REQUIRED"}
+    if payout_status is not None and payout_status not in allowed:
+        raise HTTPException(status_code=422, detail={"code": "invalid_payout_status", "message": "Payout status is invalid."})
+    stmt = select(DeliveryPayoutBatch).order_by(DeliveryPayoutBatch.created_at.desc()).offset(offset).limit(limit)
+    if agent_id is not None:
+        stmt = stmt.where(DeliveryPayoutBatch.agent_id == agent_id)
+    if payout_status is not None:
+        stmt = stmt.where(DeliveryPayoutBatch.status == payout_status)
+    rows = db.scalars(stmt).all()
+    return [{
+        "id": row.id,
+        "agent_id": row.agent_id,
+        "amount_ugx": row.amount_ugx,
+        "currency": row.currency,
+        "status": row.status,
+        "batch_reference": row.batch_reference,
+        "payout_reference": row.payout_reference,
+        "authorized_by_user_id": row.authorized_by_user_id,
+        "submitted_at": row.submitted_at,
+        "settled_at": row.settled_at,
+    } for row in rows]
+
+
+@router.post("/rider-payouts/{batch_id}/submit")
+def submit_admin_rider_payout(
+    batch_id: UUID,
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        batch = submit_rider_payout_batch(db, batch_id=batch_id, authorized_by_user_id=principal.user.id)
+    except RiderPayoutNotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"code": "rider_payout_not_found", "message": str(exc)}) from exc
+    except RiderPayoutBatchError as exc:
+        raise HTTPException(status_code=409, detail={"code": "rider_payout_lifecycle_conflict", "message": str(exc)}) from exc
+    _audit(db, principal.user.id, "RIDER_PAYOUT_SUBMITTED", "delivery_payout_batch", batch.id)
+    db.commit()
+    return {"id": batch.id, "agent_id": batch.agent_id, "amount_ugx": batch.amount_ugx, "status": batch.status}
+
+
+@router.post("/rider-payouts/{batch_id}/settle")
+def settle_admin_rider_payout(
+    batch_id: UUID,
+    payload: SettlementPayoutUpdate,
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        batch = settle_rider_payout_batch(db, batch_id=batch_id, payout_reference=payload.payout_reference)
+    except RiderPayoutNotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"code": "rider_payout_not_found", "message": str(exc)}) from exc
+    except RiderPayoutBatchError as exc:
+        raise HTTPException(status_code=409, detail={"code": "rider_payout_lifecycle_conflict", "message": str(exc)}) from exc
+    _audit(db, principal.user.id, "RIDER_PAYOUT_SETTLED", "delivery_payout_batch", batch.id, {"payout_reference": payload.payout_reference})
+    db.commit()
+    return {"id": batch.id, "agent_id": batch.agent_id, "amount_ugx": batch.amount_ugx, "status": batch.status, "payout_reference": batch.payout_reference}
+
+
+@router.post("/rider-payouts/{batch_id}/review")
+def review_admin_rider_payout(
+    batch_id: UUID,
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        batch = review_rider_payout_batch(db, batch_id=batch_id)
+    except RiderPayoutNotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"code": "rider_payout_not_found", "message": str(exc)}) from exc
+    except RiderPayoutBatchError as exc:
+        raise HTTPException(status_code=409, detail={"code": "rider_payout_lifecycle_conflict", "message": str(exc)}) from exc
+    _audit(db, principal.user.id, "RIDER_PAYOUT_REVIEW_REQUIRED", "delivery_payout_batch", batch.id)
+    db.commit()
+    return {"id": batch.id, "agent_id": batch.agent_id, "amount_ugx": batch.amount_ugx, "status": batch.status}
+
+
+@router.post("/rider-payouts/{batch_id}/fail")
+def fail_admin_rider_payout(
+    batch_id: UUID,
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        batch = fail_rider_payout_batch(db, batch_id=batch_id)
+    except RiderPayoutNotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"code": "rider_payout_not_found", "message": str(exc)}) from exc
+    except RiderPayoutBatchError as exc:
+        raise HTTPException(status_code=409, detail={"code": "rider_payout_lifecycle_conflict", "message": str(exc)}) from exc
+    _audit(db, principal.user.id, "RIDER_PAYOUT_FAILED", "delivery_payout_batch", batch.id)
+    db.commit()
+    return {"id": batch.id, "agent_id": batch.agent_id, "amount_ugx": batch.amount_ugx, "status": batch.status}
 
 
 @router.get("/settlements")
