@@ -30,6 +30,7 @@ from app.models import (
     RefreshTokenFamily,
     Retailer,
     RetailerSettlement,
+    RetailerPayableEntry,
     DeliveryPayoutBatch,
     RetailerFulfillment,
     RetailerFulfillmentEvent,
@@ -1249,6 +1250,60 @@ def admin_settlements(
         }
         for row in rows
     ]
+
+
+@router.get("/reconciliation")
+def financial_reconciliation(db: Session = Depends(get_db)) -> dict:
+    """Read-only financial control totals for retailer and rider obligations."""
+    retailer_credits = int(db.scalar(
+        select(func.coalesce(func.sum(RetailerPayableEntry.amount_ugx), 0))
+        .where(RetailerPayableEntry.entry_type == "CREDIT")
+    ) or 0)
+    retailer_debits = int(db.scalar(
+        select(func.coalesce(func.sum(RetailerPayableEntry.amount_ugx), 0))
+        .where(RetailerPayableEntry.entry_type == "DEBIT")
+    ) or 0)
+    retailer_settled = int(db.scalar(
+        select(func.coalesce(func.sum(RetailerSettlement.amount_ugx), 0))
+        .where(RetailerSettlement.status == "SETTLED")
+    ) or 0)
+    retailer_pending = int(db.scalar(
+        select(func.coalesce(func.sum(RetailerSettlement.amount_ugx), 0))
+        .where(RetailerSettlement.status.in_(["DRAFT", "SUBMITTED", "REVIEW_REQUIRED"]))
+    ) or 0)
+    rider_pending = int(db.scalar(
+        select(func.coalesce(func.sum(DeliveryEarning.amount_ugx), 0))
+        .where(DeliveryEarning.status == "PENDING")
+    ) or 0)
+    rider_paid = int(db.scalar(
+        select(func.coalesce(func.sum(DeliveryEarning.amount_ugx), 0))
+        .where(DeliveryEarning.status == "PAID")
+    ) or 0)
+    rider_batch_pending = int(db.scalar(
+        select(func.coalesce(func.sum(DeliveryPayoutBatch.amount_ugx), 0))
+        .where(DeliveryPayoutBatch.status.in_(["DRAFT", "SUBMITTED", "REVIEW_REQUIRED"]))
+    ) or 0)
+    retailer_balance = retailer_credits - retailer_debits
+    return {
+        "currency": "UGX",
+        "retailer": {
+            "ledger_credits_ugx": retailer_credits,
+            "ledger_debits_ugx": retailer_debits,
+            "ledger_balance_ugx": retailer_balance,
+            "settled_ugx": retailer_settled,
+            "pending_settlement_ugx": retailer_pending,
+            "unsettled_ledger_obligation_ugx": max(0, retailer_balance - retailer_settled),
+        },
+        "riders": {
+            "pending_earnings_ugx": rider_pending,
+            "paid_earnings_ugx": rider_paid,
+            "pending_payout_batches_ugx": rider_batch_pending,
+        },
+        "controls": {
+            "third_party_obligations_tracked": retailer_balance + rider_pending,
+            "note": "These are accounting control totals, not customer funds or stored-value wallet balances.",
+        },
+    }
 
 
 @router.get("/system-health")
