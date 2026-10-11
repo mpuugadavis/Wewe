@@ -102,13 +102,19 @@ def attach_payable_entry_to_draft_settlement(
         )
 
     existing = session.scalar(
-        select(RetailerSettlementLine).where(
-            RetailerSettlementLine.payable_entry_id == payable_entry_id
+        select(RetailerSettlementLine)
+        .join(
+            RetailerSettlement,
+            RetailerSettlement.id == RetailerSettlementLine.settlement_id,
+        )
+        .where(
+            RetailerSettlementLine.payable_entry_id == payable_entry_id,
+            RetailerSettlement.status.in_(("DRAFT", "SUBMITTED", "SETTLED")),
         )
     )
     if existing is not None:
         raise SettlementEntryConflictError(
-            "payable entry is already linked to a settlement"
+            "payable entry is already consumed by an active or settled settlement"
         )
 
     line = RetailerSettlementLine(
