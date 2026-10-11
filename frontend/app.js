@@ -1223,7 +1223,12 @@
     if (!nav.some(([key]) => key === state.dashboardSection)) state.dashboardSection = "overview";
     $("#sideRole").textContent = role.replaceAll("_", " ");
     $("#dashName").textContent = user.name;
-    $("#dashAvatar").textContent = (user.name || "?").slice(0, 1).toUpperCase();
+    const dashboardAvatar = $("#dashAvatar");
+    if (safeImage(user.profile_image_url)) {
+      dashboardAvatar.innerHTML = '<img src="' + escapeHtml(safeImage(user.profile_image_url)) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">';
+    } else {
+      dashboardAvatar.textContent = (user.name || "?").slice(0, 1).toUpperCase();
+    }
     $("#dashAccountRole").textContent = `${role.replaceAll("_", " ")} account`;
     $("#dashNav").innerHTML = `${nav.map(([key, label]) => `<button class="${key === state.dashboardSection ? "active" : ""}" data-action="dashboard-section" data-section="${key}">${label}</button>`).join("")}<button data-action="sign-out">Sign out</button><button data-action="storefront">Back to shop</button>`;
     $("#dashTitle").textContent = nav.find(([key]) => key === state.dashboardSection)?.[1] || "Overview";
