@@ -229,3 +229,43 @@ def test_pre_pickup_acceptance_can_be_released_for_redispatch():
     assert is_delivery_assignment_transition_allowed("ACCEPTED", "UNASSIGNED")
     assert not is_delivery_assignment_transition_allowed("PICKED_UP", "UNASSIGNED")
     assert not is_delivery_assignment_transition_allowed("OUT_FOR_DELIVERY", "UNASSIGNED")
+def test_expired_offer_does_not_get_reoffered_to_same_rider(database):
+    assignment, rider_a, rider_b = _dispatch_fixture(database)
+    first = advance_dispatch(database, assignment.id)
+    assert first is not None
+    first.expires_at = utcnow() - timedelta(seconds=1)
+    database.flush()
+
+    second = advance_dispatch(database, assignment.id)
+    assert second is not None
+    assert second.agent_id == rider_b.id
+
+    second.expires_at = utcnow() - timedelta(seconds=1)
+    database.flush()
+
+    third = advance_dispatch(database, assignment.id)
+    assert third is None
+
+
+def test_accept_offer_marks_rider_busy_and_competing_offer_cancelled(database):
+    assignment, rider_a, rider_b = _dispatch_fixture(database)
+    first = advance_dispatch(database, assignment.id)
+    assert first is not None
+    second = DeliveryOffer(
+        assignment_id=assignment.id,
+        agent_id=rider_b.id,
+        status="PENDING",
+        offer_sequence=2,
+        offered_at=utcnow(),
+        expires_at=utcnow() + timedelta(seconds=OFFER_TTL_SECONDS),
+        distance_m=1000,
+    )
+    database.add(second)
+    database.commit()
+
+    accept_offer(database, rider_a.id, first.id)
+    agent = database.get(DeliveryAgent, rider_a.id)
+
+    assert agent is not None
+    assert agent.availability_status == "BUSY"
+    assert second.status == "CANCELLED"
