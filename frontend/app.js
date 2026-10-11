@@ -20,9 +20,10 @@
     campuses: null,
     checkoutPoints: [],
     addressForCheckout: false,
-    mapsApiKey: null,
+    mapboxPublicKey: null,
     checkoutMap: null,
     checkoutMarker: null,
+    checkoutMarkers: [],
     checkoutAutocomplete: null,
     refreshPromise: null,
     riderLocationWatchId: null,
@@ -508,113 +509,167 @@
     $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Campus retailer</div><h2>${escapeHtml(retailer.business_name)}</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${escapeHtml(retailer.description || "")}</p><p>${escapeHtml(retailer.phone || "")}</p><div class="retailer-products">${products.map(item => `<article class="listing-row"><span><b>${escapeHtml(item.name || item.product_name)}</b><small>${escapeHtml(item.category_name || "")}</small></span><b>${money(item.price_ugx)}</b></article>`).join("") || '<p>No active products are listed.</p>'}</div>`;
   }
 
-  async function loadGoogleMaps() {
-    if (window.google?.maps) return true;
-    if (state.mapsApiKey === null) {
+  async function loadMapbox() {
+    if (window.mapboxgl?.Map && window.MapboxGeocoder) return true;
+    if (state.mapboxPublicKey === null) {
       try {
         const config = await apiFetch("/locations/maps-config");
-        state.mapsApiKey = config.google_maps_api_key || "";
+        state.mapboxPublicKey = config.mapbox_public_key || "";
       } catch {
-        state.mapsApiKey = "";
+        state.mapboxPublicKey = "";
       }
     }
-    if (!state.mapsApiKey) return false;
-    await new Promise((resolve, reject) => {
-      const existing = document.querySelector('script[data-wewe-google-maps]');
+    if (!state.mapboxPublicKey) return false;
+
+    const loadScript = (src, marker) => new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-wewe-mapbox="' + marker + '"]');
       if (existing) {
+        if (marker === "gl" && window.mapboxgl?.Map) return resolve();
+        if (marker === "geocoder" && window.MapboxGeocoder) return resolve();
         existing.addEventListener("load", resolve, { once: true });
         existing.addEventListener("error", reject, { once: true });
-        if (window.google?.maps) resolve();
         return;
       }
       const script = document.createElement("script");
-      script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(state.mapsApiKey) + "&v=weekly";
+      script.src = src;
       script.async = true;
       script.defer = true;
-      script.dataset.weweGoogleMaps = "true";
+      script.dataset.weweMapbox = marker;
       script.onload = resolve;
-      script.onerror = () => reject(new Error("Google Maps could not be loaded."));
+      script.onerror = () => reject(new Error("Mapbox could not be loaded."));
       document.head.appendChild(script);
     });
-    return Boolean(window.google?.maps);
+
+    if (!document.querySelector('link[data-wewe-mapbox-css="gl"]')) {
+      const css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = "https://api.mapbox.com/mapbox-gl-js/v3.32.0/mapbox-gl.css";
+      css.dataset.weweMapboxCss = "gl";
+      document.head.appendChild(css);
+    }
+    if (!document.querySelector('link[data-wewe-mapbox-css="geocoder"]')) {
+      const css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = "https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.css";
+      css.dataset.weweMapboxCss = "geocoder";
+      document.head.appendChild(css);
+    }
+
+    await loadScript("https://api.mapbox.com/mapbox-gl-js/v3.32.0/mapbox-gl.js", "gl");
+    await loadScript("https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.1.0/mapbox-gl-geocoder.min.js", "geocoder");
+    return Boolean(window.mapboxgl?.Map && window.MapboxGeocoder);
+  }
+
+  function clearCheckoutMapMarkers() {
+    (state.checkoutMarkers || []).forEach(marker => marker.remove());
+    state.checkoutMarkers = [];
+    if (state.checkoutMarker) {
+      state.checkoutMarker.remove();
+      state.checkoutMarker = null;
+    }
   }
 
   async function initializeCheckoutMap(points) {
     const mapElement = $("#checkoutMap");
     if (!mapElement) return;
     try {
-      const loaded = await loadGoogleMaps();
+      const loaded = await loadMapbox();
       if (!loaded) {
-        mapElement.innerHTML = '<div class="map-unavailable"><b>Google Maps preview</b><span>Configure the restricted Maps browser key to enable the live map.</span></div>';
+        mapElement.innerHTML = '<div class="map-unavailable"><b>Mapbox preview unavailable</b><span>Configure MAPBOX_PUBLIC_KEY to enable the live checkout map.</span></div>';
         return;
       }
-      const { Map } = await google.maps.importLibrary("maps");
-      const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
-      const defaultCenter = { lat: 0.3350, lng: 32.5700 };
-      state.checkoutMap = new Map(mapElement, {
+
+      const defaultCenter = [32.5700, 0.3350];
+      state.checkoutMap?.remove();
+      state.checkoutMap = new mapboxgl.Map({
+        container: mapElement,
+        style: "mapbox://styles/mapbox/standard",
         center: defaultCenter,
         zoom: 15,
-        mapId: "DEMO_MAP_ID",
-        disableDefaultUI: false,
-        streetViewControl: false,
-        fullscreenControl: true
+        attributionControl: true
       });
-      const usable = points.filter(point => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)));
+
+      state.checkoutMap.addControl(new mapboxgl.NavigationControl(), "top-right");
+      clearCheckoutMapMarkers();
+
+      const usable = points.filter(point =>
+        Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))
+      );
+
       usable.forEach(point => {
-        const marker = new AdvancedMarkerElement({
-          map: state.checkoutMap,
-          position: { lat: Number(point.latitude), lng: Number(point.longitude) },
-          title: point.name
-        });
-        marker.addListener("click", () => selectCheckoutPoint(point.id));
+        const marker = new mapboxgl.Marker({ color: "#6c3df4" })
+          .setLngLat([Number(point.longitude), Number(point.latitude)])
+          .setPopup(new mapboxgl.Popup({ offset: 24 }).setText(point.name || "Delivery point"))
+          .addTo(state.checkoutMap);
+        marker.getElement().addEventListener("click", () => selectCheckoutPoint(point.id));
+        state.checkoutMarkers.push(marker);
       });
+
       if (usable[0]) {
-        state.checkoutMap.setCenter({ lat: Number(usable[0].latitude), lng: Number(usable[0].longitude) });
+        state.checkoutMap.setCenter([Number(usable[0].longitude), Number(usable[0].latitude)]);
       }
-      try {
-        const { PlaceAutocompleteElement } = await google.maps.importLibrary("places");
-        const host = $("#checkoutAutocomplete");
-        if (host) {
-          state.checkoutAutocomplete = new PlaceAutocompleteElement({ placeholder: "Search a hostel, hall or address" });
-          state.checkoutAutocomplete.setAttribute("included-region-codes", "ug");
-          host.replaceChildren(state.checkoutAutocomplete);
-          state.checkoutAutocomplete.addEventListener("gmp-select", async ({ placePrediction }) => {
-            const place = placePrediction.toPlace();
-            await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "id"] });
-            if (!place.location) return;
-            const campusId = state.campuses?.find(item => item.slug === "main-campus")?.id || state.campuses?.[0]?.id;
-            if (!campusId) throw new Error("No WEWE campus is configured.");
-            const point = await apiFetch("/locations/me/delivery-points", {
-              method: "POST",
-              body: JSON.stringify({
-                campus_id: campusId,
-                kind: "OTHER",
-                name: place.displayName || "Selected Google Maps location",
-                directions: place.formattedAddress || "",
-                latitude: place.location.lat(),
-                longitude: place.location.lng(),
-                google_place_id: place.id || null,
-                is_private: true
-              })
-            });
-            state.checkoutPoints = [...state.checkoutPoints.filter(item => item.id !== point.id), point];
-            const select = $('form[data-form="checkout"]')?.elements.delivery_point_id;
-            if (select) {
+
+      const host = $("#checkoutAutocomplete");
+      if (host) {
+        state.checkoutAutocomplete = new MapboxGeocoder({
+          accessToken: state.mapboxPublicKey,
+          mapboxgl,
+          marker: false,
+          countries: "ug",
+          language: "en",
+          placeholder: "Search a Makerere hall, hostel or address"
+        });
+        host.replaceChildren(state.checkoutAutocomplete.onAdd(state.checkoutMap));
+        state.checkoutAutocomplete.on("result", async event => {
+          const feature = event?.result;
+          const coordinates = feature?.geometry?.coordinates;
+          if (!Array.isArray(coordinates) || coordinates.length < 2) return;
+          const campusId = state.campuses?.find(item => item.slug === "main-campus")?.id || state.campuses?.[0]?.id;
+          if (!campusId) throw new Error("No WEWE campus is configured.");
+
+          const point = await apiFetch("/locations/me/delivery-points", {
+            method: "POST",
+            body: JSON.stringify({
+              campus_id: campusId,
+              kind: "OTHER",
+              name: feature.text || feature.place_name || "Selected Mapbox location",
+              directions: feature.place_name || "",
+              latitude: Number(coordinates[1]),
+              longitude: Number(coordinates[0]),
+              google_place_id: null,
+              is_private: true
+            })
+          });
+
+          state.checkoutPoints = [...state.checkoutPoints.filter(item => item.id !== point.id), point];
+          const select = $('form[data-form="checkout"]')?.elements.delivery_point_id;
+          if (select) {
+            const existing = Array.from(select.options).find(option => option.value === point.id);
+            if (!existing) {
               const option = document.createElement("option");
               option.value = point.id;
               option.textContent = point.name;
               select.appendChild(option);
-              select.value = point.id;
             }
-            state.checkoutMap.setCenter({ lat: Number(point.latitude), lng: Number(point.longitude) });
-            state.checkoutMap.setZoom(17);
-            const label = $("#selectedDeliveryLocation");
-            if (label) label.textContent = point.name + (point.directions ? " · " + point.directions : "");
-            await updateCheckoutQuote();
+            select.value = point.id;
+          }
+
+          state.checkoutMap.flyTo({
+            center: [Number(point.longitude), Number(point.latitude)],
+            zoom: 17,
+            essential: true
           });
-        }
-      } catch {
-        // The map remains fully usable without Places autocomplete.
+
+          if (state.checkoutMarker) state.checkoutMarker.remove();
+          state.checkoutMarker = new mapboxgl.Marker({ color: "#e46c1b" })
+            .setLngLat([Number(point.longitude), Number(point.latitude)])
+            .setPopup(new mapboxgl.Popup({ offset: 24 }).setText(point.name))
+            .addTo(state.checkoutMap);
+
+          const label = $("#selectedDeliveryLocation");
+          if (label) label.textContent = point.name + (point.directions ? " · " + point.directions : "");
+          await updateCheckoutQuote();
+        });
       }
     } catch (error) {
       mapElement.innerHTML = '<div class="map-unavailable"><b>Map unavailable</b><span>' + escapeHtml(error.message) + '</span></div>';
@@ -631,8 +686,12 @@
     const label = $("#selectedDeliveryLocation");
     if (label) label.textContent = point.name + (point.directions ? " · " + point.directions : "");
     if (state.checkoutMap && point.latitude && point.longitude) {
-      state.checkoutMap.setCenter({ lat: Number(point.latitude), lng: Number(point.longitude) });
-      state.checkoutMap.setZoom(17);
+      state.checkoutMap.flyTo({ center: [Number(point.longitude), Number(point.latitude)], zoom: 17, essential: true });
+      if (state.checkoutMarker) state.checkoutMarker.remove();
+      state.checkoutMarker = new mapboxgl.Marker({ color: "#e46c1b" })
+        .setLngLat([Number(point.longitude), Number(point.latitude)])
+        .setPopup(new mapboxgl.Popup({ offset: 24 }).setText(point.name))
+        .addTo(state.checkoutMap);
     }
     updateCheckoutQuote().catch(error => showToast(error.message));
   }
@@ -675,12 +734,12 @@
     const label = $("#selectedDeliveryLocation");
     if (label) label.textContent = "My current location · GPS coordinates";
     if (state.checkoutMap) {
-      state.checkoutMap.setCenter({ lat: latitude, lng: longitude });
-      state.checkoutMap.setZoom(17);
-      if (window.google?.maps) {
-        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
-        state.checkoutMarker = new AdvancedMarkerElement({ map: state.checkoutMap, position: { lat: latitude, lng: longitude }, title: "My current location" });
-      }
+      state.checkoutMap.flyTo({ center: [longitude, latitude], zoom: 17, essential: true });
+      if (state.checkoutMarker) state.checkoutMarker.remove();
+      state.checkoutMarker = new mapboxgl.Marker({ color: "#e46c1b" })
+        .setLngLat([longitude, latitude])
+        .setPopup(new mapboxgl.Popup({ offset: 24 }).setText("My current location"))
+        .addTo(state.checkoutMap);
     }
     await updateCheckoutQuote();
   }
@@ -707,7 +766,7 @@
     state.checkoutPoints = [...new Map([...publicPoints, ...saved].map(point => [point.id, point])).values()];
     const profile = await apiFetch("/users/me/profile");
     $("#checkoutContents").innerHTML = '<form data-form="checkout" class="api-form">' +
-      '<div class="delivery-map-shell"><div class="map-toolbar"><div><b>Where should we deliver?</b><small>Choose a Makerere hall/hostel, search Google Maps, or use your current location.</small></div><button type="button" class="button-outline" data-action="use-current-location">Use my current location</button></div><div id="checkoutAutocomplete" class="checkout-autocomplete"></div><div id="checkoutMap" class="checkout-map"></div><p id="selectedDeliveryLocation" class="selected-location">Choose a delivery point</p></div>' +
+      '<div class="delivery-map-shell"><div class="map-toolbar"><div><b>Where should we deliver?</b><small>Choose a Makerere hall/hostel, search Mapbox, or use your current location.</small></div><button type="button" class="button-outline" data-action="use-current-location">Use my current location</button></div><div id="checkoutAutocomplete" class="checkout-autocomplete"></div><div id="checkoutMap" class="checkout-map"></div><p id="selectedDeliveryLocation" class="selected-location">Choose a delivery point</p></div>' +
       '<label class="field">Fulfilment<select name="delivery_method"><option value="DELIVERY">Campus delivery</option><option value="PICKUP">Pickup</option></select></label>' +
       '<div data-checkout-delivery><label class="field">Delivery point<select name="delivery_point_id"><option value="">Choose a hall, hostel or saved point</option>' + state.checkoutPoints.map(point => '<option value="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : "") + '</option>').join("") + '</select></label><div class="quick-location-grid">' + state.checkoutPoints.slice(0, 12).map(point => '<button type="button" class="location-chip" data-action="select-delivery-point" data-id="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + '</button>').join("") + '</div><button type="button" class="text-link" data-action="new-address">Add a delivery point</button></div>' +
       '<div data-checkout-pickup class="hidden"><label class="field">Pickup point<select name="pickup_point_id">' + pickupPoints.map(point => '<option value="' + escapeHtml(point.id) + '">' + escapeHtml(point.name) + (point.directions ? ' — ' + escapeHtml(point.directions) : "") + '</option>').join("") + '</select></label></div>' +
@@ -742,7 +801,7 @@
     const payload = { delivery_method: method, ...(method === "PICKUP" ? { pickup_point_id: destination } : { delivery_point_id: destination }) };
     const quote = await apiFetch("/orders/delivery-quote", { method: "POST", body: JSON.stringify(payload) });
     const routeRows = (quote.fulfillments || []).map(item => '<p><span>' + escapeHtml(item.retailer_name || "Retailer") + ' · ' + Number(item.route_distance_km || 0).toFixed(1) + ' km</span><b>' + money(item.delivery_fee_ugx) + '</b></p>').join("");
-    box.innerHTML = '<div class="checkout-totals"><p>Subtotal <b>' + money(quote.subtotal_ugx) + '</b></p>' + routeRows + '<p>Delivery fee <b>' + money(quote.delivery_fee_ugx) + '</b></p><p class="checkout-total"><span>Total</span><b>' + money(quote.total_ugx) + '</b></p><small class="route-note">' + (quote.routing_provider ? 'Google/road routing is used when configured; WEWE applies its own UGX pricing formula.' : 'Pickup has no delivery fee.') + '</small></div>';
+    box.innerHTML = '<div class="checkout-totals"><p>Subtotal <b>' + money(quote.subtotal_ugx) + '</b></p>' + routeRows + '<p>Delivery fee <b>' + money(quote.delivery_fee_ugx) + '</b></p><p class="checkout-total"><span>Total</span><b>' + money(quote.total_ugx) + '</b></p><small class="route-note">' + (quote.routing_provider ? 'Mapbox road routing is used for delivery distance; WEWE applies its own UGX pricing formula.' : 'Pickup has no delivery fee.') + '</small></div>';
     form.dataset.quoteTotal = String(quote.total_ugx);
   }
 
