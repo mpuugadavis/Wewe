@@ -17,7 +17,26 @@ depends_on = None
 def upgrade() -> None:
     # One payout reference represents one external payout/batch and therefore
     # may legitimately be shared by many delivery earnings.
-    op.drop_constraint("uq_delivery_earnings_payout_reference", "delivery_earnings", type_="unique")
+    # The frozen initial schema used an unnamed UniqueConstraint, so PostgreSQL
+    # generated its own constraint name. Discover and remove the unique constraint
+    # by definition instead of assuming a particular generated name.
+    op.execute("""
+        DO $
+        DECLARE constraint_name text;
+        BEGIN
+            SELECT c.conname INTO constraint_name
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            WHERE t.relname = 'delivery_earnings'
+              AND c.contype = 'u'
+              AND pg_get_constraintdef(c.oid) = 'UNIQUE (payout_reference)'
+            LIMIT 1;
+            IF constraint_name IS NOT NULL THEN
+                EXECUTE format('ALTER TABLE delivery_earnings DROP CONSTRAINT %I', constraint_name);
+            END IF;
+        END
+        $;
+    """)
 
     op.create_table(
         "delivery_payout_batches",
