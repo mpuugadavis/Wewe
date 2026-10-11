@@ -89,6 +89,7 @@ class UserOut(ORMModel):
     status: str
     email_verified_at: Any | None = None
     phone_verified_at: Any | None = None
+    profile_image_url: str | None = None
 
 
 class ResetRequestIn(BaseModel):
