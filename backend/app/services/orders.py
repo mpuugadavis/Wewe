@@ -359,6 +359,8 @@ def order_payload(db: Session, order: Order) -> dict:
         "multi_retailer_discount_percent": str(order.multi_retailer_discount_percent),
         "delivery_fee_ugx": order.delivery_fee_ugx,
         "total_ugx": order.total_ugx,
+        "platform_commission_percent": str(order.platform_commission_percent),
+        "platform_commission_ugx": order.platform_commission_ugx,
         "status": order.status,
         "payment_status": order.payment_status,
         "created_at": order.created_at,
