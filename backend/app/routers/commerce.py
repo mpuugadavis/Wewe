@@ -461,22 +461,6 @@ def cancel_order(
                 )
             )
 
-    # Legacy rows only: WEWE no longer creates cash payments (online-only), but
-    # any pre-existing pending cash attempt is failed when the order is cancelled.
-    cash_payments = db.scalars(
-        select(Payment).where(
-            Payment.order_id == order.id,
-            Payment.method == "CASH",
-            Payment.status == "PENDING",
-        )
-    ).all()
-    for payment in cash_payments:
-        payment.status = "FAILED"
-    if cash_payments:
-        db.flush()
-        order.payment_status = aggregate_payment_status(
-            db.scalars(select(Payment.status).where(Payment.order_id == order.id)).all()
-        )
     order.status = "CANCELLED"
     order.cancelled_at = utcnow()
     db.commit()
@@ -616,7 +600,7 @@ def update_fulfillment(
 
 def _adjust_order_after_rejection(db: Session, order: Order, fulfillment: RetailerFulfillment) -> None:
     payments = db.scalars(select(Payment).where(Payment.order_id == order.id).with_for_update()).all()
-    if order.payment_status == "PAID" or any(payment.status == "PENDING" and payment.method != "CASH" for payment in payments):
+    if order.payment_status == "PAID" or any(payment.status == "PENDING" for payment in payments):
         raise HTTPException(status_code=409, detail={"code": "refund_or_payment_resolution_required", "message": "Resolve the payment or refund before rejecting this retailer fulfilment."})
     items = db.scalars(
         select(OrderItem).where(OrderItem.order_id == order.id, OrderItem.retailer_id == fulfillment.retailer_id)
@@ -640,7 +624,6 @@ def _adjust_order_after_rejection(db: Session, order: Order, fulfillment: Retail
     order.delivery_fee_ugx = max(0, order.delivery_fee_ugx - fee_share)
     order.total_ugx = order.subtotal_ugx + order.delivery_fee_ugx
     # WEWE is online-payment-only. Rejection adjusts the order amount, but it
-    # never mutates a cash payment because CASH is not a valid payment method.
     # Any existing online payment attempt must be resolved/refunded before the
     # fulfillment can be rejected (enforced above).
 

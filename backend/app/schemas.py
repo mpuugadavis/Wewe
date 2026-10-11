@@ -254,7 +254,7 @@ class PaymentCreate(BaseModel):
 
     method: Literal["MTN_MOMO", "AIRTEL_MONEY"]
     phone: str = Field(min_length=9, max_length=32)
-    email: str | None = Field(default=None, min_length=5, max_length=320)
+    email: str | None = Field(default=None, max_length=320)
 
     @field_validator("email")
     @classmethod

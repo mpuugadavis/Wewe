@@ -683,7 +683,6 @@ def override_order_status(order_id: UUID, payload: AdminOrderStatusUpdate, princ
         select(Payment.id).where(
             Payment.order_id == order.id,
             Payment.status == "PENDING",
-            Payment.method != "CASH",
         )
     )
     if pending_mobile_payment:
@@ -756,20 +755,6 @@ def override_order_status(order_id: UUID, payload: AdminOrderStatusUpdate, princ
             agent.availability_status = "AVAILABLE"
     order.status = payload.status
     order.cancelled_at = utcnow() if payload.status == "CANCELLED" else order.cancelled_at
-    cash_payments = db.scalars(
-        select(Payment).where(
-            Payment.order_id == order.id,
-            Payment.method == "CASH",
-            Payment.status == "PENDING",
-        )
-    ).all()
-    for payment in cash_payments:
-        payment.status = "FAILED"
-    if cash_payments:
-        db.flush()
-        order.payment_status = aggregate_payment_status(
-            db.scalars(select(Payment.status).where(Payment.order_id == order.id)).all()
-        )
     _audit(db, principal.user.id, "ORDER_STATUS_OVERRIDDEN", "order", order.id, {"from": previous, "to": payload.status, "reason": payload.reason})
     db.add(NotificationOutbox(user_id=order.customer_id, event_type=f"ORDER_{payload.status}", payload={"order_id": str(order.id), "reason": payload.reason}))
     db.commit()
