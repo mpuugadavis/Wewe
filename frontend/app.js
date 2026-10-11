@@ -1605,7 +1605,7 @@
       if(section==="products") return `<button data-action="moderate-product" data-id="${escapeHtml(id)}" data-status="${raw.status==="ACTIVE"?"REMOVED":"ACTIVE"}">${raw.status==="ACTIVE"?"Remove":"Activate"}</button>`;
       if(section==="orders") {
         const deliveryButtons=(raw.deliveries||[]).map(delivery => delivery.status==="UNASSIGNED"
-          ? `<button data-action="admin-assign-delivery" data-assignment-id="${escapeHtml(delivery.id)}">Assign rider</button>`
+          ? `<button data-action="admin-show-delivery-assignment" data-assignment-id="${escapeHtml(delivery.id)}">Assign rider</button>`
           : delivery.status==="ACCEPTED"
             ? `<button data-action="admin-release-delivery" data-id="${escapeHtml(delivery.id)}">Release rider</button>`
             : "").join("");
@@ -1800,6 +1800,7 @@
     if (action === "new-category") return newCategory();
     if (action === "admin-order-cancel") return adminOrderAction(button.dataset.id, "CANCELLED");
     if (action === "admin-order-fail") return adminOrderAction(button.dataset.id, "FAILED");
+    if (action === "admin-show-delivery-assignment") return showAdminDeliveryAssignment(button.dataset.assignmentId);
     if (action === "admin-assign-delivery") {
       await apiFetch(`/admin/deliveries/${encodeURIComponent(button.dataset.assignmentId)}/assign`, { method: "POST", body: JSON.stringify({ agent_user_id: button.dataset.agentId }) });
       showToast("Delivery assigned.");
