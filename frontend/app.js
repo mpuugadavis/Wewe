@@ -1335,7 +1335,7 @@
     const nextAction = offer
       ? `<button class="rider-primary-action" data-action="accept-delivery" data-id="${escapeHtml(row.id)}">Accept delivery</button>`
       : row.status === "ACCEPTED"
-        ? `<button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="PICKED_UP">Confirm pickup</button>`
+        ? `<div class="rider-action-stack"><button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="PICKED_UP">Confirm pickup</button><button class="button-outline" data-action="release-delivery" data-id="${escapeHtml(row.id)}">Release before pickup</button></div>`
         : row.status === "PICKED_UP"
           ? `<button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="OUT_FOR_DELIVERY">Start delivery</button>`
           : row.status === "OUT_FOR_DELIVERY"
@@ -1467,6 +1467,38 @@
       <div class="rider-layout"><section><div class="rider-section-head"><div><h3>${activeJob ? "Your active delivery" : "Your next job"}</h3><p>${activeJob ? "Complete the current step before taking another job." : "Your delivery workspace is ready."}</p></div><button class="text-link" data-action="dashboard-section" data-section="available">View offers →</button></div>${current}</section><aside class="rider-side-card"><h3>Rider shortcuts</h3><button data-action="dashboard-section" data-section="available">🚚 Delivery offers</button><button data-action="dashboard-section" data-section="history">🧾 Delivery history</button><button data-action="dashboard-section" data-section="earnings">UGX Earnings</button><button data-action="dashboard-section" data-section="profile">⚙ Rider profile</button></aside></div>`;
   }
 
+  async function newCategory() {
+    setModal(`<div class="modal-head"><div><div class="section-kicker">Administration</div><h2>Add category</h2></div><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-category" class="api-form"><label class="field">Category name<input name="name" required minlength="2" maxlength="100"></label><label class="field">Slug<input name="slug" required minlength="2" maxlength="120" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="e.g. campus-food"></label><label class="field">Sort order<input name="sort_order" type="number" min="0" step="1" value="0"></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Create category</button></form>`);
+  }
+
+  async function createCategory(form) {
+    const values = Object.fromEntries(new FormData(form));
+    await apiFetch("/admin/categories", { method: "POST", body: JSON.stringify({
+      name: values.name.trim(),
+      slug: values.slug.trim().toLowerCase(),
+      sort_order: Number(values.sort_order || 0)
+    }) });
+    showToast("Category created.");
+    closeModal();
+    await renderDashboard();
+    await loadCatalog();
+  }
+
+  async function showAdminDeliveryAssignment(assignmentId) {
+    const agents = await apiFetch("/admin/delivery-agents?verification_status=VERIFIED");
+    const available = (agents || []).filter(agent => agent.availability_status === "AVAILABLE");
+    setModal(`<div class="modal-head"><div><div class="section-kicker">Dispatch</div><h2>Assign delivery</h2></div><button class="close-modal" data-action="close-modal">×</button></div>${available.length ? available.map(agent => `<button class="dashboard-list-item admin-assign-agent" data-action="admin-assign-delivery" data-assignment-id="${escapeHtml(assignmentId)}" data-agent-id="${escapeHtml(agent.user_id)}"><span><b>${escapeHtml(agent.name)}</b><small>${escapeHtml(agent.transport_mode || "Delivery agent")} · ${escapeHtml(agent.phone || "")}</small></span><b>Assign</b></button>`).join("") : '<div class="dashboard-empty"><h3>No verified rider is available</h3><p>Only verified, active and available riders can be assigned.</p></div>'}`);
+  }
+
+  async function adminOrderAction(orderId, status) {
+    const reason = prompt(status === "CANCELLED" ? "Reason for cancelling this order:" : "Reason for failing this order:");
+    if (reason === null) return;
+    if (reason.trim().length < 3) throw new Error("Please provide a reason of at least 3 characters.");
+    await apiFetch(`/admin/orders/${encodeURIComponent(orderId)}/status`, { method: "PATCH", body: JSON.stringify({ status, reason: reason.trim() }) });
+    showToast(status === "CANCELLED" ? "Order cancelled." : "Order marked failed.");
+    return renderDashboard();
+  }
+
   function dashboardPage(title,subtitle,content){return `<div class="dashboard-page-head"><div><span class="eyebrow">WEWE workspace</span><h2>${escapeHtml(title)}</h2><p>${escapeHtml(subtitle)}</p></div></div><div class="dashboard-panel dashboard-content-panel">${content}</div>`;}
   function dashboardEmpty(title,subtitle){return `<div class="dashboard-empty"><div class="empty-icon">W</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(subtitle)}</p></div>`;}
   function dashboardTable(columns,rows,actions){return `<div class="dashboard-table"><div class="dashboard-table-head">${columns.map(c=>`<span>${escapeHtml(c)}</span>`).join("")}<span>Actions</span></div>${rows.map(r=>`<div class="dashboard-table-row">${r.cells.map(cell=>`<span>${cell}</span>`).join("")}<span class="row-actions">${actions(r.raw)}</span></div>`).join("")}</div>`;}
@@ -1565,7 +1597,26 @@
     if(section==="categories"){const rows=await apiFetch("/categories");return dashboardPage("Categories","Keep the marketplace taxonomy organized.",`<div class="dashboard-toolbar"><button class="button-primary" data-action="new-category">Add category</button></div>${rows.map(x=>`<div class="dashboard-list-item"><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.description||"Marketplace category")}</small></div>`).join("")||dashboardEmpty("No categories.","Create the first marketplace category.")}`);}
     if(section==="settlements"){const data=await apiFetch("/admin/settlements"),rows=Array.isArray(data)?data:data.items||[];return dashboardPage("Retailer settlements","Technical settlement operations only. Commercial eligibility and economics remain frozen until approved.",rows.length?dashboardTable(["Reference","Retailer","Amount","Status"],rows.map(raw=>({raw,cells:[escapeHtml(raw.settlement_reference||raw.id),escapeHtml(raw.retailer_id||""),money(raw.amount_ugx),statusBadge(raw.status)]})),raw=>raw.status==="DRAFT"?`<button data-action="settlement-submit" data-id="${escapeHtml(raw.id)}">Submit</button>`:raw.status==="SUBMITTED"?`<button data-action="settlement-review" data-id="${escapeHtml(raw.id)}">Review</button>`:""):dashboardEmpty("No settlement records.","Settlement records will appear here when created by the authorized workflow."));}
     const paths={users:"/admin/users",retailers:"/admin/retailers",products:"/admin/products",orders:"/admin/orders",agents:"/admin/delivery-agents",reviews:"/admin/reviews",settings:"/admin/settings",audit:"/admin/audit-logs"};const data=await apiFetch(paths[section]);const rows=Array.isArray(data)?data:data.items||[];if(!rows.length)return dashboardPage(sectionLabel(section),`Manage ${sectionLabel(section).toLowerCase()} from one place.`,dashboardEmpty("Nothing here yet.","There are no records requiring action."));
-    return dashboardPage(sectionLabel(section),`Manage ${sectionLabel(section).toLowerCase()} from one place.`,dashboardTable(["Item","Status","Details"],rows.map(raw=>({raw,cells:[`<b>${escapeHtml(raw.name||raw.business_name||raw.order_number||raw.action||raw.key||raw.id)}</b>`,escapeHtml(raw.verification_status||raw.status||""),escapeHtml(raw.email||raw.payment_status||raw.category_name||raw.resource_type||raw.availability_status||raw.value||"")]})),raw=>{const id=raw.id;if(section==="users")return`<button data-action="user-status" data-id="${escapeHtml(id)}" data-status="${raw.status==="ACTIVE"?"SUSPENDED":"ACTIVE"}">${raw.status==="ACTIVE"?"Suspend":"Activate"}</button>`;if(section==="retailers"&&raw.verification_status!=="VERIFIED")return`<button data-action="verify-retailer" data-id="${escapeHtml(raw.retailer_id||raw.id)}">Verify</button>`;if(section==="agents"&&raw.verification_status!=="VERIFIED")return`<button data-action="verify-agent" data-id="${escapeHtml(raw.user_id||raw.id)}">Verify</button>`;if(section==="products")return`<button data-action="moderate-product" data-id="${escapeHtml(id)}" data-status="${raw.status==="ACTIVE"?"REMOVED":"ACTIVE"}">${raw.status==="ACTIVE"?"Remove":"Activate"}</button>`;return "";}));
+    return dashboardPage(sectionLabel(section),`Manage ${sectionLabel(section).toLowerCase()} from one place.`,dashboardTable(["Item","Status","Details"],rows.map(raw=>({raw,cells:[`<b>${escapeHtml(raw.name||raw.business_name||raw.order_number||raw.action||raw.key||raw.id)}</b>`,escapeHtml(raw.verification_status||raw.status||""),escapeHtml(raw.email||raw.payment_status||raw.category_name||raw.resource_type||raw.availability_status||raw.value||"")]})),raw=>{
+      const id=raw.id;
+      if(section==="users") return `<button data-action="user-status" data-id="${escapeHtml(id)}" data-status="${raw.status==="ACTIVE"?"SUSPENDED":"ACTIVE"}">${raw.status==="ACTIVE"?"Suspend":"Activate"}</button>`;
+      if(section==="retailers"&&raw.verification_status!=="VERIFIED") return `<button data-action="verify-retailer" data-id="${escapeHtml(raw.retailer_id||raw.id)}">Verify</button>`;
+      if(section==="agents"&&raw.verification_status!=="VERIFIED") return `<button data-action="verify-agent" data-id="${escapeHtml(raw.user_id||raw.id)}">Verify</button>`;
+      if(section==="products") return `<button data-action="moderate-product" data-id="${escapeHtml(id)}" data-status="${raw.status==="ACTIVE"?"REMOVED":"ACTIVE"}">${raw.status==="ACTIVE"?"Remove":"Activate"}</button>`;
+      if(section==="orders") {
+        const deliveryButtons=(raw.deliveries||[]).map(delivery => delivery.status==="UNASSIGNED"
+          ? `<button data-action="admin-assign-delivery" data-assignment-id="${escapeHtml(delivery.id)}">Assign rider</button>`
+          : delivery.status==="ACCEPTED"
+            ? `<button data-action="admin-release-delivery" data-id="${escapeHtml(delivery.id)}">Release rider</button>`
+            : "").join("");
+        const statusButton=["PENDING","CONFIRMED","PROCESSING","READY"].includes(raw.status)
+          ? `<button data-action="admin-order-cancel" data-id="${escapeHtml(id)}">Cancel</button>` : "";
+        return statusButton + deliveryButtons;
+      }
+      if(section==="reviews") return `<button data-action="moderate-review" data-id="${escapeHtml(id)}" data-status="${raw.status==="VISIBLE"?"HIDDEN":"VISIBLE"}">${raw.status==="VISIBLE"?"Hide":"Publish"}</button>`;
+      if(section==="settings" && raw.key==="delivery_fee_ugx") return `<button data-action="edit-delivery-fee">Edit</button>`;
+      return "";
+    }));
   }
 
 
@@ -1673,6 +1724,7 @@
       else if (action === "agent-profile") await saveAgentProfile(form);
       else if (action === "new-product") await createProduct(form);
       else if (action === "edit-retailer-product") await updateRetailerProduct(form);
+      else if (action === "new-category") await createCategory(form);
       else if (action === "delivery-code") await updateDelivery(form.dataset.id, "DELIVERED", new FormData(form).get("confirmation_code"));
     } catch (error) {
       if (message) message.textContent = error.message;
@@ -1745,6 +1797,27 @@
     if (action === "retailer-details") return showRetailer(button.dataset.retailerSlug);
     if (action === "retry-online-payment") return retryOnlinePayment(button.dataset.orderId, button.dataset.method, button.dataset.phone, button.dataset.email);
     if (action === "order-details") return showOrder(button.dataset.id);
+    if (action === "new-category") return newCategory();
+    if (action === "admin-order-cancel") return adminOrderAction(button.dataset.id, "CANCELLED");
+    if (action === "admin-order-fail") return adminOrderAction(button.dataset.id, "FAILED");
+    if (action === "admin-assign-delivery") {
+      await apiFetch(`/admin/deliveries/${encodeURIComponent(button.dataset.assignmentId)}/assign`, { method: "POST", body: JSON.stringify({ agent_user_id: button.dataset.agentId }) });
+      showToast("Delivery assigned.");
+      closeModal();
+      return renderDashboard();
+    }
+    if (action === "admin-release-delivery") {
+      if (!confirm("Release this rider assignment before pickup?")) return;
+      await apiFetch(`/admin/deliveries/${encodeURIComponent(button.dataset.id)}/release`, { method: "POST", body: JSON.stringify({}) });
+      showToast("Delivery released for redispatch.");
+      return renderDashboard();
+    }
+    if (action === "release-delivery") {
+      if (!confirm("Release this delivery before pickup? It will return to dispatch.")) return;
+      await apiFetch(`/deliveries/${encodeURIComponent(button.dataset.id)}/release`, { method: "POST", body: JSON.stringify({}) });
+      showToast("Delivery released.");
+      return renderDashboard();
+    }
     if (action === "cancel-order") {
       await apiFetch(`/orders/${encodeURIComponent(button.dataset.id)}/cancel`, { method: "POST", body: JSON.stringify({}) });
       showToast("Order cancelled.");
@@ -1856,6 +1929,15 @@
       if (!confirm("Deactivate this product listing? It will no longer appear in the storefront.")) return;
       await apiFetch(`/retailers/me/products/${encodeURIComponent(button.dataset.listingId)}`, { method: "DELETE" });
       showToast("Product listing deactivated.");
+      return renderDashboard();
+    }
+    if (action === "edit-delivery-fee") {
+      const amount = prompt("Delivery fee amount in UGX:", "3500");
+      if (amount === null) return;
+      const numeric = Number(amount);
+      if (!Number.isInteger(numeric) || numeric < 0 || numeric > 100000) throw new Error("Enter an integer from 0 to 100000 UGX.");
+      await apiFetch("/admin/settings/delivery_fee_ugx", { method: "PUT", body: JSON.stringify({ value: { amount: numeric } }) });
+      showToast("Delivery fee setting updated.");
       return renderDashboard();
     }
     if (action === "moderate-review") {
