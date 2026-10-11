@@ -392,7 +392,7 @@ class Order(TimestampMixin, Base):
         ),
         CheckConstraint("status IN ('PENDING','CONFIRMED','PREPARING','READY','OUT_FOR_DELIVERY','DELIVERED','PARTIALLY_REJECTED','PARTIALLY_DELIVERED','CANCELLED','REJECTED','FAILED')", name="ck_order_status"),
         CheckConstraint("payment_status IN ('UNPAID','PENDING','PAID','FAILED','REFUNDED')", name="ck_order_payment_status"),
-        CheckConstraint("subtotal_ugx >= 0 AND gross_delivery_fee_ugx >= 0 AND multi_retailer_discount_ugx >= 0 AND delivery_fee_ugx >= 0 AND total_ugx >= 0", name="ck_order_amounts"),
+        CheckConstraint("subtotal_ugx >= 0 AND gross_delivery_fee_ugx >= 0 AND multi_retailer_discount_ugx >= 0 AND delivery_fee_ugx >= 0 AND total_ugx >= 0 AND platform_commission_ugx >= 0", name="ck_order_amounts"),
         CheckConstraint("multi_retailer_discount_ugx <= gross_delivery_fee_ugx AND delivery_fee_ugx = gross_delivery_fee_ugx - multi_retailer_discount_ugx", name="ck_order_delivery_discount_matches_components"),
         CheckConstraint("total_ugx = subtotal_ugx + delivery_fee_ugx", name="ck_order_total_matches_components"),
         Index("ix_orders_created_status", "created_at", "status"),
@@ -410,6 +410,8 @@ class Order(TimestampMixin, Base):
     multi_retailer_discount_percent: Mapped[Decimal] = mapped_column(Numeric(7, 3), default=Decimal("0"), server_default="0", nullable=False)
     delivery_fee_ugx: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     total_ugx: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    platform_commission_percent: Mapped[Decimal] = mapped_column(Numeric(7, 3), default=Decimal("8"), server_default="8", nullable=False)
+    platform_commission_ugx: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0", nullable=False)
     status: Mapped[str] = mapped_column(String(24), default="PENDING", nullable=False, index=True)
     payment_status: Mapped[str] = mapped_column(String(20), default="UNPAID", nullable=False, index=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(100))
