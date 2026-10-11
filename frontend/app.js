@@ -1210,7 +1210,7 @@
     if(role==="CUSTOMER") return [...common,["orders","Orders"],["wishlist","Saved items"],["addresses","Delivery points"],["notifications","Notifications"],["profile","Profile"]];
     if(role==="RETAILER") return [...common,["earnings","Earnings"],["products","Products"],["fulfillments","Fulfilments"],["profile","Store profile"]];
     if(role==="DELIVERY_AGENT") return [...common,["available","Delivery offers"],["active","Active delivery"],["history","Delivery history"],["earnings","Earnings"],["profile","Rider profile"]];
-    return [...common,["analytics","Analytics"],["users","Users"],["retailers","Retailers"],["products","Products"],["categories","Categories"],["orders","Orders"],["agents","Delivery agents"],["reviews","Reviews"],["settlements","Settlements"],["settings","Settings"],["audit","Audit log"]];
+    return [...common,["analytics","Analytics"],["users","Users"],["retailers","Retailers"],["products","Products"],["categories","Categories"],["orders","Orders"],["agents","Delivery agents"],["reviews","Reviews"],["settlements","Settlements"],["rider-payouts","Rider payouts"],["reconciliation","Reconciliation"],["settings","Settings"],["audit","Audit log"]];
   }
   async function renderDashboard() {
     if (!state.user) return showAuth();
@@ -1561,7 +1561,7 @@
   function dashboardPage(title,subtitle,content){return `<div class="dashboard-page-head"><div><span class="eyebrow">WEWE workspace</span><h2>${escapeHtml(title)}</h2><p>${escapeHtml(subtitle)}</p></div></div><div class="dashboard-panel dashboard-content-panel">${content}</div>`;}
   function dashboardEmpty(title,subtitle){return `<div class="dashboard-empty"><div class="empty-icon">W</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(subtitle)}</p></div>`;}
   function dashboardTable(columns,rows,actions){return `<div class="dashboard-table"><div class="dashboard-table-head">${columns.map(c=>`<span>${escapeHtml(c)}</span>`).join("")}<span>Actions</span></div>${rows.map(r=>`<div class="dashboard-table-row">${r.cells.map(cell=>`<span>${cell}</span>`).join("")}<span class="row-actions">${actions(r.raw)}</span></div>`).join("")}</div>`;}
-  function sectionLabel(s){return ({users:"Users",retailers:"Retailers",products:"Products",orders:"Orders",agents:"Delivery agents",reviews:"Reviews",analytics:"Analytics",categories:"Categories",settlements:"Settlements",settings:"Settings",audit:"Audit log"})[s]||"Workspace";}
+  function sectionLabel(s){return ({users:"Users",retailers:"Retailers",products:"Products",orders:"Orders",agents:"Delivery agents",reviews:"Reviews",analytics:"Analytics",categories:"Categories",settlements:"Settlements",settings:"Settings",audit:"Audit log", "rider-payouts":"Rider payouts", reconciliation:"Financial reconciliation"})[s]||"Workspace";}
   async function adminDashboard(){
     const section=state.dashboardSection;
     if(section==="overview"){const [m,statuses,pending]=await Promise.all([apiFetch("/admin/metrics"),apiFetch("/admin/reports/order-statuses"),apiFetch("/admin/retailers?verification_status=PENDING")]);return `<div class="dashboard-hero admin-hero"><div><span class="eyebrow">Admin control center</span><h2>Platform overview</h2><p>Monitor marketplace health and resolve operational issues from one workspace.</p></div><div class="admin-hero-actions"><button class="button-primary" data-action="dashboard-section" data-section="retailers">Review retailers</button><button class="button-outline" data-action="dashboard-section" data-section="settlements">Settlements</button></div></div><div class="stat-grid dashboard-stat-grid"><div class="stat-card"><span>Users</span><b class="stat-value">${m.users??m.total_users??0}</b><small>Registered accounts</small></div><div class="stat-card"><span>Orders</span><b class="stat-value">${m.orders??m.total_orders??0}</b><small>Platform orders</small></div><div class="stat-card"><span>Active retailers</span><b class="stat-value">${m.active_retailers??0}</b><small>Verified and active</small></div><div class="stat-card"><span>Pending verification</span><b class="stat-value">${m.pending_retailers??pending.length}</b><small>Needs review</small></div></div><div class="dashboard-grid-3"><div class="dashboard-panel dashboard-span-2"><div class="panel-head"><div><h2>Order health</h2><small>Current status distribution</small></div><button class="text-link" data-action="dashboard-section" data-section="orders">Open orders →</button></div><div class="status-bars">${(Array.isArray(statuses)?statuses:Object.entries(statuses||{}).map(([status,count])=>({status,count}))).map(x=>`<div class="status-bar-row"><div><span>${escapeHtml(x.status||x.key||"Unknown")}</span><b>${x.count??x.total??0}</b></div><div class="status-bar"><i style="width:${Math.min(100,Number(x.count??x.total??0))}%"></i></div></div>`).join("")}</div></div><div class="dashboard-panel"><h2>Quick actions</h2><div class="quick-actions"><button data-action="dashboard-section" data-section="users">👥 Users</button><button data-action="dashboard-section" data-section="products">📦 Products</button><button data-action="dashboard-section" data-section="analytics">📊 Analytics</button><button data-action="dashboard-section" data-section="audit">🛡 Audit log</button></div></div></div>`;}
@@ -1655,6 +1655,22 @@
     }
     if(section==="categories"){const rows=await apiFetch("/categories");return dashboardPage("Categories","Keep the marketplace taxonomy organized.",`<div class="dashboard-toolbar"><button class="button-primary" data-action="new-category">Add category</button></div>${rows.map(x=>`<div class="dashboard-list-item"><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.description||"Marketplace category")}</small></div>`).join("")||dashboardEmpty("No categories.","Create the first marketplace category.")}`);}
     if(section==="settlements"){const data=await apiFetch("/admin/settlements"),rows=Array.isArray(data)?data:data.items||[];return dashboardPage("Retailer settlements","Technical settlement operations only. Commercial eligibility and economics remain frozen until approved.",rows.length?dashboardTable(["Reference","Retailer","Amount","Status"],rows.map(raw=>({raw,cells:[escapeHtml(raw.settlement_reference||raw.id),escapeHtml(raw.retailer_id||""),money(raw.amount_ugx),statusBadge(raw.status)]})),raw=>raw.status==="DRAFT"?`<button data-action="settlement-submit" data-id="${escapeHtml(raw.id)}">Submit</button>`:raw.status==="SUBMITTED"?`<button data-action="settlement-review" data-id="${escapeHtml(raw.id)}">Review</button>`:""):dashboardEmpty("No settlement records.","Settlement records will appear here when created by the authorized workflow."));}
+    if(section==="rider-payouts"){
+      const rows=await apiFetch("/admin/rider-payouts");
+      return dashboardPage("Rider payouts","Scheduled payout batches for delivery-agent earnings.",
+        '<div class="dashboard-toolbar"><button class="button-primary" data-action="generate-rider-payouts">Generate rider payout batches</button></div>'+
+        (rows.length ? dashboardTable(["Batch","Rider","Amount","Status"],rows.map(raw=>({raw,cells:[escapeHtml(raw.batch_reference||raw.id),escapeHtml(raw.agent_id||""),money(raw.amount_ugx),statusBadge(raw.status)]})),raw=>raw.status==="DRAFT"?'<button data-action="rider-payout-submit" data-id="'+escapeHtml(raw.id)+'">Submit</button>':raw.status==="SUBMITTED"?'<button data-action="rider-payout-settle" data-id="'+escapeHtml(raw.id)+'">Mark paid</button>':"") : dashboardEmpty("No rider payout batches.","Generate batches on the configured rider payout day.")));
+    }
+    if(section==="reconciliation"){
+      const r=await apiFetch("/admin/reconciliation");
+      return dashboardPage("Financial reconciliation","Control totals for retailer obligations, rider earnings and pending payout instructions.",
+        '<div class="dashboard-toolbar"><button class="button-outline" data-action="dashboard-section" data-section="reconciliation">↻ Refresh</button></div>'+
+        '<div class="stat-grid dashboard-stat-grid">'+
+        '<div class="stat-card"><span>Retailer ledger balance</span><b class="stat-value">'+money(r.retailer?.ledger_balance_ugx||0)+'</b><small>Credits less debits</small></div>'+
+        '<div class="stat-card"><span>Retailer pending payouts</span><b class="stat-value">'+money(r.retailer?.pending_settlement_ugx||0)+'</b><small>Controlled settlement instructions</small></div>'+
+        '<div class="stat-card"><span>Rider pending earnings</span><b class="stat-value">'+money(r.riders?.pending_earnings_ugx||0)+'</b><small>Awaiting payout</small></div>'+
+        '<div class="stat-card"><span>Tracked obligations</span><b class="stat-value">'+money(r.controls?.third_party_obligations_tracked||0)+'</b><small>Accounting control total</small></div></div>');
+    }
     const paths={users:"/admin/users",retailers:"/admin/retailers",products:"/admin/products",orders:"/admin/orders",agents:"/admin/delivery-agents",reviews:"/admin/reviews",settings:"/admin/settings",audit:"/admin/audit-logs"};const data=await apiFetch(paths[section]);const rows=Array.isArray(data)?data:data.items||[];if(!rows.length)return dashboardPage(sectionLabel(section),`Manage ${sectionLabel(section).toLowerCase()} from one place.`,dashboardEmpty("Nothing here yet.","There are no records requiring action."));
     return dashboardPage(sectionLabel(section),`Manage ${sectionLabel(section).toLowerCase()} from one place.`,dashboardTable(["Item","Status","Details"],rows.map(raw=>({raw,cells:[`<b>${escapeHtml(raw.name||raw.business_name||raw.order_number||raw.action||raw.key||raw.id)}</b>`,escapeHtml(raw.verification_status||raw.status||""),escapeHtml(raw.email||raw.payment_status||raw.category_name||raw.resource_type||raw.availability_status||raw.value||"")]})),raw=>{
       const id=raw.id;
@@ -2003,6 +2019,23 @@
     if (action === "moderate-review") {
       await apiFetch("/admin/reviews/" + encodeURIComponent(button.dataset.id) + "/moderation", { method: "PATCH", body: JSON.stringify({ status: button.dataset.status }) });
       showToast("Review moderation updated.");
+      return renderDashboard();
+    }
+    if (action === "generate-rider-payouts") {
+      await apiFetch("/admin/rider-payouts/generate", { method: "POST" });
+      showToast("Rider payout batches generated.");
+      return renderDashboard();
+    }
+    if (action === "rider-payout-submit") {
+      await apiFetch("/admin/rider-payouts/" + encodeURIComponent(button.dataset.id) + "/submit", { method: "POST" });
+      showToast("Rider payout submitted.");
+      return renderDashboard();
+    }
+    if (action === "rider-payout-settle") {
+      const reference = prompt("Enter the payout/provider reference:");
+      if (!reference) return;
+      await apiFetch("/admin/rider-payouts/" + encodeURIComponent(button.dataset.id) + "/settle", { method: "POST", body: JSON.stringify({ payout_reference: reference.trim() }) });
+      showToast("Rider payout marked paid.");
       return renderDashboard();
     }
     if (action === "settlement-submit") {
