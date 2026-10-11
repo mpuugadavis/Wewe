@@ -240,6 +240,8 @@ class OrderOut(BaseModel):
     subtotal_ugx: int
     delivery_fee_ugx: int
     total_ugx: int
+    platform_commission_percent: Any = 0
+    platform_commission_ugx: int = 0
     status: str
     payment_status: str
     created_at: Any
