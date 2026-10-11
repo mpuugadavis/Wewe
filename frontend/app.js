@@ -1892,8 +1892,8 @@
 
     on("#modalContent", "change", event => {
       if (event.target.closest('form[data-form="checkout"]')) {
-        toggleCheckoutFields();
         if (event.target.name === "delivery_point_id") selectCheckoutPoint(event.target.value);
+        else toggleCheckoutFields();
       }
       if (event.target.closest('form[data-form="register"]')) updateRegistrationFields();
     });
