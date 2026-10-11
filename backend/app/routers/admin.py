@@ -65,6 +65,11 @@ from app.schemas import (
 )
 from app.services.orders import order_payload
 from app.services.delivery_dispatch import dispatch_ready_queue
+from app.services.retailer_settlement_batches import (
+    RetailerNotFoundError,
+    RetailerSettlementBatchError,
+    generate_retailer_settlement_batch,
+)
 from app.services.retailer_settlement_operations import (
     RetailerSettlementOperationError,
     SettlementIdempotencyConflictError,
@@ -877,6 +882,64 @@ def admin_settlements(
         }
         for row in rows
     ]
+
+
+@router.post("/settlements/generate", status_code=status.HTTP_201_CREATED)
+def generate_admin_settlements(
+    retailer_id: UUID | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    principal: Principal = Depends(require_roles("ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Generate balanced DRAFT retailer payout instructions.
+
+    This endpoint only creates payout instructions. It does not move money,
+    submit to a provider, or mark a settlement as paid.
+    """
+    try:
+        results = generate_retailer_settlement_batch(
+            db,
+            retailer_id=retailer_id,
+            limit=limit,
+        )
+    except RetailerNotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"code": "retailer_not_found", "message": str(exc)}) from exc
+    except RetailerSettlementBatchError as exc:
+        raise HTTPException(status_code=422, detail={"code": "settlement_batch_generation_failed", "message": str(exc)}) from exc
+
+    generated = []
+    for result in results:
+        if result.settlement_id is not None:
+            _audit(
+                db,
+                principal.user.id,
+                "SETTLEMENT_BATCH_GENERATED",
+                "retailer_settlement",
+                result.settlement_id,
+                {
+                    "retailer_id": str(result.retailer_id),
+                    "amount_ugx": result.amount_ugx,
+                    "selected_entry_count": result.selected_entry_count,
+                    "threshold_ugx": result.threshold_ugx,
+                },
+            )
+        generated.append({
+            "retailer_id": result.retailer_id,
+            "settlement_id": result.settlement_id,
+            "amount_ugx": result.amount_ugx,
+            "threshold_ugx": result.threshold_ugx,
+            "selected_entry_count": result.selected_entry_count,
+            "eligible": result.eligible,
+            "reason": result.reason,
+        })
+
+    db.commit()
+    return {
+        "currency": "UGX",
+        "requested_retailer_id": retailer_id,
+        "generated_count": sum(1 for item in generated if item["settlement_id"] is not None),
+        "results": generated,
+    }
 
 
 @router.post("/settlements", status_code=status.HTTP_201_CREATED)
