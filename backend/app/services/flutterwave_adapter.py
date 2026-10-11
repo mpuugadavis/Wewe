@@ -19,7 +19,38 @@ FLUTTERWAVE_TOKEN_URL = "https://idp.flutterwave.com/realms/flutterwave/protocol
 
 
 class FlutterwaveAPIError(RuntimeError):
-    """The Flutterwave API could not complete a request safely."""
+    """A safe, structured error returned by Flutterwave."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: str | None = None,
+        http_status: int | None = None,
+        provider_code: str | None = None,
+        provider_type: str | None = None,
+        validation_errors: list[dict] | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.http_status = http_status
+        self.provider_code = provider_code
+        self.provider_type = provider_type
+        self.validation_errors = validation_errors or []
+        self.request_id = request_id
+
+    def diagnostic(self) -> dict:
+        return {
+            "provider": "FLUTTERWAVE",
+            "stage": self.stage,
+            "http_status": self.http_status,
+            "provider_code": self.provider_code,
+            "provider_type": self.provider_type,
+            "message": str(self),
+            "validation_errors": self.validation_errors,
+            "request_id": self.request_id,
+        }
 
 
 class FlutterwaveProvider:
