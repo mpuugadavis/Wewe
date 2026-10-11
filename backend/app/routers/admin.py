@@ -810,10 +810,19 @@ def get_settings(db: Session = Depends(get_db)) -> dict:
 
 @router.put("/settings/{key}")
 def update_setting(key: str, payload: AdminSettingUpdate, principal: Principal = Depends(require_roles("ADMIN")), db: Session = Depends(get_db)) -> dict:
-    if key not in {"delivery_fee_ugx"}:
+    if key not in {"delivery_fee_ugx", "platform_commission"}:
         raise HTTPException(status_code=404, detail={"code": "setting_not_found", "message": "Setting is not editable through this endpoint."})
-    if "amount" not in payload.value or isinstance(payload.value["amount"], bool) or not isinstance(payload.value["amount"], int) or not 0 <= payload.value["amount"] <= 100_000:
-        raise HTTPException(status_code=422, detail={"code": "invalid_setting", "message": "Delivery fee amount must be an integer from 0 to 100000 UGX."})
+    if key == "delivery_fee_ugx":
+        if "amount" not in payload.value or isinstance(payload.value["amount"], bool) or not isinstance(payload.value["amount"], int) or not 0 <= payload.value["amount"] <= 100_000:
+            raise HTTPException(status_code=422, detail={"code": "invalid_setting", "message": "Delivery fee amount must be an integer from 0 to 100000 UGX."})
+    elif key == "platform_commission":
+        value = payload.value.get("percent")
+        try:
+            percent = float(value)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail={"code": "invalid_setting", "message": "Platform commission percent must be a number from 0 to 30."}) from None
+        if percent < 0 or percent > 30:
+            raise HTTPException(status_code=422, detail={"code": "invalid_setting", "message": "Platform commission percent must be from 0 to 30."})
     setting = db.get(PlatformSetting, key)
     if setting is None:
         setting = PlatformSetting(key=key, value=payload.value, updated_by=principal.user.id)
