@@ -1336,13 +1336,19 @@
     }
     if (section === "products") {
       const products = await apiFetch("/retailers/me/products");
-      const items = products.map(({ product, listing }) =>
-        '<div class="dashboard-list-item"><div class="dashboard-item-main"><span class="mini-product-image placeholder">W</span><span><b>' +
-        escapeHtml(product.name) + '</b><small>' + money(listing.price_ugx) + ' · ' + Number(listing.stock_available) + ' available</small></span></div>' +
-        '<div class="row-actions"><button data-action="edit-retailer-product" data-listing-id="' + escapeHtml(listing.retailer_product_id) +
-        '" data-name="' + escapeHtml(product.name) + '" data-price="' + Number(listing.price_ugx) + '">Edit</button>' +
-        '<button data-action="deactivate-retailer-product" data-listing-id="' + escapeHtml(listing.retailer_product_id) + '">Deactivate</button></div></div>'
-      ).join("");
+      const productRows = Array.isArray(products) ? products : [];
+      const items = productRows.map(product => {
+        const listing = Array.isArray(product?.listings) ? product.listings.find(item => item?.retailer_product_id) || product.listings[0] : null;
+        if (!product || !listing) return "";
+        const listingId = listing.retailer_product_id || listing.id;
+        const price = Number(listing.price_ugx || 0);
+        const stock = Number(listing.stock_available || 0);
+        return '<div class="dashboard-list-item"><div class="dashboard-item-main"><span class="mini-product-image placeholder">W</span><span><b>' +
+          escapeHtml(product.name || "Unnamed product") + '</b><small>' + money(price) + ' · ' + stock + ' available</small></span></div>' +
+          '<div class="row-actions"><button data-action="edit-retailer-product" data-listing-id="' + escapeHtml(listingId) +
+          '" data-name="' + escapeHtml(product.name || "") + '" data-price="' + price + '">Edit</button>' +
+          '<button data-action="deactivate-retailer-product" data-listing-id="' + escapeHtml(listingId) + '">Deactivate</button></div></div>';
+      }).filter(Boolean).join("");
       const content = '<div class="dashboard-toolbar"><span class="muted">' + products.length + ' listings</span><button class="button-primary" data-action="new-product">Add product</button></div>' +
         (items || dashboardEmpty("No listings yet.", "Add your first product to start selling on WEWE."));
       return dashboardPage("Products", "Create, price, stock and manage your active campus listings.", content);
