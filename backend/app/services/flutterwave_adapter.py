@@ -135,14 +135,62 @@ class FlutterwaveProvider:
         request = URLRequest(f"{base}{path}", data=body, headers=headers, method=method)
         try:
             with urlopen(request, timeout=20) as response:
-                decoded = json.loads(response.read().decode("utf-8"))
+                raw = response.read().decode("utf-8")
+                decoded = json.loads(raw)
         except HTTPError as exc:
-            detail = exc.read(4096).decode("utf-8", errors="replace")
-            raise FlutterwaveAPIError(f"Flutterwave returned HTTP {exc.code}: {detail}") from None
+            raw = exc.read(4096).decode("utf-8", errors="replace")
+            try:
+                decoded = json.loads(raw)
+            except json.JSONDecodeError:
+                decoded = None
+            error = decoded.get("error") if isinstance(decoded, dict) else None
+            if not isinstance(error, dict):
+                error = {}
+            validation_errors = error.get("validation_errors")
+            if not isinstance(validation_errors, list):
+                validation_errors = []
+            request_id = (
+                (decoded.get("request_id") if isinstance(decoded, dict) else None)
+                or error.get("request_id")
+                or error.get("requestId")
+            )
+            message = error.get("message") or (
+                decoded.get("message") if isinstance(decoded, dict) else None
+            ) or "Flutterwave rejected the request."
+            raise FlutterwaveAPIError(
+                str(message),
+                stage=path,
+                http_status=exc.code,
+                provider_code=str(error.get("code")) if error.get("code") is not None else None,
+                provider_type=str(error.get("type")) if error.get("type") is not None else None,
+                validation_errors=[item for item in validation_errors if isinstance(item, dict)],
+                request_id=str(request_id) if request_id else None,
+            ) from None
         except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-            raise FlutterwaveAPIError(f"Flutterwave request failed ({type(exc).__name__}).") from None
+            raise FlutterwaveAPIError(
+                f"Flutterwave request failed ({type(exc).__name__}).",
+                stage=path,
+            ) from None
         if not isinstance(decoded, dict):
-            raise FlutterwaveAPIError("Flutterwave returned an invalid response.")
+            raise FlutterwaveAPIError("Flutterwave returned an invalid response.", stage=path)
+        if decoded.get("status") == "failed":
+            error = decoded.get("error")
+            if not isinstance(error, dict):
+                error = {}
+            validation_errors = error.get("validation_errors")
+            if not isinstance(validation_errors, list):
+                validation_errors = []
+            request_id = decoded.get("request_id") or error.get("request_id") or error.get("requestId")
+            message = error.get("message") or decoded.get("message") or "Flutterwave rejected the request."
+            raise FlutterwaveAPIError(
+                str(message),
+                stage=path,
+                http_status=200,
+                provider_code=str(error.get("code")) if error.get("code") is not None else None,
+                provider_type=str(error.get("type")) if error.get("type") is not None else None,
+                validation_errors=[item for item in validation_errors if isinstance(item, dict)],
+                request_id=str(request_id) if request_id else None,
+            )
         return decoded
 
     @staticmethod
