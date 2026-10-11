@@ -382,11 +382,11 @@ def _build_provider(name: str) -> RoutingProvider:
             )
         return GoogleMapsRoutingProvider(settings.google_maps_api_key.get_secret_value())
     if name == "MAPBOX":
-        if not settings.mapbox_access_token:
+        if not settings.mapbox_server_key:
             raise RoutingProviderError(
                 "routing_provider_unconfigured", "Mapbox routing is not configured for this deployment."
             )
-        return MapboxRoutingProvider(settings.mapbox_access_token.get_secret_value())
+        return MapboxRoutingProvider(settings.mapbox_server_key.get_secret_value())
     if name == "OSRM":
         return OsrmRoutingProvider()
     raise RoutingProviderError("routing_provider_unavailable", f"Routing provider {name} is not available.")
