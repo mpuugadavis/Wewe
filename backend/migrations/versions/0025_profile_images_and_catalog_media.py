@@ -66,8 +66,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
     for product_name in DEMO_IMAGES:
-        op.execute(
+        bind.execute(
             sa.text(
                 "DELETE FROM product_images "
                 "WHERE product_id IN (SELECT id FROM products WHERE name = :name) "
