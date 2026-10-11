@@ -541,10 +541,19 @@ def delivery_earnings(
     paid = sum(row.amount_ugx for row in rows if row.status == "PAID")
     return {
         "currency": "UGX",
+        "owed_by_wewe_ugx": pending,
         "pending_ugx": pending,
         "paid_ugx": paid,
+        "payout_status": "AWAITING_SCHEDULED_PAYOUT" if pending else "UP_TO_DATE",
         "entries": [
-            {"assignment_id": row.assignment_id, "amount_ugx": row.amount_ugx, "status": row.status, "created_at": row.created_at, "paid_at": row.paid_at}
+            {
+                "assignment_id": row.assignment_id,
+                "amount_ugx": row.amount_ugx,
+                "status": row.status,
+                "created_at": row.created_at,
+                "paid_at": row.paid_at,
+                "payout_reference": row.payout_reference,
+            }
             for row in rows
         ],
     }
