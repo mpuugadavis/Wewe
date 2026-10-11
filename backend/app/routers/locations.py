@@ -14,9 +14,13 @@ router = APIRouter(prefix="/locations", tags=["locations"])
 
 @router.get("/maps-config")
 def maps_config() -> dict:
-    """Return only the browser-restricted Maps key; never expose the server routing key."""
+    """Return only the browser-safe Mapbox key."""
     from app.config import get_settings
-    return {"google_maps_api_key": get_settings().google_maps_browser_api_key}
+    settings = get_settings()
+    return {
+        "mapbox_public_key": settings.mapbox_public_key,
+        "google_maps_api_key": None,
+    }
 
 
 @router.get("/universities")
