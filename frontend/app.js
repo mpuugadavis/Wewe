@@ -114,6 +114,19 @@
     return `UGX ${Number(value || 0).toLocaleString("en-UG")}`;
   }
 
+  function normalizeUgandanPaymentPhone(value) {
+    let cleaned = String(value || "").trim()
+      .replace(/[\s\-()]/g, "");
+    if (cleaned.startsWith("00")) cleaned = "+" + cleaned.slice(2);
+    else if (cleaned.startsWith("0") && /^\d{10}$/.test(cleaned)) cleaned = "+256" + cleaned.slice(1);
+    else if (cleaned.startsWith("256") && /^256\d+$/.test(cleaned)) cleaned = "+" + cleaned;
+    if (!/^\+2567\d{8}$/.test(cleaned)) {
+      throw new Error("Enter a valid Ugandan mobile number, for example +256700000000.");
+    }
+    return cleaned;
+  }
+
+
   function messageFrom(payload, status) {
     const detail = payload?.detail;
     if (typeof detail === "string") return detail;
@@ -1083,7 +1096,7 @@
     try {
       const paymentBody = {
         method: form.elements.payment_method.value,
-        phone: form.elements.phone.value.trim(),
+        phone: normalizeUgandanPaymentPhone(form.elements.phone.value),
         email: form.elements.email.value.trim()
       };
       form.dataset.paymentIdempotencyKey ||= crypto.randomUUID();
@@ -1140,11 +1153,12 @@
     if (!["MTN_MOMO", "AIRTEL_MONEY"].includes(method)) throw new Error("Choose an online mobile-money payment method.");
     if (!phone) throw new Error("Enter the mobile-money phone number.");
     if (!email) throw new Error("Enter an email address for the payment receipt.");
+    const normalizedPhone = normalizeUgandanPaymentPhone(phone);
     const idempotencyKey = crypto.randomUUID();
     const payment = await apiFetch(`/orders/${encodeURIComponent(orderId)}/payments`, {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify({ method, phone, email })
+      body: JSON.stringify({ method, phone: normalizedPhone, email })
     });
     const checkoutUrl = safeImage(payment?.checkout_url);
     $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Payment retry</div><h2>Continue payment</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${escapeHtml(payment?.status || "Payment initiated")}</p>${checkoutUrl ? `<p><a class="button-primary" href="${escapeHtml(checkoutUrl)}" target="_blank" rel="noopener noreferrer">Continue mobile payment</a></p>` : ""}<button class="button-outline" data-action="close-modal">Close</button>`;
