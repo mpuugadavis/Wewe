@@ -2186,6 +2186,12 @@
   }
 
   function installStyles() {
+    if (!document.querySelector("#commerceUiStyles")) {
+      const style = document.createElement("style");
+      style.id = "commerceUiStyles";
+      style.textContent = ".password-input-wrap{position:relative;display:block}.password-input-wrap input{padding-right:46px!important;width:100%}.password-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#6d6475;cursor:pointer;font-size:16px;padding:7px;line-height:1}.password-toggle:hover{color:#4b3a5e}.product-price{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.price-current{font-size:17px;font-weight:900}.price-old{text-decoration:line-through;color:#93899c;font-size:11px;font-weight:700}.discount-badge{display:inline-flex;align-items:center;border-radius:6px;padding:3px 6px;background:#e9f7ef;color:#18734f;font-size:10px;font-weight:900}.listing-price{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}.listing-price .price-current{font-size:14px}.listing-price .price-old{font-size:10px}.listing-price .discount-badge{font-size:9px}";
+      document.head.appendChild(style);
+    }
     const account = $("#accountButton");
     if (account) account.classList.remove("hidden");
     const mobileCart = $("#mobileCartNav");
