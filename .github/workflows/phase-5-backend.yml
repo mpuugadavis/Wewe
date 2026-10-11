@@ -1,0 +1,41 @@
+name: Phase 5 backend verification
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/phase-5-backend.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/phase-5-backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend and test dependencies
+        run: pip install ".[test]"
+
+      - name: Run backend test suite
+        run: pytest
+
+      - name: Verify Alembic migration graph
+        run: alembic heads
