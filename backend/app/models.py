@@ -68,7 +68,11 @@ class User(TimestampMixin, Base):
 
     @property
     def profile_image_url(self) -> str | None:
-        return f"/api/v1/profile-images/{self.id}" if self.profile_image_storage_key else None
+        if not self.profile_image_storage_key:
+            return None
+        filename = self.profile_image_storage_key.rsplit("/", 1)[-1]
+        version = filename.split(".", 1)[0]
+        return f"/api/v1/profile-images/{self.id}?v={version}"
 
 
 class CustomerProfile(TimestampMixin, Base):
