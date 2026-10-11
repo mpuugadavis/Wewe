@@ -101,7 +101,7 @@ def seed() -> None:
             "Livingstone Hall": ("0.338770", "32.567990"),
             "Lumumba Hall": ("0.331960", "32.566610"),
             "Mary Stuart Hall": ("0.330580", "32.566590"),
-            "Mitchell Hall": ("0.332530", "32.570580"),
+            "Mitchell Hall": ("0.3338875", "32.5705214"),
             "Nkrumah Hall": ("0.335840", "32.569380"),
             "Nsibirwa Hall": ("0.336080", "32.569900"),
             "University Hall": ("0.332897", "32.572208"),
@@ -160,7 +160,7 @@ def seed() -> None:
                 latitude=latitude,
                 longitude=longitude,
             )
-        pickup_location = public_point("Main Library pickup desk", kind="PICKUP_POINT", directions="Ground floor reception", latitude="0.327000", longitude="32.580600")
+        pickup_location = public_point("Main Library pickup desk", kind="PICKUP_POINT", directions="Ground floor reception", latitude="0.334873", longitude="32.567497")
         pickup = db.get(PickupPoint, pickup_location.id)
         if pickup is None:
             db.add(PickupPoint(delivery_point_id=pickup_location.id, contact_name="WEWE desk", opening_hours={"weekdays": "09:00-18:00", "weekends": "10:00-16:00"}))
