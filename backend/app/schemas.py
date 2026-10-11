@@ -266,11 +266,24 @@ class PaymentCreate(BaseModel):
         except EmailNotValidError as exc:
             raise ValueError("Enter a valid email address for mobile-money checkout") from exc
 
-    @model_validator(mode="after")
-    def require_mobile_number(self) -> "PaymentCreate":
-        if not self.phone.startswith("+") or not self.phone[1:].isdigit():
-            raise ValueError("A phone number in international format is required for mobile money")
-        return self
+    @field_validator("phone")
+    @classmethod
+    def normalize_payment_phone(cls, value: str) -> str:
+        # Accept the common Ugandan formats customers actually enter at
+        # checkout, then canonicalize to E.164 before the provider adapter sees
+        # the number. Flutterwave v4 receives the canonical number only.
+        cleaned = value.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        if cleaned.startswith("00"):
+            cleaned = "+" + cleaned[2:]
+        elif cleaned.startswith("0") and len(cleaned) == 10 and cleaned.isdigit():
+            cleaned = "+256" + cleaned[1:]
+        elif cleaned.startswith("256") and cleaned.isdigit():
+            cleaned = "+" + cleaned
+        if not cleaned.startswith("+") or not cleaned[1:].isdigit():
+            raise ValueError("Enter a valid Ugandan mobile number, for example +256700000000")
+        if len(cleaned) != 13 or not cleaned.startswith("+2567"):
+            raise ValueError("Enter a valid Ugandan mobile number, for example +256700000000")
+        return cleaned
 
 
 class PaymentOut(ORMModel):
