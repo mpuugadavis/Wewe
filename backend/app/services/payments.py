@@ -13,6 +13,9 @@ class PaymentRequest:
     currency: str
     phone: str
     callback_url: str
+    method: str = ""
+    customer_email: str | None = None
+    customer_name: str | None = None
 
 
 @dataclass(frozen=True)
