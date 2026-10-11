@@ -1243,7 +1243,7 @@
 
   function renderOrders(orders, actions = false) {
     if (!orders.length) return "";
-    return orders.map(order => `<div class="order-card"><div class="panel-head"><div><b>${escapeHtml(order.order_number)}</b><small>${formatDate(order.created_at)}</small></div>${statusBadge(order.status)}</div><div>${(order.items || []).map(item => `${escapeHtml(item.product_name || item.name)} × ${Number(item.quantity)}`).join(", ")}</div><div class="panel-head"><span>Payment ${statusBadge(order.payment_status)}</span><b>${money(order.total_ugx)}</b></div>${actions ? `<div class="row-actions"><button data-action="order-details" data-id="${escapeHtml(order.id)}">Details</button>${["PENDING","CONFIRMED","PROCESSING"].includes(order.status) ? `<button data-action="cancel-order" data-id="${escapeHtml(order.id)}">Cancel</button>` : ""}<button data-action="reorder" data-id="${escapeHtml(order.id)}">Order again</button></div>` : ""}</div>`).join("");
+    return orders.map(order => `<div class="order-card"><div class="panel-head"><div><b>${escapeHtml(order.order_number)}</b><small>${formatDate(order.created_at)}</small></div>${statusBadge(order.status)}</div><div>${(order.items || []).map(item => `${escapeHtml(item.product_name || item.name)} × ${Number(item.quantity)}`).join(", ")}</div><div class="panel-head"><span>Payment ${statusBadge(order.payment_status)}</span><b>${money(order.total_ugx)}</b></div>${actions ? `<div class="row-actions"><button data-action="order-details" data-id="${escapeHtml(order.id)}">Details</button>${["PENDING","CONFIRMED","PREPARING"].includes(order.status) ? `<button data-action="cancel-order" data-id="${escapeHtml(order.id)}">Cancel</button>` : ""}<button data-action="reorder" data-id="${escapeHtml(order.id)}">Order again</button></div>` : ""}</div>`).join("");
   }
 
   async function retailerDashboard() {
@@ -1620,7 +1620,7 @@
           : delivery.status==="ACCEPTED"
             ? `<button data-action="admin-release-delivery" data-id="${escapeHtml(delivery.id)}">Release rider</button>`
             : "").join("");
-        const statusButton=["PENDING","CONFIRMED","PROCESSING","READY"].includes(raw.status)
+        const statusButton=["PENDING","CONFIRMED","PREPARING","READY"].includes(raw.status)
           ? `<button data-action="admin-order-cancel" data-id="${escapeHtml(id)}">Cancel</button>` : "";
         return statusButton + deliveryButtons;
       }
@@ -1659,7 +1659,7 @@
   }
 
   function renderOrderModal(order, tracking) {
-    const stages = ["PENDING", "CONFIRMED", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"];
+    const stages = ["PENDING", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"];
     const currentStage = stages.indexOf(order.status);
     const timeline = stages.map((stage, index) => '<div class="tracking-step ' + (index <= currentStage ? "done" : "") + ' ' + (stage === order.status ? "current" : "") + '"><span>' + (index <= currentStage ? "✓" : index + 1) + '</span><div><b>' + escapeHtml(stage.replaceAll("_", " ")) + '</b><small>' + (stage === order.status ? "Current status" : index < currentStage ? "Completed" : "Waiting") + '</small></div></div>').join("");
     return '<div class="modal-head"><div><div class="section-kicker">Order</div><h2>' + escapeHtml(order.order_number) + '</h2></div><button class="close-modal" data-action="close-modal">×</button></div>' +
