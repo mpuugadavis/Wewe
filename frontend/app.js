@@ -803,6 +803,10 @@
       if (state.checkoutMarker) {
         try { state.checkoutMap.removeLayer(state.checkoutMarker); } catch {}
       }
+      if (state.checkoutAccuracyCircle) {
+        try { state.checkoutMap.removeLayer(state.checkoutAccuracyCircle); } catch {}
+        state.checkoutAccuracyCircle = null;
+      }
       state.checkoutMarker = window.L.marker([Number(point.latitude), Number(point.longitude)])
         .addTo(state.checkoutMap)
         .bindTooltip(point.name || "Delivery destination", { direction: "top" })
