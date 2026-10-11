@@ -68,6 +68,7 @@ def test_initiate_uses_v4_uganda_mobile_money(method, expected_network):
     assert payment_method_payload["mobile_money"]["network"] == expected_network
     assert payment_method_payload["mobile_money"]["phone_number"] == "700000000"
     charge_payload = captured[2][2]
+    assert "redirect_url" not in charge_payload
     assert charge_payload["amount"] == 1500
     assert charge_payload["currency"] == "UGX"
     assert charge_payload["reference"] == "WEWE-TEST-12345"
