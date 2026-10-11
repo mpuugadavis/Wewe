@@ -82,13 +82,14 @@ def seed() -> None:
                 db.add(point)
                 db.flush()
             else:
-                # Keep existing seed data usable after routing coordinates are
-                # introduced. Never overwrite a deliberately customized point.
-                if latitude is not None and point.latitude is None:
+                # Canonical public destinations are maintained by the seed.
+                # Refresh their coordinates so an older development database
+                # cannot retain stale or approximate routing coordinates.
+                if latitude is not None:
                     point.latitude = latitude
-                if longitude is not None and point.longitude is None:
+                if longitude is not None:
                     point.longitude = longitude
-                if hall_id is not None and point.hall_id is None:
+                if hall_id is not None:
                     point.hall_id = hall_id
                 db.flush()
             return point
