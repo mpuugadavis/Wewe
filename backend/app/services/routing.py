@@ -10,6 +10,10 @@ Supported providers:
     Google Maps Routes API for the route and the Google Geocoding API for
     addresses that have no stored coordinates. Requires ``GOOGLE_MAPS_API_KEY``.
 
+``MAPBOX``
+    Mapbox Directions API for road routing and Mapbox Geocoding API for addresses
+    that have no stored coordinates. Requires a server-side Mapbox secret token.
+
 ``OSRM``
     The OpenStreetMap OSRM road service for the route (no API key) and the
     Nominatim geocoder for addresses that have no stored coordinates.
@@ -43,11 +47,14 @@ ROUTE_DISTANCE_QUANTUM = Decimal("0.001")
 GOOGLE_ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 GOOGLE_GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 OSRM_ROUTE_PATH = "/route/v1/driving"
+MAPBOX_DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/driving"
+MAPBOX_GEOCODING_URL = "https://api.mapbox.com/search/geocode/v6/forward"
 NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 
 #: Values recorded on a committed delivery quote so the priced route stays auditable.
 GOOGLE_MAPS_DISTANCE_SOURCE = "GOOGLE_MAPS_DIRECTIONS"
 OSRM_DISTANCE_SOURCE = "OSRM_ROAD_ROUTE"
+MAPBOX_DISTANCE_SOURCE = "MAPBOX_ROAD_ROUTE"
 
 
 class RoutingProviderError(RuntimeError):
@@ -226,6 +233,88 @@ class GoogleMapsRoutingProvider:
         )
 
 
+
+class MapboxRoutingProvider:
+    """Mapbox Directions API + Geocoding API implementation."""
+
+    name = "MAPBOX"
+    source = MAPBOX_DISTANCE_SOURCE
+
+    def __init__(
+        self,
+        access_token: str,
+        *,
+        directions_url: str = MAPBOX_DIRECTIONS_URL,
+        geocoding_url: str = MAPBOX_GEOCODING_URL,
+        timeout: float | None = None,
+        user_agent: str | None = None,
+    ) -> None:
+        settings = get_settings()
+        self._access_token = access_token
+        self._directions_url = directions_url.rstrip("/")
+        self._geocoding_url = geocoding_url
+        self._timeout = timeout if timeout is not None else settings.routing_timeout_seconds
+        self._user_agent = user_agent or settings.routing_user_agent
+
+    def geocode(self, address: str) -> GeoCoordinate | None:
+        query = urlencode({
+            "q": address,
+            "access_token": self._access_token,
+            "limit": "1",
+            "country": "UG",
+            "language": "en",
+            "permanent": "true",
+        })
+        data = _get_json(f"{self._geocoding_url}?{query}", timeout=self._timeout, user_agent=self._user_agent)
+        features = data.get("features") if isinstance(data, dict) else None
+        if not features:
+            return None
+        coordinates = (features[0].get("geometry") or {}).get("coordinates") or []
+        if len(coordinates) < 2:
+            return None
+        return GeoCoordinate.from_values(coordinates[1], coordinates[0])
+
+    def route_distance(
+        self,
+        origin: GeoCoordinate,
+        destination: GeoCoordinate,
+        *,
+        origin_place_id: str | None = None,
+        destination_place_id: str | None = None,
+    ) -> RouteDistance:
+        coordinates = f"{origin.longitude},{origin.latitude};{destination.longitude},{destination.latitude}"
+        query = urlencode({
+            "access_token": self._access_token,
+            "alternatives": "false",
+            "overview": "false",
+            "steps": "false",
+        })
+        data = _get_json(
+            f"{self._directions_url}/{coordinates}?{query}",
+            timeout=self._timeout,
+            user_agent=self._user_agent,
+        )
+        code = data.get("code") if isinstance(data, dict) else None
+        if code == "NoRoute":
+            raise RoutingProviderError("no_route_found", "No road route connects those two locations.")
+        if code != "Ok":
+            raise RoutingProviderError(
+                "routing_provider_error",
+                f"Mapbox Directions returned {code or 'an unreadable response'}.",
+            )
+        routes = data.get("routes") or []
+        if not routes or "distance" not in routes[0]:
+            raise RoutingProviderError(
+                "routing_provider_invalid_response",
+                "Mapbox Directions did not return a route distance.",
+            )
+        return RouteDistance(
+            distance_km=metres_to_kilometres(routes[0]["distance"]),
+            source=self.source,
+            provider=self.name,
+            reference=routes[0].get("geometry") if isinstance(routes[0].get("geometry"), str) else None,
+        )
+
 class OsrmRoutingProvider:
     """OpenStreetMap OSRM road service + Nominatim geocoder implementation."""
 
@@ -292,6 +381,12 @@ def _build_provider(name: str) -> RoutingProvider:
                 "routing_provider_unconfigured", "Google Maps routing is not configured for this deployment."
             )
         return GoogleMapsRoutingProvider(settings.google_maps_api_key.get_secret_value())
+    if name == "MAPBOX":
+        if not settings.mapbox_access_token:
+            raise RoutingProviderError(
+                "routing_provider_unconfigured", "Mapbox routing is not configured for this deployment."
+            )
+        return MapboxRoutingProvider(settings.mapbox_access_token.get_secret_value())
     if name == "OSRM":
         return OsrmRoutingProvider()
     raise RoutingProviderError("routing_provider_unavailable", f"Routing provider {name} is not available.")
