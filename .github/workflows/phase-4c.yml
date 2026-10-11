@@ -70,6 +70,13 @@ jobs:
       - name: Run complete backend test suite
         run: pytest
 
+      - name: Validate frontend JavaScript and integration smoke checks
+        run: |
+          node --check frontend/app.js
+          node --check frontend/retailer-media.js
+          node frontend/smoke.js
+        working-directory: .
+
       - name: Verify S3-compatible media storage
         env:
           STORAGE_INTEGRATION: "1"
