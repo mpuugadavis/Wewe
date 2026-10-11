@@ -1,3 +1,4 @@
+import io
 import re
 from uuid import UUID
 
@@ -22,6 +23,7 @@ from app.schemas import CustomerProfileUpdate, DeliveryAgentProfileUpdate, Locat
 from app.services.media_storage import (
     MediaStorageError,
     MediaStorageNotFoundError,
+    MediaValidationError,
     build_profile_object_key,
     read_upload_with_limit,
     sanitize_image,
@@ -57,17 +59,14 @@ def _replace_profile_image(user: User, file: UploadFile, db: Session) -> None:
             max_size_bytes=settings.media_max_upload_bytes,
         )
         key = build_profile_object_key(user.id, sanitized, extension)
-    except Exception as exc:
-        from app.services.media_storage import MediaValidationError
-        if isinstance(exc, MediaValidationError):
-            raise HTTPException(status_code=422, detail={"code": "invalid_profile_image", "message": str(exc)}) from exc
-        raise
+    except MediaValidationError as exc:
+        raise HTTPException(status_code=422, detail={"code": "invalid_profile_image", "message": str(exc)}) from exc
     finally:
         file.file.close()
 
     old_key = user.profile_image_storage_key
     try:
-        url = storage.put(key=key, content=__import__("io").BytesIO(sanitized), content_type=content_type, size_bytes=len(sanitized))
+        storage.put(key=key, content=io.BytesIO(sanitized), content_type=content_type, size_bytes=len(sanitized))
         user.profile_image_storage_key = key
         user.profile_image_content_type = content_type
         user.profile_image_size_bytes = len(sanitized)
