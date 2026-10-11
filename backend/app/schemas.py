@@ -253,7 +253,7 @@ class PaymentCreate(BaseModel):
     """Online payment only: WEWE is online-payment-only and cash is out of scope (COM-PAY-004 / COM-MULTI-001)."""
 
     method: Literal["MTN_MOMO", "AIRTEL_MONEY"]
-    phone: str = Field(min_length=9, max_length=16)
+    phone: str = Field(min_length=9, max_length=32)
     email: str | None = Field(default=None, min_length=5, max_length=320)
 
     @field_validator("email")
@@ -281,6 +281,10 @@ class PaymentCreate(BaseModel):
             cleaned = "+" + cleaned
         if not cleaned.startswith("+") or not cleaned[1:].isdigit():
             raise ValueError("Enter a valid Ugandan mobile number, for example +256700000000")
+        # Field constraints run before field validators in Pydantic, so the
+        # input field deliberately allows formatted human-entered numbers
+        # (for example "+256 (700) 000-000"). The normalized value is then
+        # strictly validated as a Ugandan 7xx E.164 number.
         if len(cleaned) != 13 or not cleaned.startswith("+2567"):
             raise ValueError("Enter a valid Ugandan mobile number, for example +256700000000")
         return cleaned
