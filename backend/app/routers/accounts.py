@@ -1,7 +1,8 @@
 import re
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -18,7 +19,16 @@ from app.models import (
     User,
 )
 from app.schemas import CustomerProfileUpdate, DeliveryAgentProfileUpdate, LocationCreate, LocationOut, RetailerAvailabilityUpdate, RetailerProfileUpdate
+from app.services.media_storage import (
+    MediaStorageError,
+    MediaStorageNotFoundError,
+    build_profile_object_key,
+    read_upload_with_limit,
+    sanitize_image,
+)
+from app.services.media_uploads import build_media_storage
 from app.services.retailer_income import retailer_income_payload
+from app.config import get_settings
 
 router = APIRouter(tags=["profiles", "retailers"])
 
@@ -32,6 +42,87 @@ def _validate_phone(phone: str) -> str:
 
 def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")[:180] or "retailer"
+
+
+def _replace_profile_image(user: User, file: UploadFile, db: Session) -> None:
+    storage = build_media_storage()
+    if storage is None:
+        raise HTTPException(status_code=503, detail={"code": "media_storage_unavailable", "message": "Profile image uploads are not configured."})
+    settings = get_settings()
+    try:
+        raw = read_upload_with_limit(file.file, max_size_bytes=settings.media_max_upload_bytes)
+        sanitized, content_type, extension, width, height = sanitize_image(
+            raw,
+            declared_content_type=(file.content_type or "").lower(),
+            max_size_bytes=settings.media_max_upload_bytes,
+        )
+        key = build_profile_object_key(user.id, sanitized, extension)
+    except Exception as exc:
+        from app.services.media_storage import MediaValidationError
+        if isinstance(exc, MediaValidationError):
+            raise HTTPException(status_code=422, detail={"code": "invalid_profile_image", "message": str(exc)}) from exc
+        raise
+    finally:
+        file.file.close()
+
+    old_key = user.profile_image_storage_key
+    try:
+        url = storage.put(key=key, content=__import__("io").BytesIO(sanitized), content_type=content_type, size_bytes=len(sanitized))
+        user.profile_image_storage_key = key
+        user.profile_image_content_type = content_type
+        user.profile_image_size_bytes = len(sanitized)
+        user.profile_image_width = width
+        user.profile_image_height = height
+        db.commit()
+    except MediaStorageError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail={"code": "media_storage_error", "message": "Profile image storage is temporarily unavailable."}) from exc
+    except Exception:
+        db.rollback()
+        try:
+            storage.delete(key=key)
+        except MediaStorageError:
+            pass
+        raise
+    if old_key and old_key != key:
+        try:
+            storage.delete(key=old_key)
+        except MediaStorageError:
+            pass
+
+
+@router.get("/profile-images/{user_id}")
+def read_profile_image(
+    user_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    user = db.get(User, user_id)
+    if user is None or user.status != "ACTIVE" or user.role not in {"RETAILER", "DELIVERY_AGENT"} or not user.profile_image_storage_key:
+        raise HTTPException(status_code=404, detail={"code": "profile_image_not_found", "message": "Profile image was not found."})
+    storage = build_media_storage()
+    if storage is None:
+        raise HTTPException(status_code=503, detail={"code": "media_storage_unavailable", "message": "Profile image storage is not configured."})
+    try:
+        body, content_type, size_bytes = storage.get(key=user.profile_image_storage_key)
+    except MediaStorageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail={"code": "profile_image_not_found", "message": "Profile image was not found."}) from exc
+    except MediaStorageError as exc:
+        raise HTTPException(status_code=503, detail={"code": "media_storage_error", "message": "Profile image storage is temporarily unavailable."}) from exc
+    resolved = (content_type or user.profile_image_content_type or "").lower()
+    if resolved not in {"image/jpeg", "image/png", "image/webp"}:
+        body.close()
+        raise HTTPException(status_code=503, detail={"code": "invalid_media_metadata", "message": "Stored profile image metadata is invalid."})
+    background_tasks.add_task(body.close)
+    headers = {
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "X-Content-Type-Options": "nosniff",
+        "Cross-Origin-Resource-Policy": "cross-origin",
+        "Content-Disposition": "inline",
+    }
+    if size_bytes is not None:
+        headers["Content-Length"] = str(size_bytes)
+    return StreamingResponse(body, media_type=resolved, headers=headers, background=background_tasks)
 
 
 @router.get("/users/me/profile")
@@ -88,6 +179,7 @@ def list_public_retailers(
         query = query.where(Retailer.business_name.ilike(f"%{q[:120]}%"))
     retailers = db.scalars(query.order_by(Retailer.business_name).offset(max(offset, 0)).limit(min(max(limit, 1), 100))).all()
     retailer_ids = [retailer.id for retailer in retailers]
+    users_by_id = {user.id: user for user in db.scalars(select(User).where(User.id.in_([r.user_id for r in retailers]))).all()}
     product_counts: dict[UUID, int] = {}
     if retailer_ids:
         product_counts = dict(
@@ -108,6 +200,7 @@ def list_public_retailers(
             "business_name": retailer.business_name,
             "slug": retailer.slug,
             "description": retailer.description,
+            "profile_image_url": users_by_id.get(retailer.user_id).profile_image_url if users_by_id.get(retailer.user_id) else None,
             "product_count": product_counts.get(retailer.id, 0),
         }
         for retailer in retailers
@@ -129,6 +222,7 @@ def get_retailer_profile(
         "slug": retailer.slug,
         "description": retailer.description,
         "phone": retailer.phone,
+        "profile_image_url": principal.user.profile_image_url,
         "location_id": retailer.location_id,
         "location": {
             "id": location.id,
@@ -141,6 +235,34 @@ def get_retailer_profile(
         "verification_status": retailer.verification_status,
         "status": retailer.status,
     }
+
+
+
+
+@router.post("/retailers/me/profile-image", status_code=status.HTTP_201_CREATED)
+def upload_retailer_profile_image(
+    file: UploadFile = File(...),
+    principal: Principal = Depends(require_roles("RETAILER")),
+    db: Session = Depends(get_db),
+) -> dict:
+    retailer = db.scalar(select(Retailer).where(Retailer.user_id == principal.user.id))
+    if retailer is None:
+        raise HTTPException(status_code=404, detail={"code": "retailer_profile_missing", "message": "Retailer profile was not found."})
+    _replace_profile_image(principal.user, file, db)
+    return {"profile_image_url": principal.user.profile_image_url}
+
+
+@router.post("/deliveries/me/profile-image", status_code=status.HTTP_201_CREATED)
+def upload_delivery_profile_image(
+    file: UploadFile = File(...),
+    principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
+    db: Session = Depends(get_db),
+) -> dict:
+    agent = db.get(DeliveryAgent, principal.user.id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail={"code": "agent_profile_missing", "message": "Delivery profile was not found."})
+    _replace_profile_image(principal.user, file, db)
+    return {"profile_image_url": principal.user.profile_image_url}
 
 
 @router.get("/retailers/me/earnings")
@@ -274,6 +396,7 @@ def get_public_retailer(slug: str, db: Session = Depends(get_db)) -> dict:
         "business_name": retailer.business_name,
         "slug": retailer.slug,
         "description": retailer.description,
+        "profile_image_url": db.get(User, retailer.user_id).profile_image_url if db.get(User, retailer.user_id) else None,
         "products": [{"id": product.id, "name": product.name, "retailer_product_id": listing.id, "price_ugx": listing.price_ugx} for listing, product in listings],
     }
 
@@ -286,7 +409,7 @@ def get_delivery_profile(
     agent = db.get(DeliveryAgent, principal.user.id)
     if agent is None:
         raise HTTPException(status_code=404, detail={"code": "agent_profile_missing", "message": "Delivery profile was not found."})
-    return {"user_id": agent.user_id, "phone": agent.phone, "verification_status": agent.verification_status, "availability_status": agent.availability_status, "transport_mode": agent.transport_mode}
+    return {"user_id": agent.user_id, "phone": agent.phone, "verification_status": agent.verification_status, "availability_status": agent.availability_status, "transport_mode": agent.transport_mode, "profile_image_url": principal.user.profile_image_url}
 
 
 @router.patch("/deliveries/me/profile")
