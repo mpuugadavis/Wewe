@@ -1171,7 +1171,8 @@
       body: JSON.stringify({ method, phone: normalizedPhone, email })
     });
     const checkoutUrl = safeImage(payment?.checkout_url);
-    $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Payment retry</div><h2>Continue payment</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${escapeHtml(payment?.status || "Payment initiated")}</p>${checkoutUrl ? `<p><a class="button-primary" href="${escapeHtml(checkoutUrl)}" target="_blank" rel="noopener noreferrer">Continue mobile payment</a></p>` : ""}<button class="button-outline" data-action="close-modal">Close</button>`;
+    $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Payment retry</div><h2>Continue payment</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${escapeHtml(payment?.status || "Payment initiated")}</p>${checkoutUrl ? `<p><a class="button-primary" href="${escapeHtml(checkoutUrl)}" target="_blank" rel="noopener noreferrer">Continue mobile payment</a></p>` : ""}<p id="paymentProgress" class="api-state">Waiting for mobile-money confirmation…</p><button class="button-outline" data-action="close-modal">Close</button>`;
+    if (payment?.id) watchPaymentStatus(payment.id);
   }
 
 
