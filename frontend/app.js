@@ -699,7 +699,15 @@
       // Use public map tiles directly in the browser. This keeps the checkout
       // map independent of the WEWE API container's ability to reach an
       // upstream tile provider. The backend relay remains a final fallback.
+      // Prefer the WEWE server-side relay. This keeps checkout tile delivery
+      // independent of browser CORS/referrer/network quirks and gives us one
+      // controlled path for production. Public providers remain fallbacks.
       const tileSources = [
+        {
+          id: "wewe-relay",
+          url: API_BASE + "/locations/map-tile/{z}/{x}/{y}.png",
+          attribution: '&copy; OpenStreetMap contributors'
+        },
         {
           id: "openstreetmap",
           url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -709,11 +717,6 @@
           id: "esri",
           url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
           attribution: 'Sources: Esri, HERE, Garmin, USGS, Intermap, &copy; OpenStreetMap contributors, GIS User Community'
-        },
-        {
-          id: "wewe-relay",
-          url: API_BASE + "/locations/map-tile/{z}/{x}/{y}.png",
-          attribution: '&copy; OpenStreetMap contributors'
         }
       ];
 
