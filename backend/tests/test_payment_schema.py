@@ -28,3 +28,13 @@ def test_payment_phone_rejects_non_uganda_number():
 def test_payment_phone_rejects_malformed_number():
     with pytest.raises(ValidationError):
         PaymentCreate(method="MTN_MOMO", phone="+256123", email="customer@example.com")
+
+
+def test_payment_blank_email_is_optional():
+    payload = PaymentCreate(method="MTN_MOMO", phone="0700000000", email="")
+    assert payload.email is None
+
+
+def test_payment_whitespace_email_is_optional():
+    payload = PaymentCreate(method="MTN_MOMO", phone="0700000000", email="   ")
+    assert payload.email is None
