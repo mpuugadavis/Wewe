@@ -37,10 +37,12 @@ class Settings(BaseSettings):
     #: Road-route distance for delivery pricing (COM-FEE-004). Google Maps is
     #: opt-in because it requires a billed Cloud project/key. OSRM is the
     #: safe local-development default and still uses a real road route.
-    routing_provider: Literal["GOOGLE_MAPS", "OSRM"] = "OSRM"
+    routing_provider: Literal["GOOGLE_MAPS", "MAPBOX", "OSRM"] = "OSRM"
     google_maps_api_key: SecretStr | None = None
     #: Browser-restricted key used only by the Maps JavaScript API in the WEWE frontend.
     google_maps_browser_api_key: str | None = None
+    mapbox_server_key: SecretStr | None = None
+    mapbox_public_key: str | None = None
     #: Optional override of the routing service base URL (proxy or self-hosted
     #: OSRM instance). When unset the provider's public endpoint is used.
     routing_base_url: str | None = None
