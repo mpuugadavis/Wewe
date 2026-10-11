@@ -273,11 +273,28 @@ def test_failed_settlement_releases_payable_entry_for_reuse():
             idempotency_key="SET-IDEMP-FAILED-REUSE",
         )
         session.add(failed)
+        session.flush()
+        session.add(RetailerSettlementLine(
+            settlement_id=failed.id,
+            payable_entry_id=entry.id,
+            amount_ugx=5000,
+            currency="UGX",
+        ))
+        draft = RetailerSettlement(
+            id=uuid4(),
+            retailer_id=retailer.id,
+            amount_ugx=5000,
+            currency="UGX",
+            status="DRAFT",
+            settlement_reference="SET-DRAFT-REUSE",
+            idempotency_key="SET-IDEMP-DRAFT-REUSE",
+        )
+        session.add(draft)
         session.commit()
 
         attach_payable_entry_to_draft_settlement(
             session,
-            settlement_id=failed.id,
+            settlement_id=draft.id,
             payable_entry_id=entry.id,
             amount_ugx=5000,
         )
