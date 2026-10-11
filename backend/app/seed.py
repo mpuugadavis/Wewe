@@ -23,6 +23,7 @@ from app.models import (
     PickupPoint,
     PlatformSetting,
     Product,
+    ProductImage,
     Retailer,
     RetailerFulfillment,
     RetailerProduct,
@@ -254,6 +255,16 @@ def seed() -> None:
                 db.add(listing)
                 db.flush()
                 db.add(Inventory(product_id=product.id, retailer_id=retailer.id, retailer_product_id=listing.id, owner_type="RETAILER", quantity=quantity, reserved_quantity=0))
+            if db.scalar(select(ProductImage.id).where(ProductImage.product_id == product.id)) is None:
+                demo_image_urls = {
+                    "Campus Classic Hoodie": "https://images.unsplash.com/photo-1521803751845-f36d43bb1f76?auto=format&fit=crop&w=1200&q=85",
+                    "Chicken & Chips Combo": "https://images.unsplash.com/photo-1548340748-6d2b7d7da280?auto=format&fit=crop&w=1200&q=85",
+                    "Everyday Canvas Tote": "https://images.unsplash.com/photo-1780480999314-b82a1f2f9de6?auto=format&fit=crop&w=1200&q=85",
+                    "Study Notes Bundle": "https://images.unsplash.com/photo-1764818959104-995873e9add5?auto=format&fit=crop&w=1200&q=85",
+                }
+                image_url = demo_image_urls.get(name)
+                if image_url:
+                    db.add(ProductImage(product_id=product.id, url=image_url, alt_text=name, sort_order=0))
             seeded_products.append((product, listing))
 
         setting = db.get(PlatformSetting, "delivery_fee_ugx")
