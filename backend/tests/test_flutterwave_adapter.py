@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import SecretStr
 
-from app.services.flutterwave_adapter import FlutterwaveProvider
+from app.services.flutterwave_adapter import FlutterwaveAPIError, FlutterwaveProvider
 from app.services.payments import PaymentRequest
 
 
@@ -132,3 +132,30 @@ def test_verify_transaction_uses_v4_charge_id():
     result = provider.verify_transaction("chg_test")
     assert captured == {"method": "GET", "path": "/charges/chg_test"}
     assert result["status"] == "succeeded"
+
+
+def test_flutterwave_diagnostic_preserves_validation_details_without_secrets():
+    error = FlutterwaveAPIError(
+        "One or more request fields are invalid.",
+        stage="/charges",
+        http_status=400,
+        provider_code="10422",
+        provider_type="REQUEST_NOT_VALID",
+        validation_errors=[{"field_name": "currency", "message": "currency is not supported"}],
+        request_id="req_test_123",
+    )
+
+    diagnostic = error.diagnostic()
+
+    assert diagnostic == {
+        "provider": "FLUTTERWAVE",
+        "stage": "/charges",
+        "http_status": 400,
+        "provider_code": "10422",
+        "provider_type": "REQUEST_NOT_VALID",
+        "message": "One or more request fields are invalid.",
+        "validation_errors": [{"field_name": "currency", "message": "currency is not supported"}],
+        "request_id": "req_test_123",
+    }
+    assert "client_secret" not in str(diagnostic).lower()
+    assert "access_token" not in str(diagnostic).lower()

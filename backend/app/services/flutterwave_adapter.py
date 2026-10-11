@@ -19,7 +19,38 @@ FLUTTERWAVE_TOKEN_URL = "https://idp.flutterwave.com/realms/flutterwave/protocol
 
 
 class FlutterwaveAPIError(RuntimeError):
-    """The Flutterwave API could not complete a request safely."""
+    """A safe, structured error returned by Flutterwave."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: str | None = None,
+        http_status: int | None = None,
+        provider_code: str | None = None,
+        provider_type: str | None = None,
+        validation_errors: list[dict] | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.http_status = http_status
+        self.provider_code = provider_code
+        self.provider_type = provider_type
+        self.validation_errors = validation_errors or []
+        self.request_id = request_id
+
+    def diagnostic(self) -> dict:
+        return {
+            "provider": "FLUTTERWAVE",
+            "stage": self.stage,
+            "http_status": self.http_status,
+            "provider_code": self.provider_code,
+            "provider_type": self.provider_type,
+            "message": str(self),
+            "validation_errors": self.validation_errors,
+            "request_id": self.request_id,
+        }
 
 
 class FlutterwaveProvider:
@@ -104,14 +135,62 @@ class FlutterwaveProvider:
         request = URLRequest(f"{base}{path}", data=body, headers=headers, method=method)
         try:
             with urlopen(request, timeout=20) as response:
-                decoded = json.loads(response.read().decode("utf-8"))
+                raw = response.read().decode("utf-8")
+                decoded = json.loads(raw)
         except HTTPError as exc:
-            detail = exc.read(4096).decode("utf-8", errors="replace")
-            raise FlutterwaveAPIError(f"Flutterwave returned HTTP {exc.code}: {detail}") from None
+            raw = exc.read(4096).decode("utf-8", errors="replace")
+            try:
+                decoded = json.loads(raw)
+            except json.JSONDecodeError:
+                decoded = None
+            error = decoded.get("error") if isinstance(decoded, dict) else None
+            if not isinstance(error, dict):
+                error = {}
+            validation_errors = error.get("validation_errors")
+            if not isinstance(validation_errors, list):
+                validation_errors = []
+            request_id = (
+                (decoded.get("request_id") if isinstance(decoded, dict) else None)
+                or error.get("request_id")
+                or error.get("requestId")
+            )
+            message = error.get("message") or (
+                decoded.get("message") if isinstance(decoded, dict) else None
+            ) or "Flutterwave rejected the request."
+            raise FlutterwaveAPIError(
+                str(message),
+                stage=path,
+                http_status=exc.code,
+                provider_code=str(error.get("code")) if error.get("code") is not None else None,
+                provider_type=str(error.get("type")) if error.get("type") is not None else None,
+                validation_errors=[item for item in validation_errors if isinstance(item, dict)],
+                request_id=str(request_id) if request_id else None,
+            ) from None
         except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-            raise FlutterwaveAPIError(f"Flutterwave request failed ({type(exc).__name__}).") from None
+            raise FlutterwaveAPIError(
+                f"Flutterwave request failed ({type(exc).__name__}).",
+                stage=path,
+            ) from None
         if not isinstance(decoded, dict):
-            raise FlutterwaveAPIError("Flutterwave returned an invalid response.")
+            raise FlutterwaveAPIError("Flutterwave returned an invalid response.", stage=path)
+        if decoded.get("status") == "failed":
+            error = decoded.get("error")
+            if not isinstance(error, dict):
+                error = {}
+            validation_errors = error.get("validation_errors")
+            if not isinstance(validation_errors, list):
+                validation_errors = []
+            request_id = decoded.get("request_id") or error.get("request_id") or error.get("requestId")
+            message = error.get("message") or decoded.get("message") or "Flutterwave rejected the request."
+            raise FlutterwaveAPIError(
+                str(message),
+                stage=path,
+                http_status=200,
+                provider_code=str(error.get("code")) if error.get("code") is not None else None,
+                provider_type=str(error.get("type")) if error.get("type") is not None else None,
+                validation_errors=[item for item in validation_errors if isinstance(item, dict)],
+                request_id=str(request_id) if request_id else None,
+            )
         return decoded
 
     @staticmethod
@@ -158,7 +237,7 @@ class FlutterwaveProvider:
         customer = customer_response.get("data") if isinstance(customer_response, dict) else None
         customer_id = customer.get("id") if isinstance(customer, dict) else None
         if customer_response.get("status") != "success" or not isinstance(customer_id, str):
-            raise FlutterwaveAPIError("Flutterwave did not create the customer profile.")
+            raise FlutterwaveAPIError("Flutterwave did not create the customer profile.", stage="/customers")
 
         method_response = self._request(
             "POST",
@@ -176,7 +255,7 @@ class FlutterwaveProvider:
         payment_method = method_response.get("data") if isinstance(method_response, dict) else None
         payment_method_id = payment_method.get("id") if isinstance(payment_method, dict) else None
         if method_response.get("status") != "success" or not isinstance(payment_method_id, str):
-            raise FlutterwaveAPIError("Flutterwave did not create the mobile-money payment method.")
+            raise FlutterwaveAPIError("Flutterwave did not create the mobile-money payment method.", stage="/payment-methods")
 
         charge_response = self._request(
             "POST",
@@ -197,7 +276,7 @@ class FlutterwaveProvider:
         data = charge_response.get("data") if isinstance(charge_response, dict) else None
         charge_id = data.get("id") if isinstance(data, dict) else None
         if charge_response.get("status") not in {"success", "pending"} or not isinstance(charge_id, str):
-            raise FlutterwaveAPIError("Flutterwave did not create the mobile-money charge.")
+            raise FlutterwaveAPIError("Flutterwave did not create the mobile-money charge.", stage="/charges")
 
         checkout_url = None
         next_action = data.get("next_action") if isinstance(data, dict) else None
