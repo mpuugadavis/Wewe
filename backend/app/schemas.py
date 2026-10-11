@@ -137,8 +137,15 @@ class ProductCreate(BaseModel):
     category_id: UUID
     sku: str | None = Field(default=None, max_length=100)
     price_ugx: int = Field(gt=0, le=2_000_000_000)
+    original_price_ugx: int | None = Field(default=None, gt=0, le=2_000_000_000)
     stock_quantity: int = Field(ge=0, le=2_000_000)
     image_urls: list[str] = Field(default_factory=list, max_length=MAX_PRODUCT_IMAGES)
+
+    @model_validator(mode="after")
+    def validate_discount_price(self) -> "ProductCreate":
+        if self.original_price_ugx is not None and self.original_price_ugx <= self.price_ugx:
+            raise ValueError("Original price must be higher than the current price to create a discount.")
+        return self
 
     @field_validator("image_urls")
     @classmethod
@@ -165,6 +172,7 @@ class ProductUpdate(BaseModel):
     category_id: UUID | None = None
     sku: str | None = Field(default=None, max_length=100)
     price_ugx: int | None = Field(default=None, gt=0, le=2_000_000_000)
+    original_price_ugx: int | None = Field(default=None, gt=0, le=2_000_000_000)
     stock_quantity: int | None = Field(default=None, ge=0, le=2_000_000)
     is_active: bool | None = None
 
