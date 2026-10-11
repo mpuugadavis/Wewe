@@ -48,6 +48,7 @@ jobs:
       PAYMENT_MODE: DISABLED
       RATE_LIMIT_STORAGE_URI: redis://localhost:6379/0
       RUN_POSTGRES_CONCURRENCY: "1"
+      ROUTING_PROVIDER: OSRM
 
     steps:
       - name: Check out repository

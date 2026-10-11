@@ -10,6 +10,11 @@ Supported providers:
     Google Maps Routes API for the route and the Google Geocoding API for
     addresses that have no stored coordinates. Requires ``GOOGLE_MAPS_API_KEY``.
 
+``OPENROUTESERVICE``
+    OpenRouteService (HeiGIT) Directions API for road routing and its Pelias
+    geocoder for addresses that have no stored coordinates. Requires
+    ``OPENROUTESERVICE_API_KEY``.
+
 ``OSRM``
     The OpenStreetMap OSRM road service for the route (no API key) and the
     Nominatim geocoder for addresses that have no stored coordinates.
@@ -43,11 +48,16 @@ ROUTE_DISTANCE_QUANTUM = Decimal("0.001")
 GOOGLE_ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 GOOGLE_GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 OSRM_ROUTE_PATH = "/route/v1/driving"
+OPENROUTESERVICE_DIRECTIONS_PATH = "/v2/directions/driving-car"
+OPENROUTESERVICE_GEOCODING_PATH = "/v1/search"
+OPENROUTESERVICE_DEFAULT_BASE_URL = "https://api.heigit.org/openrouteservice"
+OPENROUTESERVICE_GEOCODING_BASE_URL = "https://api.heigit.org/pelias"
 NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 
 #: Values recorded on a committed delivery quote so the priced route stays auditable.
 GOOGLE_MAPS_DISTANCE_SOURCE = "GOOGLE_MAPS_DIRECTIONS"
 OSRM_DISTANCE_SOURCE = "OSRM_ROAD_ROUTE"
+OPENROUTESERVICE_DISTANCE_SOURCE = "OPENROUTESERVICE_DIRECTIONS"
 
 
 class RoutingProviderError(RuntimeError):
@@ -122,8 +132,17 @@ def metres_to_kilometres(metres: Any) -> Decimal:
         )
     return (value / Decimal("1000")).quantize(ROUTE_DISTANCE_QUANTUM, rounding=ROUND_HALF_UP)
 
-def _get_json(url: str, *, timeout: float, user_agent: str) -> Any:
-    request = Request(url, headers={"User-Agent": user_agent, "Accept": "application/json"})
+def _get_json(
+    url: str,
+    *,
+    timeout: float,
+    user_agent: str,
+    headers: dict[str, str] | None = None,
+) -> Any:
+    request_headers = {"User-Agent": user_agent, "Accept": "application/json"}
+    if headers:
+        request_headers.update(headers)
+    request = Request(url, headers=request_headers)
     try:
         with urlopen(request, timeout=timeout) as response:  # provider endpoints are fixed or configured
             charset = response.headers.get_content_charset() or "utf-8"
@@ -226,6 +245,114 @@ class GoogleMapsRoutingProvider:
         )
 
 
+class OpenRouteServiceRoutingProvider:
+    """OpenRouteService (HeiGIT) Directions + Pelias geocoder provider."""
+
+    name = "OPENROUTESERVICE"
+    source = OPENROUTESERVICE_DISTANCE_SOURCE
+
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        base_url: str | None = None,
+        geocoder_base_url: str = OPENROUTESERVICE_GEOCODING_BASE_URL,
+        timeout: float | None = None,
+        user_agent: str | None = None,
+    ) -> None:
+        settings = get_settings()
+        self._api_key = api_key
+        self._base_url = (base_url or settings.routing_base_url or OPENROUTESERVICE_DEFAULT_BASE_URL).rstrip("/")
+        self._geocoder_base_url = geocoder_base_url.rstrip("/")
+        self._timeout = timeout if timeout is not None else settings.routing_timeout_seconds
+        self._user_agent = user_agent or settings.routing_user_agent
+
+    def geocode(self, address: str) -> GeoCoordinate | None:
+        query = urlencode({"text": address, "size": "1", "api_key": self._api_key})
+        data = _get_json(
+            f"{self._geocoder_base_url}{OPENROUTESERVICE_GEOCODING_PATH}?{query}",
+            timeout=self._timeout,
+            user_agent=self._user_agent,
+        )
+        features = data.get("features") if isinstance(data, dict) else None
+        if not features:
+            return None
+        geometry = features[0].get("geometry") or {}
+        coordinates = geometry.get("coordinates") or []
+        if len(coordinates) < 2:
+            return None
+        return GeoCoordinate.from_values(coordinates[1], coordinates[0])
+
+    def route_distance(
+        self,
+        origin: GeoCoordinate,
+        destination: GeoCoordinate,
+        *,
+        origin_place_id: str | None = None,
+        destination_place_id: str | None = None,
+    ) -> RouteDistance:
+        payload = {
+            "coordinates": [
+                [float(origin.longitude), float(origin.latitude)],
+                [float(destination.longitude), float(destination.latitude)],
+            ],
+            "instructions": False,
+            "geometry": False,
+        }
+        request = Request(
+            f"{self._base_url}{OPENROUTESERVICE_DIRECTIONS_PATH}",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": self._api_key,
+                "User-Agent": self._user_agent,
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self._timeout) as response:
+                charset = response.headers.get_content_charset() or "utf-8"
+                data = json.loads(response.read().decode(charset))
+        except HTTPError as exc:
+            raise RoutingProviderError(
+                "routing_provider_error",
+                f"OpenRouteService returned HTTP {exc.code}.",
+            ) from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            raise RoutingProviderError(
+                "routing_provider_unreachable",
+                "OpenRouteService could not be reached.",
+            ) from exc
+        except json.JSONDecodeError as exc:
+            raise RoutingProviderError(
+                "routing_provider_invalid_response",
+                "OpenRouteService returned invalid JSON.",
+            ) from exc
+
+        routes = data.get("routes") if isinstance(data, dict) else None
+        if not routes:
+            raise RoutingProviderError(
+                "no_route_found",
+                "No road route connects those two locations.",
+            )
+        summary = routes[0].get("summary") or {}
+        metres = summary.get("distance")
+        if metres is None:
+            raise RoutingProviderError(
+                "routing_provider_invalid_response",
+                "OpenRouteService did not return a route distance.",
+            )
+        duration = summary.get("duration")
+        reference = f"duration_seconds={duration}" if duration is not None else None
+        return RouteDistance(
+            distance_km=metres_to_kilometres(metres),
+            source=self.source,
+            provider=self.name,
+            reference=reference,
+        )
+
+
 class OsrmRoutingProvider:
     """OpenStreetMap OSRM road service + Nominatim geocoder implementation."""
 
@@ -292,6 +419,15 @@ def _build_provider(name: str) -> RoutingProvider:
                 "routing_provider_unconfigured", "Google Maps routing is not configured for this deployment."
             )
         return GoogleMapsRoutingProvider(settings.google_maps_api_key.get_secret_value())
+    if name == "OPENROUTESERVICE":
+        if not settings.openrouteservice_api_key:
+            raise RoutingProviderError(
+                "routing_provider_unconfigured",
+                "OpenRouteService routing is not configured for this deployment.",
+            )
+        return OpenRouteServiceRoutingProvider(
+            settings.openrouteservice_api_key.get_secret_value()
+        )
     if name == "OSRM":
         return OsrmRoutingProvider()
     raise RoutingProviderError("routing_provider_unavailable", f"Routing provider {name} is not available.")

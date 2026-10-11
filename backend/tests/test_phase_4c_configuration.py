@@ -19,6 +19,7 @@ def production_settings(**overrides):
         "storage_bucket": "wewe-media",
         "storage_access_key": SecretStr("test-access"),
         "storage_secret_key": SecretStr("test-secret"),
+        "openrouteservice_api_key": SecretStr("test-openrouteservice-key"),
         **overrides,
     }
     return Settings(**values)
@@ -40,6 +41,7 @@ def test_development_can_use_memory_rate_limit_storage():
         secret_key=SECRET,
         database_url="sqlite:///./wewe.db",
         rate_limit_storage_uri="memory://",
+        openrouteservice_api_key=SecretStr("test-openrouteservice-key"),
     )
     assert settings.rate_limit_storage_uri == "memory://"
 
