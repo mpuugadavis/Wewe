@@ -7,12 +7,13 @@ derive retailer earnings, commission, fees, tax, or settlement eligibility.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Payment, RetailerFulfillment, RetailerPaymentAllocation
+from app.models import Order, OrderItem, Payment, RetailerFulfillment, RetailerPaymentAllocation
 
 
 class RetailerPaymentAllocationError(ValueError):
@@ -132,3 +133,86 @@ def allocate_successful_payment_to_fulfillment(
     session.add(allocation)
     session.flush()
     return allocation
+
+
+def allocate_successful_payment_for_order(
+    session: Session,
+    *,
+    payment_id: UUID,
+) -> list[RetailerPaymentAllocation]:
+    """Allocate merchandise value net of the order's snapshotted commission.
+
+    Delivery fees remain platform-held cash used to fund rider earnings. The
+    retailer allocations therefore cover only merchandise payable to retailers.
+    """
+    payment = session.scalar(select(Payment).where(Payment.id == payment_id).with_for_update())
+    if payment is None:
+        raise RetailerPaymentAllocationError("payment_id does not exist")
+    if payment.status != "SUCCESSFUL":
+        raise RetailerPaymentAllocationError("only SUCCESSFUL payments can be allocated")
+
+    order_obj = session.scalar(select(Order).where(Order.id == payment.order_id).with_for_update())
+    if order_obj is None:
+        raise RetailerPaymentAllocationError("payment order does not exist")
+    if order_obj.platform_commission_ugx < 0 or order_obj.platform_commission_ugx > order_obj.subtotal_ugx:
+        raise RetailerPaymentAllocationError("order commission snapshot is invalid")
+
+    fulfillments = session.scalars(
+        select(RetailerFulfillment)
+        .where(RetailerFulfillment.order_id == order_obj.id)
+        .order_by(RetailerFulfillment.id)
+        .with_for_update()
+    ).all()
+    if not fulfillments:
+        raise RetailerPaymentAllocationError("payment order has no retailer fulfillments")
+
+    allocations: list[RetailerPaymentAllocation] = []
+    merchandise_by_fulfillment: list[tuple[RetailerFulfillment, int]] = []
+    for fulfillment in fulfillments:
+        merchandise = session.scalar(
+            select(func.coalesce(func.sum(OrderItem.line_total_ugx), 0)).where(
+                OrderItem.order_id == order_obj.id,
+                OrderItem.retailer_id == fulfillment.retailer_id,
+            )
+        )
+        merchandise_ugx = int(merchandise or 0)
+        if merchandise_ugx > 0:
+            merchandise_by_fulfillment.append((fulfillment, merchandise_ugx))
+
+    if not merchandise_by_fulfillment:
+        raise RetailerPaymentAllocationError("payment order has no merchandise fulfillments")
+
+    remaining_commission = order_obj.platform_commission_ugx
+    allocated_total = 0
+    for index, (fulfillment, merchandise_ugx) in enumerate(merchandise_by_fulfillment):
+        if index == len(merchandise_by_fulfillment) - 1:
+            commission = remaining_commission
+        else:
+            commission = int(
+                (Decimal(merchandise_ugx) * order_obj.platform_commission_percent / Decimal("100"))
+                .quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            )
+            commission = min(commission, remaining_commission)
+        remaining_commission -= commission
+        payable = merchandise_ugx - commission
+        if payable <= 0:
+            continue
+        allocation = allocate_successful_payment_to_fulfillment(
+            session,
+            payment_id=payment_id,
+            fulfillment_id=fulfillment.id,
+            amount_ugx=payable,
+        )
+        allocations.append(allocation)
+        allocated_total += payable
+
+    expected = order_obj.subtotal_ugx - order_obj.platform_commission_ugx
+    if remaining_commission != 0:
+        raise RetailerPaymentAllocationError("commission allocation did not reconcile to the order snapshot")
+    if allocated_total != expected:
+        raise RetailerPaymentAllocationError(
+            f"retailer allocations total {allocated_total} UGX but expected {expected} UGX"
+        )
+    if allocated_total + order_obj.delivery_fee_ugx > payment.amount_ugx:
+        raise RetailerPaymentAllocationError("retailer allocations exceed the captured order funds")
+    return allocations

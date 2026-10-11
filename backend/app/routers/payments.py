@@ -19,6 +19,8 @@ from app.models import (
     utcnow,
 )
 from app.schemas import PaymentWebhookIn
+from app.services.retailer_payment_allocation import allocate_successful_payment_for_order
+from app.services.retailer_payment_payable import post_payable_credit_for_payment_allocation
 from app.services.payment_attempts import (
     record_cancelled_order_capture_review,
     record_payment_conflict,
@@ -296,6 +298,9 @@ async def provider_webhook(
             )
         if payment.status == "SUCCESSFUL" and order.status == "CANCELLED":
             record_cancelled_order_capture_review(db, payment.id, payment_event.id)
+        elif payment.status == "SUCCESSFUL" and payment_event.disposition == "APPLIED":
+            for allocation in allocate_successful_payment_for_order(db, payment_id=payment.id):
+                post_payable_credit_for_payment_allocation(db, allocation_id=allocation.id)
     if was_unknown and payment.status in {"SUCCESSFUL", "FAILED"}:
         db.add(
             PaymentReconciliation(
