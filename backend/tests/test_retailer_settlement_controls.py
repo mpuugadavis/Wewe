@@ -256,3 +256,28 @@ def test_debit_payable_entry_cannot_be_settled():
                 session, settlement_id=settlement.id,
                 payable_entry_id=debit.id, amount_ugx=1000,
             )
+
+
+def test_failed_settlement_releases_payable_entry_for_reuse():
+    with _session() as session:
+        retailer, order, fulfillment = _seed(session)
+        entry = _entry(session, retailer, order, fulfillment, source="release-after-failed")
+
+        failed = RetailerSettlement(
+            id=uuid4(),
+            retailer_id=retailer.id,
+            amount_ugx=5000,
+            currency="UGX",
+            status="FAILED",
+            settlement_reference="SET-FAILED-REUSE",
+            idempotency_key="SET-IDEMP-FAILED-REUSE",
+        )
+        session.add(failed)
+        session.commit()
+
+        attach_payable_entry_to_draft_settlement(
+            session,
+            settlement_id=failed.id,
+            payable_entry_id=entry.id,
+            amount_ugx=5000,
+        )
