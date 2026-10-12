@@ -715,6 +715,31 @@ img,video{max-width:100%}
 }
 @media(max-width:380px){.retailer-product-grid{grid-template-columns:1fr}.retailer-product-media{aspect-ratio:1.6}}
 
+
+/* Retailer profile and earnings workspace */
+.rider-earnings-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.rider-earnings-card{min-width:0;padding:16px;border:1px solid #e6deef;border-radius:16px;background:#fff;box-shadow:0 7px 22px rgba(45,25,90,.04)}
+.rider-earnings-card span,.rider-earnings-card small{display:block;color:#93889f;font-size:9px}
+.rider-earnings-card strong{display:block;margin:7px 0 3px;color:#38264a;font-size:21px;line-height:1.15;overflow-wrap:anywhere}
+.rider-info-card{display:flex;flex-direction:column;gap:4px;padding:14px 16px;margin-bottom:14px;border:1px solid #e5dcef;border-radius:14px;background:#faf8fd}
+.rider-info-card b{font-size:11px;color:#493457}.rider-info-card span{font-size:10px;color:#8d8199;line-height:1.5}
+.retailer-location-card{display:flex;flex-direction:column;gap:12px;padding:15px;border:1px solid #e5deeb;border-radius:15px;background:#faf8fd}
+.retailer-location-card>div:first-child{display:flex;flex-direction:column;gap:4px}
+.retailer-location-card>div:first-child b{font-size:12px;color:#40304b}
+.retailer-location-card>div:first-child small{font-size:10px;color:#92879d;line-height:1.5}
+.retailer-location-status,.retailer-location-warning{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:11px}
+.retailer-location-status{background:#eaf8f1;color:#176f4c}
+.retailer-location-warning{background:#fff5dc;color:#916000}
+.retailer-location-status b,.retailer-location-warning b{font-size:10px}.retailer-location-status span,.retailer-location-warning span{font-size:9px;line-height:1.4}
+.retailer-location-card .button-outline{align-self:flex-start}
+@media(max-width:1100px){.rider-earnings-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){
+  .rider-earnings-grid{grid-template-columns:1fr 1fr;gap:9px}
+  .rider-earnings-card{padding:12px}.rider-earnings-card strong{font-size:16px}
+  .retailer-location-card .button-outline{width:100%}
+}
+@media(max-width:390px){.rider-earnings-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
