@@ -128,8 +128,12 @@ class PawaPayProvider:
                 },
             },
             "customerMessage": f"WEWE {request.reference}"[:22],
+            "clientReferenceId": request.reference[:64],
+            # PawaPay Merchant API v2 expects metadata as an array of
+            # key/value objects. The previous fieldName/fieldValue shape
+            # can trigger request-field validation errors on current sandbox.
             "metadata": [
-                {"fieldName": "wewePaymentReference", "fieldValue": request.reference},
+                {"wewePaymentReference": request.reference[:180]},
             ],
         }
         response = self._request("POST", "/v2/deposits", payload)
