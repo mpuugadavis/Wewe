@@ -1048,6 +1048,43 @@ body{background:radial-gradient(ellipse 75% 20% at 100% 4%,rgba(185,157,255,.11)
 @media(max-width:850px){#dashboardContent .workspace-rider-layout{grid-template-columns:minmax(0,1fr)}#dashboardContent .workspace-operations-hero,#dashboardContent .workspace-rider-hero{align-items:flex-start;flex-direction:column}}
 @media(max-width:560px){#dashboardContent .workspace-rider-metrics{gap:10px}#dashboardContent .workspace-rider-metrics>div{padding:14px;min-height:138px}#dashboardContent .workspace-rider-metrics strong{font-size:20px}#dashboardContent .workspace-rider-layout>section,#dashboardContent .workspace-rider-layout>.rider-side-card{padding:16px}#dashboardContent .workspace-operations-hero{min-height:0}}
 
+
+/* Typography system: clear UI labels, calm editorial headings, accessible sizing */
+:root{--font-ui:"DM Sans",Inter,system-ui,-apple-system,"Segoe UI",sans-serif;--font-editorial:"DM Serif Display",Georgia,serif}
+body{font-family:var(--font-ui);font-size:15px;line-height:1.55;font-weight:400;letter-spacing:-.008em}
+button,input,select,textarea{font-family:var(--font-ui)}
+button{font-weight:650}
+:where(p,small,span,button,label,input,select,textarea){overflow-wrap:break-word}
+:where(h1,h2,h3,h4){text-wrap:balance}
+.dashboard{font-family:var(--font-ui);font-size:14px;line-height:1.55;letter-spacing:0}
+.dashboard .dash-top h1{font-family:var(--font-ui);font-weight:750;font-size:clamp(24px,2.15vw,32px);letter-spacing:-.045em;line-height:1.2}
+.dashboard .dash-top p{font-size:13px;line-height:1.55}
+.dashboard .dash-eyebrow{font-size:10px;letter-spacing:.12em;font-weight:750}
+.dashboard .dash-nav :where(a,button){font-family:var(--font-ui);font-size:13px;font-weight:600;letter-spacing:0;line-height:1.45}
+.dashboard .dash-brand .logo-word{font-family:var(--font-ui);font-weight:850;letter-spacing:-.06em}
+.dashboard .dash-user b{font-size:13px;letter-spacing:-.015em}
+.dashboard #dashAccountRole{font-size:11px!important;color:#777083!important}
+#dashboardContent .workspace-intro h2{font-family:var(--font-ui);font-size:clamp(28px,2.9vw,39px);font-weight:750;line-height:1.17;letter-spacing:-.048em}
+#dashboardContent .workspace-intro p{font-size:14px}
+#dashboardContent .workspace-metric-label{font-size:12px;font-weight:650;letter-spacing:0}
+#dashboardContent .workspace-metric strong{font-family:var(--font-ui);font-size:clamp(27px,2.35vw,33px);font-weight:750;line-height:1.18;letter-spacing:-.045em}
+#dashboardContent .workspace-metric strong.workspace-metric-text{font-size:clamp(17px,1.45vw,21px);font-weight:700;letter-spacing:-.025em}
+#dashboardContent .workspace-metric small{font-size:12px;line-height:1.45}
+#dashboardContent .workspace-surface h3,#dashboardContent .panel-head h2{font-family:var(--font-ui);font-size:19px;font-weight:750;letter-spacing:-.03em;line-height:1.3}
+#dashboardContent .workspace-surface-head p,#dashboardContent .panel-head small{font-size:12px;line-height:1.5}
+#dashboardContent .workspace-action-list button{font-size:13px;font-weight:650}
+#dashboardContent .dashboard-hero h2,#dashboardContent .workspace-rider-hero h2{font-family:var(--font-ui);font-size:clamp(25px,2.5vw,34px);font-weight:750;line-height:1.2;letter-spacing:-.04em}
+#dashboardContent .dashboard-hero p,#dashboardContent .workspace-rider-hero p{font-size:14px}
+#dashboardContent .dashboard-stat-grid .stat-card .stat-value{font-family:var(--font-ui);font-size:clamp(24px,2.2vw,31px);font-weight:750;line-height:1.2;letter-spacing:-.035em}
+#dashboardContent .dashboard-stat-grid .stat-card .stat-text{font-size:clamp(16px,1.4vw,20px);line-height:1.35;letter-spacing:-.015em}
+#dashboardContent .dashboard-stat-grid .stat-card>span,#dashboardContent .workspace-rider-metrics span{font-size:12px;font-weight:650}
+#dashboardContent .workspace-rider-metrics strong{font-family:var(--font-ui);font-size:clamp(19px,1.8vw,27px);font-weight:750;line-height:1.3}
+#dashboardContent .dashboard-page-head h2{font-family:var(--font-ui);font-size:clamp(23px,2vw,29px);font-weight:750;letter-spacing:-.035em}
+#dashboardContent .dashboard-table-head,#dashboardContent :where(th){font-size:11px;font-weight:750;letter-spacing:.04em}
+#dashboardContent :where(td,.dashboard-table-row,.dashboard-list-item){font-size:13px;line-height:1.55}
+#dashboardContent :where(input,select,textarea){font-size:14px;line-height:1.5}
+@media(max-width:600px){.dashboard .dash-top h1{font-size:25px}#dashboardContent .workspace-metric strong{font-size:27px}#dashboardContent .workspace-metric strong.workspace-metric-text{font-size:17px}#dashboardContent .dashboard-stat-grid .stat-card .stat-value{font-size:24px}#dashboardContent .dashboard-stat-grid .stat-card .stat-text{font-size:16px}}
+
 </style>
 </head>
 <body>
