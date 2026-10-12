@@ -8,7 +8,8 @@ COPY pyproject.toml ./
 COPY app ./app
 COPY migrations ./migrations
 COPY alembic.ini ./
-RUN pip install --no-cache-dir .
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && python -m pip install --no-cache-dir --no-build-isolation .
 RUN useradd --create-home --uid 10001 wewe && chown -R wewe:wewe /app
 USER wewe
 EXPOSE 8000
