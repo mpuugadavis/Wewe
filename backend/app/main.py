@@ -177,6 +177,12 @@ async def unexpected_error_handler(request: Request, exc: Exception):
     return error_response(500, "internal_error", "An unexpected error occurred.", request_id)
 
 
+@app.get("/health", tags=["health"])
+def health() -> dict:
+    """Backward-compatible basic health endpoint for local tooling and deployment probes."""
+    return {"status": "ok"}
+
+
 @app.get("/health/live", tags=["health"])
 def liveness() -> dict:
     return {"status": "ok"}
