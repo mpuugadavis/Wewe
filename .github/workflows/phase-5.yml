@@ -32,6 +32,44 @@ jobs:
         run: |
           node --check frontend/app.js
           node --check frontend/retailer-media.js
+          node --check frontend/brand-ui.js
+          node --check frontend/responsive.browser.cjs
 
       - name: Run frontend smoke checks
         run: node frontend/smoke.js
+
+      - name: Install pinned browser verification tooling
+        run: npm install --prefix /tmp/wewe-browser --no-save playwright@1.51.1
+
+      - name: Install browser engines
+        run: /tmp/wewe-browser/node_modules/.bin/playwright install --with-deps chromium firefox webkit
+
+      - name: Check responsive commerce journeys in three browser engines
+        env:
+          NODE_PATH: /tmp/wewe-browser/node_modules
+        run: node frontend/responsive.browser.cjs
+
+      - name: Save responsive screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wewe-brand-responsive
+          path: artifacts/brand-responsive
+          retention-days: 14
+
+  integration-regression:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend test dependencies
+        run: pip install ".[test]"
+      - name: Check Python syntax and preserved integration contracts
+        run: |
+          python -m compileall -q app
+          pytest tests/test_openrouteservice_routing.py tests/test_payment_schema.py tests/test_cart_api.py tests/test_phase_4c_configuration.py

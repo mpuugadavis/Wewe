@@ -524,7 +524,7 @@
 
   function showAuth(register = false, role = "CUSTOMER") {
     const title = register ? "Create your WEWE account" : "Welcome back";
-    setModal(`<div class="modal-head"><div><div class="section-kicker">✦ WEWE ACCOUNT</div><h2>${title}</h2><p class="auth-subtitle">${register ? "Your campus marketplace starts here. Join the community." : "Sign in to discover, shop and stay connected around campus."}</p></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div>
+    setModal(`<div class="modal-head"><div><img class="auth-brand" src="assets/brand/wewe-logo-purple.svg" width="337" height="80" alt="WEWE"><div class="section-kicker">YOUR CAMPUS ACCOUNT</div><h2>${title}</h2><p class="auth-subtitle">${register ? "Your campus marketplace starts here. Join the community." : "Sign in to discover, shop and stay connected around campus."}</p></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div>
       <div class="auth-trust-strip"><span>✦ Made for campus life</span><span>◈ Secure account</span></div><form data-form="${register ? "register" : "login"}" class="api-form auth-form">
         ${register ? '<label class="field">Full name<input name="name" required minlength="2" autocomplete="name"></label>' : ""}
         ${register ? `<label class="field">Account type<select name="role"><option value="CUSTOMER" selected>Customer</option><option value="RETAILER">Retailer</option></select></label>` : ""}
