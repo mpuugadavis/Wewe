@@ -155,8 +155,38 @@ async def http_error_handler(request: Request, exc: HTTPException):
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_error_handler(request: Request, _exc: RequestValidationError):
-    return error_response(422, "validation_error", "One or more request fields are invalid.", getattr(request.state, "request_id", None))
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    request_id = getattr(request.state, "request_id", None)
+    # Never hide the actual validation failure from server logs. This is
+    # especially important for payment initiation because FastAPI validates
+    # the request body/header before the commerce handler (and therefore
+    # before the payment provider adapter) is entered.
+    logger.warning(
+        "Request validation failed request_id=%s path=%s errors=%s",
+        request_id,
+        request.url.path,
+        exc.errors(),
+        extra={"request_id": request_id, "environment": settings.app_env},
+    )
+    details = [
+        {
+            "location": [str(part) for part in error.get("loc", ())],
+            "message": str(error.get("msg", "Invalid value")),
+            "type": str(error.get("type", "validation_error")),
+        }
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "validation_error",
+                "message": "One or more request fields are invalid.",
+                "details": details,
+            },
+            "request_id": request_id,
+        },
+    )
 
 
 @app.exception_handler(IntegrityError)
