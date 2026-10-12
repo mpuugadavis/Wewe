@@ -1108,7 +1108,7 @@
     if (!state.user) return showAuth();
     const cart = await ensureCart();
     if (!cart.items?.length) return showToast("Add at least one item before checkout.");
-    setModal('<div class="modal-head"><div><div class="section-kicker">Secure checkout</div><h2>Choose delivery</h2></div><button class="close-modal" data-action="close-modal">×</button></div><div id="checkoutContents"><p class="api-state">Loading campus locations…</p></div>', true);
+    setModal('<div class="modal-head"><div><div class="section-kicker">WEWE · Secure checkout</div><h2>Almost at your doorstep.</h2><p class="checkout-heading-note">Choose how you would like to receive your order, then pay securely with mobile money.</p></div><button class="close-modal" data-action="close-modal" aria-label="Close checkout">×</button></div><div class="checkout-steps" aria-label="Checkout steps"><span class="is-current">01 · Delivery</span><span>02 · Payment</span><span>03 · Confirmation</span></div><div id="checkoutContents"><p class="api-state">Loading campus locations…</p></div>', true);
     let saved, campuses, pickupPoints, publicPoints;
     try {
       [saved, campuses, pickupPoints] = await Promise.all([
@@ -1148,7 +1148,7 @@
       '<div class="field"><span>Payment method</span><div class="payment-options"><label class="payment-option selected"><input type="radio" name="payment_method" value="MTN_MOMO" checked> <b>MTN Mobile Money</b><small>Pay securely from your MTN line.</small></label><label class="payment-option"><input type="radio" name="payment_method" value="AIRTEL_MONEY"> <b>Airtel Money</b><small>Pay securely from your Airtel line.</small></label></div></div>' +
       '<label class="field">Email for payment receipt<input name="email" type="email" value="' + escapeHtml(state.user?.email || "") + '" placeholder="you@example.com" required autocomplete="email"></label>' +
       '<label class="field" data-payment-phone>Mobile money phone<input name="phone" type="tel" placeholder="+256700000000" required autocomplete="tel"></label>' +
-      '<div id="checkoutQuote" class="checkout-quote"><p class="api-state">Calculating delivery route…</p></div><p class="form-message" aria-live="polite"></p><button class="button-primary">Place order</button></form>';
+      '<div id="checkoutQuote" class="checkout-quote"><p class="api-state">Calculating delivery route…</p></div><p class="form-message" aria-live="polite"></p><p class="checkout-assurance">Your final total is shown above. Payment is processed securely through mobile money.</p><button class="button-primary">Place order &amp; continue to payment</button></form>';
     if (profile.preferred_delivery_point_id && $('select[name="delivery_point_id"]')) {
       $('select[name="delivery_point_id"]').value = profile.preferred_delivery_point_id;
     }
