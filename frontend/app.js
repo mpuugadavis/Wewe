@@ -1371,6 +1371,62 @@
     return orders.map(order => `<div class="order-card"><div class="panel-head"><div><b>${escapeHtml(order.order_number)}</b><small>${formatDate(order.created_at)}</small></div>${statusBadge(order.status)}</div><div>${(order.items || []).map(item => `${escapeHtml(item.product_name || item.name)} × ${Number(item.quantity)}`).join(", ")}</div><div class="panel-head"><span>Payment ${statusBadge(order.payment_status)}</span><b>${money(order.total_ugx)}</b></div>${actions ? `<div class="row-actions"><button data-action="order-details" data-id="${escapeHtml(order.id)}">Details</button>${["PENDING","CONFIRMED","PREPARING"].includes(order.status) ? `<button data-action="cancel-order" data-id="${escapeHtml(order.id)}">Cancel</button>` : ""}<button data-action="reorder" data-id="${escapeHtml(order.id)}">Order again</button></div>` : ""}</div>`).join("");
   }
 
+  function retailerFulfillmentMeta(row) {
+    const status = String(row?.status || "UNKNOWN").toUpperCase();
+    const labels = {
+      PENDING: "New order",
+      CONFIRMED: "Accepted",
+      PREPARING: "Preparing",
+      READY: "Ready for pickup",
+      REJECTED: "Rejected",
+      CANCELLED: "Cancelled",
+      DELIVERED: "Delivered"
+    };
+    const next = {
+      PENDING: { label: "Confirm order", action: "confirm", tone: "primary" },
+      CONFIRMED: { label: "Start preparing", action: "preparing", tone: "primary" },
+      PREPARING: { label: "Mark ready for pickup", action: "ready", tone: "primary" }
+    };
+    return {
+      label: labels[status] || status.replaceAll("_", " "),
+      next: next[status] || null,
+      terminal: ["REJECTED", "CANCELLED", "DELIVERED"].includes(status)
+    };
+  }
+
+  function retailerFulfillmentCard(row) {
+    const meta = retailerFulfillmentMeta(row);
+    const items = Array.isArray(row?.items) ? row.items : [];
+    const itemCount = items.reduce((sum, item) => sum + Number(item?.quantity || 0), 0);
+    const subtotal = items.reduce((sum, item) => sum + Number(item?.unit_price_ugx || 0) * Number(item?.quantity || 0), 0);
+    const created = row?.created_at ? formatDate(row.created_at) : "Time unavailable";
+    const itemMarkup = items.length
+      ? items.map(item => '<div class="retailer-fulfillment-item"><span><b>' + escapeHtml(item.name || "Product") + '</b><small>Qty ' + Number(item.quantity || 0) + (Number(item.unit_price_ugx || 0) ? ' · ' + money(item.unit_price_ugx) + ' each' : '') + '</small></span><strong>' + money(Number(item.unit_price_ugx || 0) * Number(item.quantity || 0)) + '</strong></div>').join("")
+      : '<div class="retailer-fulfillment-empty">No item details were returned for this fulfilment.</div>';
+    const primaryAction = meta.next
+      ? '<button class="button-primary retailer-fulfillment-primary" data-action="fulfillment-action" data-id="' + escapeHtml(row.id) + '" data-status="' + meta.next.action + '">' + meta.next.label + ' <span>→</span></button>'
+      : "";
+    const rejectAction = row.status === "PENDING"
+      ? '<button class="button-outline retailer-fulfillment-reject" data-action="fulfillment-action" data-id="' + escapeHtml(row.id) + '" data-status="reject">Reject order</button>'
+      : "";
+    const secondaryAction = row.status === "PENDING"
+      ? rejectAction
+      : primaryAction ? "" : '<span class="muted">No store action required</span>';
+    return '<article class="retailer-fulfillment-card status-' + escapeHtml(String(row.status || "unknown").toLowerCase()) + '">' +
+      '<div class="retailer-fulfillment-accent"></div>' +
+      '<div class="retailer-fulfillment-head">' +
+        '<div><span class="retailer-fulfillment-eyebrow">ORDER ' + escapeHtml(row.order_number || row.id || "") + '</span><h3>' + escapeHtml(meta.label) + '</h3><small>Received ' + escapeHtml(created) + '</small></div>' +
+        '<span class="retailer-fulfillment-status">' + escapeHtml(meta.label) + '</span>' +
+      '</div>' +
+      '<div class="retailer-fulfillment-summary"><div><span>Items</span><b>' + itemCount + '</b><small>' + (itemCount === 1 ? "item" : "items") + '</small></div><div><span>Order value</span><b>' + money(subtotal) + '</b><small>Retailer item subtotal</small></div></div>' +
+      '<div class="retailer-fulfillment-items">' + itemMarkup + '</div>' +
+      '<div class="retailer-fulfillment-footer">' +
+        '<div class="retailer-fulfillment-next">' + (meta.next ? '<span>Next step</span><b>' + escapeHtml(meta.next.label) + '</b>' : '<span>Workflow</span><b>' + (meta.terminal ? "Complete" : "No action required") + '</b>') + '</div>' +
+        '<div class="row-actions retailer-fulfillment-actions">' + (primaryAction || secondaryAction) + (primaryAction && rejectAction ? rejectAction : "") + '</div>' +
+      '</div>' +
+    '</article>';
+  }
+
   async function retailerDashboard() {
     const section = state.dashboardSection;
     const [profile, fulfillments, earnings] = await Promise.all([
@@ -1463,16 +1519,16 @@
       return dashboardPage("Products", "Create, price, stock and manage your active campus listings.", content);
     }
     if (section === "fulfillments") {
-      const items = fulfillments.map(row =>
-        '<div class="order-card"><div class="panel-head"><div><b>' + escapeHtml(row.order_number || row.id) + '</b><small>' +
-        (row.items || []).map(item => escapeHtml(item.name) + " × " + Number(item.quantity)).join(" · ") +
-        '</small></div>' + statusBadge(row.status) + '</div><div class="row-actions">' +
-        (row.status === "PENDING" ? '<button data-action="fulfillment-action" data-id="' + escapeHtml(row.id) + '" data-status="confirm">Confirm</button><button data-action="fulfillment-action" data-id="' + escapeHtml(row.id) + '" data-status="reject">Reject</button>' : '') +
-        (row.status === "CONFIRMED" ? '<button data-action="fulfillment-action" data-id="' + escapeHtml(row.id) + '" data-status="preparing">Start preparing</button>' : '') +
-        (row.status === "PREPARING" ? '<button data-action="fulfillment-action" data-id="' + escapeHtml(row.id) + '" data-status="ready">Mark ready</button>' : '') +
-        '</div></div>'
-      ).join("");
-      return dashboardPage("Fulfilments", "Accept orders, prepare them and mark them ready.", items || dashboardEmpty("No fulfilments waiting.", "New orders assigned to your store will appear here."));
+      const active = fulfillments.filter(row => ["PENDING", "CONFIRMED", "PREPARING"].includes(row.status));
+      const completed = fulfillments.filter(row => !["PENDING", "CONFIRMED", "PREPARING"].includes(row.status));
+      const activeItems = active.map(retailerFulfillmentCard).join("");
+      const completedItems = completed.map(retailerFulfillmentCard).join("");
+      const activeCount = active.length;
+      const pendingCount = fulfillments.filter(row => row.status === "PENDING").length;
+      const header = '<div class="retailer-fulfillment-toolbar"><div><span class="retailer-live-dot"></span><div><strong>' + activeCount + ' active fulfilment' + (activeCount === 1 ? '' : 's') + '</strong><small>' + (pendingCount ? pendingCount + ' order' + (pendingCount === 1 ? '' : 's') + ' need' + (pendingCount === 1 ? 's' : '') + ' confirmation' : 'No new orders need confirmation right now') + '</small></div></div><button class="button-outline" data-action="dashboard-section" data-section="fulfillments">↻ Refresh</button></div>';
+      return dashboardPage("Fulfilments", "Work the order queue from confirmation to ready-for-pickup without losing the next step.", header +
+        (activeItems || dashboardEmpty("Queue is clear.", "New orders assigned to your store will appear here.")) +
+        (completedItems ? '<div class="retailer-fulfillment-history-head"><div><span class="section-kicker">Recent activity</span><h3>Completed & closed</h3></div><small>Latest fulfilments</small></div><div class="retailer-fulfillment-history">' + completedItems + '</div>' : ""));
     }
     const products = await apiFetch("/retailers/me/products");
     const pending = fulfillments.filter(item => item.status === "PENDING").length;
