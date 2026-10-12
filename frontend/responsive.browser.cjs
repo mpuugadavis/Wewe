@@ -32,12 +32,15 @@ const cart = { subtotal_ugx: 25000, items: [{ id: "i1", product_name: products[0
 async function noOverflow(page, label, selector) {
   const result = await page.evaluate(selector => {
     const element = selector ? document.querySelector(selector) : document.documentElement;
-    return { width: element.clientWidth, scroll: element.scrollWidth };
+    const bounds = element.getBoundingClientRect();
+    const offenders = [...element.querySelectorAll("*")].filter(child => child.getClientRects().length && child.getBoundingClientRect().right > bounds.right + 2).slice(0, 6).map(child => child.tagName + "#" + child.id + "." + child.className);
+    const scrollOffenders = [...element.querySelectorAll("*")].filter(child => child.getClientRects().length && child.scrollWidth > child.clientWidth + 2).slice(0, 10).map(child => [child.tagName, child.id, child.className, child.clientWidth, child.scrollWidth]);
+    return { width: element.clientWidth, scroll: element.scrollWidth, offenders, scrollOffenders };
   }, selector);
   assert.ok(result.scroll <= result.width + 2, label + " overflows: " + JSON.stringify(result));
 }
 async function screenshot(page, name) {
-  await page.screenshot({ path: path.join(output, name + ".png"), fullPage: true });
+  await page.screenshot({ path: path.join(output, name + ".png"), fullPage: process.env.WEWE_TEST_PREVIEW !== "viewport" });
 }
 async function runCase(browser, engine, width, height = 900) {
   const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
@@ -81,8 +84,13 @@ async function runCase(browser, engine, width, height = 900) {
     // Exercise the map-unavailable path deterministically; location selection/quotes still work.
     if (url.hostname === "cdn.jsdelivr.net" || url.hostname === "unpkg.com") return route.abort();
     // Keep layout tests deterministic/offline; photography loads normally in the product.
-    if (url.hostname === "images.unsplash.com") return route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="850" height="1050"><rect width="850" height="1050" fill="#8a72aa"/><circle cx="425" cy="430" r="250" fill="#d5c1eb"/></svg>' });
-    if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") return route.abort();
+    if (url.hostname === "images.unsplash.com") {
+      if (process.env.WEWE_TEST_PHOTOS === "live") return route.continue();
+      return route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="850" height="1050"><rect width="850" height="1050" fill="#8a72aa"/><circle cx="425" cy="430" r="250" fill="#d5c1eb"/></svg>' });
+    }
+    if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
+      return process.env.WEWE_TEST_PHOTOS === "live" ? route.continue() : route.abort();
+    }
     if (url.origin !== base) throw new Error("Unexpected external request: " + url.origin);
     return route.continue();
   });
@@ -91,10 +99,12 @@ async function runCase(browser, engine, width, height = 900) {
     await page.locator("#productGrid .product-card").first().waitFor();
     await noOverflow(page, engine + " homepage " + width);
     assert.equal(await page.locator(".brand-logo").count(), 3);
-    const loaded = await page.locator(".brand-logo").evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0));
-    assert.ok(loaded, "All SVG logos load");
+    await page.locator(".brand-logo").evaluateAll(images => Promise.all(images.map(image => image.decode())));
+    const logoStates = await page.locator(".brand-logo").evaluateAll(images => images.map(image => ({ source: image.getAttribute("src"), complete: image.complete, width: image.naturalWidth, height: image.naturalHeight })));
+    assert.ok(logoStates.every(image => image.complete && image.width > 0), "All SVG logos load: " + JSON.stringify(logoStates));
     const logo = await page.locator("#topbar .brand-logo").boundingBox();
     assert.ok(Math.abs(logo.width / logo.height - 337 / 80) < 0.02, "Logo aspect ratio is preserved");
+    if (process.env.WEWE_TEST_PHOTOS === "live" && engine === "chromium") await screenshot(page, engine + "-" + width + "-homepage");
     await page.locator("#searchInput").fill("no-such-product");
     await page.locator("#productGrid .empty-state").waitFor();
     await noOverflow(page, "Empty catalog " + width);
@@ -135,12 +145,13 @@ async function runCase(browser, engine, width, height = 900) {
     await page.locator("#checkoutQuote").getByText("UGX 28,500", { exact: true }).waitFor();
     if (engine === "chromium" && [320, 768, 1440].includes(width)) await screenshot(page, engine + "-" + width + "-checkout");
     // Verify payment payload contracts against fixture endpoints, never the sandbox/provider.
-    await page.locator('[name="payment_method"][value="AIRTEL_MONEY"]').check();
+    const paymentMethod = width <= 540 ? "AIRTEL_MONEY" : "MTN_MOMO";
+    await page.locator('[name="payment_method"][value="' + paymentMethod + '"]').check();
     await page.locator('[name="phone"]').fill("0700000000");
     await page.locator('form[data-form="checkout"] > .button-primary').click();
     await page.getByRole("heading", { name: "WEWE-TEST-001" }).waitFor();
     const payment = calls.find(call => call.endpoint === "/orders/order1/payments");
-    assert.equal(payment.body.method, "AIRTEL_MONEY");
+    assert.equal(payment.body.method, paymentMethod);
     assert.equal(payment.body.phone, "+256700000000");
     assert.ok(payment.headers["idempotency-key"], "Payment retains idempotency");
     const order = calls.find(call => call.endpoint === "/orders" && call.method === "POST");
@@ -153,8 +164,9 @@ async function runCase(browser, engine, width, height = 900) {
     if (width <= 780) assert.equal(await page.locator(".mobile-store-nav").isVisible(), false);
     await page.getByRole("button", { name: "Back to shop", exact: true }).click();
     await page.locator("#storefront").waitFor();
-    if (engine === "chromium" && [320, 390, 768, 1024, 1440].includes(width)) await screenshot(page, engine + "-" + width + "-homepage");
+    if (process.env.WEWE_TEST_PHOTOS !== "live" && engine === "chromium" && [320, 390, 768, 1024, 1440].includes(width)) await screenshot(page, engine + "-" + width + "-homepage");
     // Error and retry states preserve interactive controls.
+    await page.evaluate(() => localStorage.removeItem("wewe_access_token"));
     failCatalog = true;
     await page.reload();
     await page.locator("#productGrid .api-error").waitFor();
@@ -181,10 +193,13 @@ let base;
       ["firefox", firefox, [390, 768, 1440]],
       ["webkit", webkit, [390, 768, 1440]]
     ]) {
-      const browser = await type.launch();
+      if (process.env.WEWE_TEST_ENGINE && process.env.WEWE_TEST_ENGINE !== name) continue;
+      const launchOptions = name === "chromium" && process.env.WEWE_TEST_CHANNEL ? { channel: process.env.WEWE_TEST_CHANNEL } : {};
+      const browser = await type.launch(launchOptions);
       try {
-        for (const width of widths) await runCase(browser, name, width);
-        if (name === "chromium") await runCase(browser, name, 844, 390);
+        const requestedWidths = process.env.WEWE_TEST_WIDTHS?.split(",").map(Number);
+        for (const width of widths.filter(width => !requestedWidths || requestedWidths.includes(width))) await runCase(browser, name, width);
+        if (name === "chromium" && !requestedWidths) await runCase(browser, name, 844, 390);
       } finally { await browser.close(); }
     }
   } finally { server.close(); }

@@ -101,6 +101,14 @@ img{max-width:100%}
 .modal :where(.modal-head>div,.field,.map-toolbar>div){min-width:0;overflow-wrap:anywhere}
 .modal-head .close-modal{flex:none}
 #modalContent :where(input,select,textarea){font-size:16px}
+#modalContent .api-form{min-width:0;grid-template-columns:minmax(0,1fr)}
+#modalContent .api-form :where(input,select,textarea){min-width:0;max-width:100%;width:100%}
+#modalContent .api-form :where(input[type=radio],input[type=checkbox]){width:auto}
+#modalContent .api-form select{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#modalContent :where([data-checkout-delivery],[data-checkout-pickup]){min-width:0;max-width:100%}
+/* WebKit includes native option text in ancestor scroll widths. Clip the
+   destination field, retaining space for its visible focus indicator. */
+#modalContent :where([data-checkout-delivery],[data-checkout-pickup]) .field{overflow:hidden;padding:4px;margin:-4px}
 #modalContent .auth-brand{display:block;width:110px;height:auto;margin-bottom:16px}
 #modalContent :where(.cart-line-controls button,.row-actions button){min-width:44px;min-height:44px}
 #modalContent .checkout-totals p{flex-wrap:wrap;gap:8px}

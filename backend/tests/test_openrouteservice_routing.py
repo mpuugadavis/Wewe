@@ -17,6 +17,7 @@ def _settings():
 
 def test_openrouteservice_route_distance_uses_server_auth_and_road_distance():
     response = MagicMock()
+    response.__enter__.return_value = response
     response.headers.get_content_charset.return_value = "utf-8"
     response.read.return_value = b'{"routes":[{"summary":{"distance":3725.4,"duration":841.2}}]}'
 
@@ -43,6 +44,7 @@ def test_openrouteservice_route_distance_uses_server_auth_and_road_distance():
 
 def test_openrouteservice_rejects_missing_route():
     response = MagicMock()
+    response.__enter__.return_value = response
     response.headers.get_content_charset.return_value = "utf-8"
     response.read.return_value = b'{"routes":[]}'
 
@@ -59,6 +61,7 @@ def test_openrouteservice_rejects_missing_route():
 
 def test_openrouteservice_geocodes_feature_coordinates():
     response = MagicMock()
+    response.__enter__.return_value = response
     response.headers.get_content_charset.return_value = "utf-8"
     response.read.return_value = (
         b'{"features":[{"geometry":{"coordinates":[32.5747,-0.3441]}}]}'

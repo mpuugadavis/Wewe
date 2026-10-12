@@ -6,6 +6,15 @@
   if (!backdrop || !modal) return;
   let wasOpen = false;
   let returnFocus = null;
+  let lastTrigger = null;
+  let lastTriggerTime = 0;
+  // Safari/WebKit does not focus every button on a mouse click. Remember the
+  // actual opener before app.js handles the click and creates the dialog.
+  document.addEventListener("click", event => {
+    if (backdrop.classList.contains("open") || !(event.target instanceof Element)) return;
+    lastTrigger = event.target.closest('button,a[href],input,select,textarea,[tabindex="0"]');
+    lastTriggerTime = Date.now();
+  }, true);
   const background = [...document.body.children].filter(element =>
     ![backdrop, document.getElementById("toast")].includes(element) &&
     !["SCRIPT", "STYLE"].includes(element.tagName));
@@ -16,7 +25,9 @@
   function synchronize() {
     const open = backdrop.classList.contains("open");
     if (open && !wasOpen) {
-      returnFocus = document.activeElement;
+      returnFocus = lastTrigger?.isConnected && Date.now() - lastTriggerTime < 10000
+        ? lastTrigger : document.activeElement;
+      lastTrigger = null;
       background.forEach(element => {
         previousInert.set(element, element.inert);
         element.inert = true;

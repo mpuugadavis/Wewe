@@ -70,6 +70,8 @@ jobs:
       - name: Install backend test dependencies
         run: pip install ".[test]"
       - name: Check Python syntax and preserved integration contracts
+        env:
+          OPENROUTESERVICE_API_KEY: test-openrouteservice-key
         run: |
           python -m compileall -q app
           pytest tests/test_openrouteservice_routing.py tests/test_payment_schema.py tests/test_cart_api.py tests/test_phase_4c_configuration.py
