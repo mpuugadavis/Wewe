@@ -1088,6 +1088,15 @@ button{font-weight:650}
 #dashboardContent :where(input,select,textarea){font-size:14px;line-height:1.5}
 @media(max-width:600px){.dashboard .dash-top h1{font-size:25px}#dashboardContent .workspace-metric strong{font-size:27px}#dashboardContent .workspace-metric strong.workspace-metric-text{font-size:17px}#dashboardContent .dashboard-stat-grid .stat-card .stat-value{font-size:24px}#dashboardContent .dashboard-stat-grid .stat-card .stat-text{font-size:16px}}
 
+
+/* Dashboard grid alignment: prevent tall admin navigation from vertically centering short pages */
+@media(min-width:901px){
+  .dashboard:not(.hidden){align-items:start;align-content:start}
+  .dashboard .dash-main{align-self:start;min-height:100vh;padding-top:30px}
+  .dashboard .dash-side{align-self:stretch;min-height:100vh}
+  .dashboard .dash-top{margin-top:0}
+}
+
 </style>
 </head>
 <body>
