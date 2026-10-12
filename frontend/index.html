@@ -916,6 +916,38 @@ body{background:radial-gradient(ellipse 75% 20% at 100% 4%,rgba(185,157,255,.11)
 @media(max-width:680px){.dashboard .dash-top{align-items:flex-start;flex-wrap:wrap}.dashboard .dash-user{padding:7px 10px}.dashboard .dash-top h1{font-size:25px}#dashboardContent :where(table){display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}#dashboardContent :where(td,th){white-space:nowrap}.dash-eyebrow{font-size:9px}}
 @media(prefers-reduced-motion:reduce){.dashboard .dash-nav button,.dashboard .dash-nav a{transition:none}}
 
+
+/* Dashboard components shared by operations, retailer, rider and admin */
+#dashboardContent .dashboard-hero{position:relative;isolation:isolate;overflow:hidden;background:linear-gradient(118deg,#281344,#54309a 67%,#7954d8);color:#fff;border:1px solid rgba(255,255,255,.13);border-radius:24px;padding:clamp(22px,3vw,36px);box-shadow:0 22px 48px rgba(50,24,101,.16)}
+#dashboardContent .dashboard-hero:after{content:"";position:absolute;width:230px;height:230px;border:1px solid rgba(255,255,255,.13);border-radius:50%;right:-60px;top:-105px;box-shadow:0 0 0 34px rgba(255,255,255,.035),0 0 0 75px rgba(255,255,255,.025);z-index:-1;pointer-events:none}
+#dashboardContent .dashboard-hero h2{color:#fff;font-size:clamp(24px,2.7vw,38px);line-height:1.15;letter-spacing:-.04em}
+#dashboardContent .dashboard-hero p{color:#e8defe;max-width:640px;line-height:1.65}
+#dashboardContent .dashboard-hero .eyebrow{color:#d5c1ff;letter-spacing:.14em;text-transform:uppercase;font-weight:800;font-size:11px}
+#dashboardContent .dashboard-hero .button-outline{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.09)}
+#dashboardContent .dashboard-page-head{margin:6px 0 22px}
+#dashboardContent .dashboard-page-head h2{font-size:clamp(22px,2.3vw,31px);margin:6px 0 8px}
+#dashboardContent .dashboard-page-head p{color:#786d87;line-height:1.6}
+#dashboardContent .dashboard-page-head .eyebrow{font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#7651cb}
+#dashboardContent .dashboard-panel{background:#fff;border:1px solid #e9e3f2;border-radius:20px;box-shadow:0 12px 34px rgba(41,23,78,.055);padding:clamp(16px,2.5vw,26px);min-width:0}
+#dashboardContent .dashboard-stat-grid{gap:15px}
+#dashboardContent .stat-card{position:relative;overflow:hidden;padding:clamp(17px,2vw,23px)}
+#dashboardContent .stat-card:before{content:"";position:absolute;right:-18px;top:-26px;width:90px;height:90px;border-radius:50%;background:rgba(120,82,227,.06);pointer-events:none}
+#dashboardContent .stat-card>span{font-size:12px;font-weight:650;color:#736982}
+#dashboardContent .stat-card .stat-value{font-size:clamp(24px,2.6vw,36px);line-height:1.2;letter-spacing:-.04em;color:#291647}
+#dashboardContent .stat-card small{color:#877d94;line-height:1.5}
+#dashboardContent .dashboard-list-item{padding:15px 0;border-bottom:1px solid #eee9f4;display:flex;align-items:center;justify-content:space-between;gap:16px}
+#dashboardContent .dashboard-list-item:last-child{border-bottom:0}
+#dashboardContent .dashboard-list-item b{overflow-wrap:anywhere}
+#dashboardContent .dashboard-list-item small{display:block;margin-top:5px;color:#81768e}
+#dashboardContent .dashboard-table{max-width:100%;overflow-x:auto;border:1px solid #eee8f5;border-radius:16px}
+#dashboardContent .dashboard-table-head{background:#f5f1fb;color:#685a7b;font-size:11px;font-weight:800;letter-spacing:.04em}
+#dashboardContent .dashboard-table-row{background:#fff;border-top:1px solid #eee8f5}
+#dashboardContent .dashboard-table-row:hover{background:#fbf9ff}
+#dashboardContent .dashboard-empty{padding:clamp(28px,5vw,58px);text-align:center;border:1px dashed #d9c9f0;border-radius:20px;background:linear-gradient(140deg,#fff,#f8f4ff)}
+#dashboardContent .dashboard-empty .empty-icon{margin-inline:auto}
+#dashboardContent .dashboard-empty p{color:#7b7089;line-height:1.6}
+@media(max-width:680px){#dashboardContent .dashboard-hero{border-radius:18px}#dashboardContent .dashboard-hero:after{width:140px;height:140px}#dashboardContent .dashboard-list-item{align-items:flex-start;flex-wrap:wrap}#dashboardContent .dashboard-panel{border-radius:16px}}
+
 </style>
 </head>
 <body>
