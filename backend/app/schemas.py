@@ -269,13 +269,33 @@ class PaymentCreate(BaseModel):
     phone: str = Field(min_length=9, max_length=64)
     email: str | None = Field(default=None, max_length=320)
 
+    @field_validator("method", mode="before")
+    @classmethod
+    def normalize_payment_method(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("Choose MTN Mobile Money or Airtel Money")
+        normalized = value.strip().upper().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "MTN": "MTN_MOMO",
+            "MTN_MOBILE_MONEY": "MTN_MOMO",
+            "MTN_MOMO_UGA": "MTN_MOMO",
+            "AIRTEL": "AIRTEL_MONEY",
+            "AIRTEL_MOBILE_MONEY": "AIRTEL_MONEY",
+            "AIRTEL_MONEY_UGA": "AIRTEL_MONEY",
+        }
+        return aliases.get(normalized, normalized)
+
     @field_validator("email")
     @classmethod
     def validate_payment_email(cls, value: str | None) -> str | None:
         if value is None or not value.strip():
             return None
         try:
-            return validate_email(value.strip(), check_deliverability=False).normalized
+            return validate_email(
+                value.strip(),
+                check_deliverability=False,
+                test_environment=get_settings().app_env in {"development", "test"},
+            ).normalized
         except EmailNotValidError as exc:
             raise ValueError("Enter a valid email address for mobile-money checkout") from exc
 
@@ -284,8 +304,6 @@ class PaymentCreate(BaseModel):
     def normalize_payment_phone(cls, value: str) -> str:
         if not isinstance(value, str):
             raise ValueError("Enter a valid Ugandan mobile number, for example +256700000000")
-        # Normalize first so Pydantic's length constraints apply to the
-        # canonicalized value rather than rejecting a harmless formatted input.
         cleaned = value.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
         if cleaned.startswith("00"):
             cleaned = "+" + cleaned[2:]
@@ -295,10 +313,6 @@ class PaymentCreate(BaseModel):
             cleaned = "+" + cleaned
         if not cleaned.startswith("+") or not cleaned[1:].isdigit():
             raise ValueError("Enter a valid Ugandan mobile number, for example +256700000000")
-        # Field constraints run before field validators in Pydantic, so the
-        # input field deliberately allows formatted human-entered numbers
-        # (for example "+256 (700) 000-000"). The normalized value is then
-        # strictly validated as a Ugandan 7xx E.164 number.
         if len(cleaned) != 13 or not cleaned.startswith("+2567"):
             raise ValueError("Enter a valid Ugandan mobile number, for example +256700000000")
         return cleaned
