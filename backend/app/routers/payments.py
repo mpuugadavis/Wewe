@@ -33,6 +33,95 @@ from app.services.state_transitions import aggregate_payment_status, is_payment_
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 
+
+@router.post("/pawapay/deposit-callback")
+@limiter.limit("120/minute")
+async def pawapay_deposit_callback(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Receive the final asynchronous PawaPay deposit outcome."""
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_callback", "message": "PawaPay callback body must be valid JSON."},
+        ) from None
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_callback", "message": "PawaPay callback payload is invalid."},
+        )
+
+    deposit_id = payload.get("depositId")
+    status = str(payload.get("status", "")).upper()
+    if not isinstance(deposit_id, str) or not deposit_id:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_callback", "message": "PawaPay callback is missing depositId."},
+        )
+    if status not in {"COMPLETED", "FAILED"}:
+        return {"received": True, "ignored": True, "status": status}
+
+    currency = str(payload.get("currency", "")).upper()
+    try:
+        amount = Decimal(str(payload.get("amount")))
+    except (InvalidOperation, TypeError):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_callback_amount", "message": "PawaPay returned an invalid amount."},
+        ) from None
+
+    if currency != "UGX" or not amount.is_finite() or amount != amount.to_integral_value() or amount <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "callback_details_mismatch", "message": "PawaPay callback amount or currency is invalid."},
+        )
+
+    normalized = PaymentWebhookIn(
+        provider_reference=deposit_id,
+        provider_event_id=deposit_id,
+        amount_ugx=int(amount),
+        currency="UGX",
+        status="SUCCESSFUL" if status == "COMPLETED" else "FAILED",
+    )
+    # PawaPay v2 callbacks are asynchronous. The provider's final callback is
+    # the authoritative outcome; the common handler below performs idempotency,
+    # amount matching, order-state transitions, notifications and allocation.
+    return await provider_webhook(
+        "PAWAPAY",
+        normalized,
+        request,
+        signature=request.headers.get("X-Webhook-Signature", "pawapay-callback"),
+        db=db,
+    )
+
+
+@router.post("/pawapay/payout-callback")
+@limiter.limit("120/minute")
+async def pawapay_payout_callback(request: Request) -> dict:
+    """Receive PawaPay payout callbacks for future rider/retailer disbursements."""
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_callback", "message": "PawaPay callback body must be valid JSON."},
+        ) from None
+    if not isinstance(payload, dict) or not isinstance(payload.get("payoutId"), str):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_callback", "message": "PawaPay payout callback is invalid."},
+        )
+    return {
+        "received": True,
+        "payout_id": payload["payoutId"],
+        "status": payload.get("status"),
+    }
+
+
 @router.post("/flutterwave/webhook")
 @limiter.limit("120/minute")
 async def flutterwave_webhook(request: Request, db: Session = Depends(get_db)) -> dict:
