@@ -1,7 +1,9 @@
 (() => {
   "use strict";
 
-  const API_BASE = document.querySelector('meta[name="wewe-api-base"]')?.content || "http://localhost:8000/api/v1";
+  const configuredApiBase = String(window.WEWE_API_BASE || document.querySelector('meta[name="wewe-api-base"]')?.content || "").trim();
+  const isLocalFrontend = ["localhost", "127.0.0.1"].includes(location.hostname);
+  const API_BASE = configuredApiBase || (isLocalFrontend ? "http://localhost:8000/api/v1" : "/api/v1");
   const ACCESS_KEY = "wewe_access_token";
   const REFRESH_KEY = "wewe_refresh_token";
   const $ = (selector, root = document) => root.querySelector(selector);
