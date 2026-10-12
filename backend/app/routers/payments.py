@@ -16,11 +16,17 @@ from app.models import (
     PaymentEvent,
     PaymentReconciliation,
     PaymentRefund,
+    DeliveryPayoutBatch,
     utcnow,
 )
 from app.schemas import PaymentWebhookIn
 from app.services.retailer_payment_allocation import allocate_successful_payment_for_order
 from app.services.retailer_payment_payable import post_payable_credit_for_payment_allocation
+from app.services.rider_payout_batches import (
+    fail_rider_payout_batch,
+    settle_rider_payout_batch,
+    RiderPayoutBatchError,
+)
 from app.services.payment_attempts import (
     record_cancelled_order_capture_review,
     record_payment_conflict,
@@ -140,8 +146,11 @@ async def pawapay_deposit_callback(
 
 @router.post("/pawapay/payout-callback")
 @limiter.limit("120/minute")
-async def pawapay_payout_callback(request: Request) -> dict:
-    """Receive PawaPay payout callbacks for future rider/retailer disbursements."""
+async def pawapay_payout_callback(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Apply final PawaPay payout outcomes to a submitted rider batch when linked."""
     try:
         payload = await request.json()
     except Exception:
@@ -149,15 +158,59 @@ async def pawapay_payout_callback(request: Request) -> dict:
             status_code=400,
             detail={"code": "invalid_callback", "message": "PawaPay callback body must be valid JSON."},
         ) from None
-    if not isinstance(payload, dict) or not isinstance(payload.get("payoutId"), str):
+
+    payload = _pawapay_operation_payload(payload, "payoutId")
+    payout_id = payload["payoutId"]
+    status = str(payload.get("status", "")).upper()
+
+    if status not in {"COMPLETED", "FAILED"}:
+        return {
+            "received": True,
+            "operation": "PAYOUT",
+            "payout_id": payout_id,
+            "ignored": True,
+            "status": status,
+        }
+
+    batch = db.scalar(
+        select(DeliveryPayoutBatch)
+        .where(DeliveryPayoutBatch.payout_reference == payout_id)
+        .with_for_update()
+    )
+    if batch is None:
         raise HTTPException(
-            status_code=422,
-            detail={"code": "invalid_callback", "message": "PawaPay payout callback is invalid."},
+            status_code=404,
+            detail={
+                "code": "payout_not_found",
+                "message": "No local rider payout batch matches this PawaPay payoutId.",
+            },
         )
+
+    try:
+        if status == "COMPLETED":
+            settle_rider_payout_batch(
+                db,
+                batch_id=batch.id,
+                payout_reference=payout_id,
+            )
+        else:
+            fail_rider_payout_batch(db, batch_id=batch.id)
+        db.commit()
+    except RiderPayoutBatchError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "payout_lifecycle_conflict",
+                "message": str(exc),
+            },
+        ) from exc
+
     return {
         "received": True,
-        "payout_id": payload["payoutId"],
-        "status": payload.get("status"),
+        "operation": "PAYOUT",
+        "payout_id": payout_id,
+        "status": "SETTLED" if status == "COMPLETED" else "FAILED",
     }
 
 
