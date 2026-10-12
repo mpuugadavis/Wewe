@@ -1110,6 +1110,53 @@ button{font-weight:650}
 @media(max-width:900px){.dashboard:not(.hidden){grid-template-columns:minmax(0,1fr)}.dashboard .dash-main{width:100%;padding-top:22px}.dashboard .dash-side{min-width:0}.dashboard .dash-nav{flex-direction:row;overflow-x:auto;overscroll-behavior-x:contain}.dashboard .dash-nav button{flex:0 0 auto;white-space:nowrap}}
 @media(min-width:901px){.dashboard .dash-side{min-height:100vh}.dashboard .dash-main{padding-top:30px}}
 
+
+/* WEWE premium commerce overlays — sign-in, basket and checkout */
+#modalContent:has(.auth-form){width:min(480px,100%);padding:clamp(23px,3vw,38px);background:radial-gradient(circle at 96% 0%,#f1eaff 0,transparent 39%),#fff;border:1px solid #e9e0f7}
+#modalContent:has(.auth-form) .modal-head{align-items:flex-start;margin-bottom:8px}
+#modalContent:has(.auth-form) .modal-head h2{font-family:"DM Sans",sans-serif;font-size:clamp(28px,3vw,37px);font-weight:800;letter-spacing:-.055em;line-height:1.13;margin-top:8px}
+.auth-subtitle,.cart-heading-note{font-size:13px;line-height:1.65;color:#776b87;margin:10px 0 0;max-width:390px}
+.auth-trust-strip{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 15px}
+.auth-trust-strip span,.checkout-confidence span{display:inline-flex;align-items:center;gap:6px;border:1px solid #e7dff6;border-radius:99px;background:#f7f3ff;color:#6645ad;font-size:11px;font-weight:700;padding:7px 11px}
+#modalContent .auth-form{gap:16px;margin:12px 0 16px}
+#modalContent .auth-form .field{font-size:12px;font-weight:700;color:#423454;gap:8px}
+#modalContent .auth-form input,#modalContent .auth-form select{min-height:48px;border-radius:12px;border:1px solid #ddd5ea;background:#fff;font-size:14px;font-weight:500;padding:12px 14px}
+#modalContent .auth-form input:focus-visible,#modalContent .auth-form select:focus-visible{border-color:#8659ed;outline:0;box-shadow:0 0 0 4px rgba(127,82,228,.12)}
+#modalContent .auth-submit{width:100%;min-height:51px;border-radius:12px;background:linear-gradient(105deg,#6739df,#8d5af4);box-shadow:0 10px 24px rgba(99,57,215,.19);font-size:14px;font-weight:800}
+#modalContent:has(.auth-form)>.text-link{display:block;margin:14px auto 0;text-align:center;font-size:13px;font-weight:700}
+#modalContent:has(#cartContents),#modalContent:has(#checkoutContents){background:#fff;border:1px solid #eae4f4;padding:clamp(20px,3vw,34px)}
+#modalContent:has(#cartContents) .modal-head h2,#modalContent:has(#checkoutContents) .modal-head h2{font-family:"DM Sans",sans-serif;font-size:clamp(26px,2.7vw,35px);letter-spacing:-.05em;font-weight:800;line-height:1.2}
+#cartContents .cart-intro{background:linear-gradient(120deg,#30144e,#6b3bd0);box-shadow:0 12px 25px rgba(68,29,130,.13);border-radius:16px}
+#cartContents .cart-lines{display:grid;gap:11px;margin-top:18px}
+#cartContents .cart-line{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:18px;background:#fcfaff;border:1px solid #eee8f5;border-radius:14px;padding:17px}
+#cartContents .cart-line>div:first-child{min-width:0}
+#cartContents .cart-line b{font-size:14px;line-height:1.4;color:#281b3e;overflow-wrap:anywhere}
+#cartContents .cart-line small{display:block;font-size:12px;color:#82768e;line-height:1.6;margin-top:5px}
+#cartContents .cart-line-controls{display:flex;align-items:center;gap:7px}
+#cartContents .cart-line-controls button{min-width:32px;min-height:32px;border:1px solid #e6dcf4;border-radius:9px;background:#fff;color:#613bc2;font-size:13px;font-weight:700}
+#cartContents .cart-line-controls button:hover:not(:disabled){background:#eee7ff}
+#cartContents .cart-line-controls span{font-weight:800;font-size:13px;min-width:19px;text-align:center}
+#cartContents .cart-summary{background:linear-gradient(135deg,#f7f3ff,#fff);border:1px solid #e8def8;border-radius:17px;padding:21px;margin-top:20px}
+#cartContents .cart-summary-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:18px}
+#cartContents .cart-summary-title span{font-size:11px;font-weight:800;letter-spacing:.12em;color:#6c42c7}
+#cartContents .cart-summary-title small{font-size:11px;color:#877b94}
+#cartContents .cart-summary>p{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:#625670}
+#cartContents .cart-summary .button-primary{width:100%;min-height:49px;border-radius:12px;margin-top:13px;background:linear-gradient(105deg,#6337dc,#8953f2);font-size:14px;font-weight:800}
+#cartContents .cart-secure-note{justify-content:center!important;font-size:11px!important;color:#776b87!important;margin:13px 0 0}
+#modalContent:has(#checkoutContents){width:min(920px,100%)}
+.checkout-confidence{display:flex;gap:9px;flex-wrap:wrap;margin:15px 0}
+#modalContent .checkout-steps{margin:18px 0 23px}
+#modalContent .checkout-steps span{border-radius:11px;font-size:12px;font-weight:750;padding:13px 9px;background:#faf8fd}
+#modalContent .checkout-steps .is-current{background:#eee7ff;border-color:#c7b1f5;color:#6038bc}
+#checkoutContents .api-form{gap:18px}
+#checkoutContents .field{font-size:12px;font-weight:700;color:#423454}
+#checkoutContents :where(input,select,textarea){font-size:14px;min-height:45px;border-radius:11px}
+#checkoutContents :where(input,select,textarea):focus-visible{outline:2px solid #926af0;outline-offset:1px}
+#checkoutContents .button-primary{min-height:49px;border-radius:12px;background:linear-gradient(105deg,#6337dc,#8953f2);font-weight:800}
+@media(max-width:720px){#cartContents .cart-line{grid-template-columns:minmax(0,1fr) auto;gap:10px}#cartContents .cart-line-controls{grid-column:1/-1;grid-row:2;justify-content:flex-start}#cartContents .cart-line> b{grid-column:2;grid-row:1;text-align:right}#cartContents .cart-summary-title{align-items:flex-start;flex-direction:column}}
+@media(max-width:480px){#modalContent:has(.auth-form),#modalContent:has(#cartContents),#modalContent:has(#checkoutContents){padding:19px 15px}#cartContents .cart-line{padding:13px}#modalContent .checkout-steps{gap:5px}#modalContent .checkout-steps span{font-size:10px;padding:10px 5px}.checkout-confidence{gap:6px}.checkout-confidence span{font-size:10px}}
+@media(prefers-reduced-motion:reduce){#modalContent .auth-submit{transition:none}}
+
 </style>
 </head>
 <body>

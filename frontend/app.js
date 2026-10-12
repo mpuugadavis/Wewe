@@ -458,7 +458,7 @@
   function showCart() {
     if (!state.user) return showAuth();
     if (state.user.role !== "CUSTOMER") return showToast("Shopping cart is available to customer accounts.");
-    setModal('<div class="modal-head"><div><div class="section-kicker">Your basket</div><h2>Shopping cart</h2></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div><div id="cartContents"><p class="api-state">Loading your cart…</p></div>', true);
+    setModal('<div class="modal-head"><div><div class="section-kicker">✦ YOUR CAMPUS PICKS</div><h2>Your basket</h2><p class="cart-heading-note">Everything you love, ready for the next step.</p></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div><div id="cartContents"><p class="api-state">Loading your cart…</p></div>', true);
     renderCartContents().catch(error => {
       $("#cartContents").innerHTML = `<p class="api-state api-error">${escapeHtml(error.message)}</p>`;
     });
@@ -470,7 +470,7 @@
     $("#cartContents").innerHTML = items.length ? `<div class="cart-intro"><span class="cart-intro-mark" aria-hidden="true">✦</span><div><strong>Your campus picks</strong><small>Review your basket, then choose delivery or pickup.</small></div></div><div class="cart-lines">${items.map(item => `<div class="cart-line">
       <div><b>${escapeHtml(item.product_name)}</b><small>${escapeHtml(item.retailer_name)} · ${money(item.unit_price_ugx)} each</small></div>
       <div class="cart-line-controls"><button data-action="cart-quantity" data-item-id="${escapeHtml(item.id)}" data-quantity="${Number(item.quantity) - 1}" ${Number(item.quantity) <= 1 ? "disabled" : ""} aria-label="Decrease quantity">−</button><span>${Number(item.quantity)}</span><button data-action="cart-quantity" data-item-id="${escapeHtml(item.id)}" data-quantity="${Number(item.quantity) + 1}" aria-label="Increase quantity">+</button><button data-action="remove-cart" data-item-id="${escapeHtml(item.id)}" aria-label="Remove item">Remove</button></div>
-      <b>${money(item.line_total_ugx)}</b></div>`).join("")}</div><div class="cart-summary"><p>Subtotal <b>${money(cart.subtotal_ugx)}</b></p><p>Delivery fee <span>Calculated securely at checkout</span></p><button class="button-primary" data-action="checkout">Continue to checkout</button></div>` : '<div class="api-state"><p>Your cart is empty.</p><button class="button-outline" data-action="close-modal">Continue shopping</button></div>';
+      <b>${money(item.line_total_ugx)}</b></div>`).join("")}</div><div class="cart-summary"><div class="cart-summary-title"><span>ORDER SUMMARY</span><small>Final delivery fee appears at checkout</small></div><p>Subtotal <b>${money(cart.subtotal_ugx)}</b></p><p>Delivery fee <span>Calculated securely at checkout</span></p><button class="button-primary" data-action="checkout">Continue to secure checkout <span aria-hidden="true">↗</span></button><p class="cart-secure-note">◈ Secure online payment · No cash required</p></div>` : '<div class="api-state"><p>Your cart is empty.</p><button class="button-outline" data-action="close-modal">Continue shopping</button></div>';
   }
 
   async function addToCart(listingId, quantity = 1) {
@@ -524,14 +524,14 @@
 
   function showAuth(register = false, role = "CUSTOMER") {
     const title = register ? "Create your WEWE account" : "Welcome back";
-    setModal(`<div class="modal-head"><div><div class="section-kicker">WEWE account</div><h2>${title}</h2></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div>
-      <form data-form="${register ? "register" : "login"}" class="api-form">
+    setModal(`<div class="modal-head"><div><div class="section-kicker">✦ WEWE ACCOUNT</div><h2>${title}</h2><p class="auth-subtitle">${register ? "Your campus marketplace starts here. Join the community." : "Sign in to discover, shop and stay connected around campus."}</p></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div>
+      <div class="auth-trust-strip"><span>✦ Made for campus life</span><span>◈ Secure account</span></div><form data-form="${register ? "register" : "login"}" class="api-form auth-form">
         ${register ? '<label class="field">Full name<input name="name" required minlength="2" autocomplete="name"></label>' : ""}
         ${register ? `<label class="field">Account type<select name="role"><option value="CUSTOMER" selected>Customer</option><option value="RETAILER">Retailer</option></select></label>` : ""}
         <label class="field">Email or phone<input name="email" type="text" required autocomplete="username"></label>
         ${register ? '<label class="field">Phone<input name="phone" type="tel" autocomplete="tel"></label><label class="field hidden" data-register-business>Business name<input name="business_name" maxlength="180"></label><label class="field hidden" data-register-transport>Transport mode<input name="transport_mode" maxlength="40"></label>' : ""}
         ${passwordField("password", register ? "Create password" : "Password", register ? "new-password" : "current-password", register ? "12" : "1")}
-        <p class="form-message" aria-live="polite"></p><button class="button-primary" type="submit">${register ? "Create account" : "Sign in"}</button>
+        <p class="form-message" aria-live="polite"></p><button class="button-primary auth-submit" type="submit">${register ? "Create your account ↗" : "Sign in to WEWE ↗"}</button>
       </form><button class="text-link" data-action="${register ? "show-login" : "show-register"}">${register ? "Already registered? Sign in" : "New to WEWE? Create an account"}</button>`, false);
     if (register) updateRegistrationFields();
   }
@@ -1108,7 +1108,7 @@
     if (!state.user) return showAuth();
     const cart = await ensureCart();
     if (!cart.items?.length) return showToast("Add at least one item before checkout.");
-    setModal('<div class="modal-head"><div><div class="section-kicker">WEWE · Secure checkout</div><h2>Almost at your doorstep.</h2><p class="checkout-heading-note">Choose how you would like to receive your order, then pay securely with mobile money.</p></div><button class="close-modal" data-action="close-modal" aria-label="Close checkout">×</button></div><div class="checkout-steps" aria-label="Checkout steps"><span class="is-current">01 · Delivery</span><span>02 · Payment</span><span>03 · Confirmation</span></div><div id="checkoutContents"><p class="api-state">Loading campus locations…</p></div>', true);
+    setModal('<div class="modal-head"><div><div class="section-kicker">✦ WEWE SECURE CHECKOUT</div><h2>Almost at your doorstep.</h2><p class="checkout-heading-note">Choose how you would like to receive your order, then pay securely with mobile money.</p></div><button class="close-modal" data-action="close-modal" aria-label="Close checkout">×</button></div><div class="checkout-confidence"><span>◈ Secure mobile money</span><span>⌖ Campus delivery &amp; pickup</span></div><div class="checkout-steps" aria-label="Checkout steps"><span class="is-current">01 · Delivery</span><span>02 · Payment</span><span>03 · Confirmation</span></div><div id="checkoutContents"><p class="api-state">Loading campus locations…</p></div>', true);
     let saved, campuses, pickupPoints, publicPoints;
     try {
       [saved, campuses, pickupPoints] = await Promise.all([
