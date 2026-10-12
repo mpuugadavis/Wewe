@@ -2344,6 +2344,13 @@
       renderCatalog();
     });
 
+    on("#modalBackdrop", "click", event => {
+      if (event.target === $("#modalBackdrop")) closeModal();
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && $("#modalBackdrop")?.classList.contains("open")) closeModal();
+    });
+
     on("#modalContent", "change", event => {
       if (event.target.closest('form[data-form="checkout"]')) {
         if (event.target.name === "delivery_point_id") selectCheckoutPoint(event.target.value);
