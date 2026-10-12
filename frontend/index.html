@@ -781,6 +781,41 @@ img,video{max-width:100%}
 @media(max-width:1000px){.category-showcase{grid-template-columns:repeat(4,minmax(0,1fr))}.commerce-rail .compact-product-card{flex-basis:230px}}
 @media(max-width:680px){.category-showcase{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.category-image{height:112px}.catalog-hint{display:none}.catalog-toolbar{margin-bottom:12px}.commerce-rail .compact-product-card{flex-basis:205px}.compact-product-card .product-image{height:190px}.rail-arrow{display:none}}
 @media(max-width:430px){.category-image{height:100px}.category-label{padding:11px;font-size:10px}.commerce-rail .compact-product-card{flex-basis:180px}}
+
+/* WEWE commerce experience: product discovery and basket */
+.product-modal{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:clamp(20px,4vw,48px);align-items:start}
+.product-modal-image{min-height:340px;aspect-ratio:1/1;background:linear-gradient(145deg,#f4efff,#e8e0fa);border-radius:24px;overflow:hidden;display:grid;place-items:center}
+.product-modal-image img{width:100%;height:100%;object-fit:cover}
+.product-modal-copy{min-width:0}
+.product-modal-copy h2{font-size:clamp(26px,3vw,40px);line-height:1.13;letter-spacing:-.035em;margin:12px 0}
+.product-modal-copy>p{color:var(--muted);line-height:1.75}
+.product-modal-copy>h3{font-size:17px;margin:26px 0 12px}
+.product-modal-copy .close-modal{float:right}
+.product-modal-copy .listing-row{border:1px solid var(--line);border-radius:16px;padding:16px;margin:10px 0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#fff}
+.product-modal-copy .listing-row>span:first-child{flex:1;min-width:130px}
+.product-modal-copy .listing-row small{display:block;color:var(--muted);margin-top:5px}
+.product-modal-copy .listing-price{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.product-modal-copy .detail-quantity-field{max-width:150px}
+.product-modal-copy .review-row{padding:16px 0;border-bottom:1px solid var(--line);display:grid;gap:6px}
+.product-modal-copy .review-row small{color:var(--muted)}
+.cart-lines{display:grid;gap:12px;margin:18px 0}
+.cart-line{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:20px;padding:18px;border:1px solid var(--line);border-radius:18px;background:var(--surface)}
+.cart-line>div:first-child{min-width:0}
+.cart-line>div:first-child b{display:block;line-height:1.4}
+.cart-line>div:first-child small{display:block;color:var(--muted);margin-top:5px}
+.cart-line-controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.cart-line-controls button{min-width:36px;min-height:36px;border:1px solid var(--line);border-radius:10px;background:#f8f6fc;color:var(--ink);cursor:pointer}
+.cart-line-controls button:disabled{opacity:.4;cursor:not-allowed}
+.cart-line-controls button[data-action="remove-cart"]{padding:0 12px;color:#8b3450}
+.cart-line>b{white-space:nowrap}
+.cart-summary{margin-top:22px;border-radius:20px;background:#f5f0ff;padding:22px;display:grid;gap:12px}
+.cart-summary p{display:flex;justify-content:space-between;gap:14px;margin:0}
+.cart-summary p span{color:var(--muted);text-align:right}
+.cart-summary .button-primary{width:100%;min-height:48px;margin-top:6px}
+@media(max-width:760px){.product-modal{grid-template-columns:1fr;gap:20px}.product-modal-image{min-height:220px;max-height:380px;aspect-ratio:4/3}.cart-line{grid-template-columns:1fr auto;gap:12px}.cart-line-controls{grid-column:1/-1;grid-row:2}.cart-line>b{grid-column:2;grid-row:1}.product-modal-copy .listing-row{align-items:flex-start}}
+@media(max-width:420px){.product-modal-image{min-height:190px}.cart-line{padding:14px}.cart-summary{padding:16px}.product-modal-copy .listing-row{padding:12px}}
+@media(prefers-reduced-motion:reduce){.product-modal *, .cart-line *{scroll-behavior:auto}}
+
 </style>
 </head>
 <body>
