@@ -319,10 +319,15 @@ class PawaPayProvider:
 
     def get_deposit_status(self, deposit_id: str) -> dict:
         """Fetch the provider-authoritative state for a deposit."""
-        response = self._request("GET", f"/v2/deposits/{deposit_id}")
-        if isinstance(response, list):
-            return response[0] if response and isinstance(response[0], dict) else {}
-        return response
+        path = f"/v2/deposits/{deposit_id}"
+        response = self._request("GET", path)
+        # V2 wraps the payment in data; FOUND is a lookup result, not a payment state.
+        deposit = response.get("data")
+        if response.get("status") != "FOUND" or not isinstance(deposit, dict):
+            raise PawaPayAPIError("PawaPay deposit status is unavailable.", stage=path)
+        if deposit.get("depositId") != deposit_id or not deposit.get("status"):
+            raise PawaPayAPIError("PawaPay returned mismatched or incomplete deposit details.", stage=path)
+        return deposit
 
     def verify_webhook(self, raw_body: bytes, signature: str) -> bool:
         # PawaPay v2 callback signatures use its HTTP-signature/public-key
