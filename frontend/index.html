@@ -948,6 +948,106 @@ body{background:radial-gradient(ellipse 75% 20% at 100% 4%,rgba(185,157,255,.11)
 #dashboardContent .dashboard-empty p{color:#7b7089;line-height:1.6}
 @media(max-width:680px){#dashboardContent .dashboard-hero{border-radius:18px}#dashboardContent .dashboard-hero:after{width:140px;height:140px}#dashboardContent .dashboard-list-item{align-items:flex-start;flex-wrap:wrap}#dashboardContent .dashboard-panel{border-radius:16px}}
 
+
+/* Dashboard v2 — intentional layout, not legacy stat-card overrides */
+.dashboard{--workspace-purple:#7043ea;--workspace-ink:#251a3c;--workspace-subtle:#777088}
+.dashboard .dash-main{background:#f7f7fb}
+.dashboard .dash-side{background:#201638}
+.dashboard .dash-top{box-shadow:none;border-bottom:1px solid #ece9f2;background:#fff}
+#dashboardContent .workspace-intro{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:30px 0 28px}
+#dashboardContent .workspace-overline{display:flex;align-items:center;gap:14px;color:#6f49d7;letter-spacing:.15em;font-size:11px;font-weight:800}
+#dashboardContent .workspace-status{font-size:10px;letter-spacing:0;color:#338c62;background:#e8f7ee;border-radius:50px;padding:6px 10px}
+#dashboardContent .workspace-intro h2{font-size:clamp(28px,3.3vw,44px);line-height:1.14;letter-spacing:-.055em;margin:13px 0 9px;color:#251a3c;font-weight:800}
+#dashboardContent .workspace-period{color:#7950ee}
+#dashboardContent .workspace-intro p{color:#797185;font-size:14px;line-height:1.6;margin:0}
+#dashboardContent .workspace-intro .button-primary{white-space:nowrap;padding:14px 19px;border-radius:12px}
+#dashboardContent .workspace-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:0 0 22px}
+#dashboardContent .workspace-metric{position:relative;min-width:0;min-height:182px;display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:0;padding:22px;border:1px solid #e9e6f0;border-radius:18px;background:#fff;color:#241936;box-shadow:0 5px 24px rgba(30,19,62,.025);font:inherit;transition:transform .2s,box-shadow .2s}
+#dashboardContent button.workspace-metric{cursor:pointer}
+#dashboardContent button.workspace-metric:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(47,28,87,.09)}
+#dashboardContent .workspace-metric-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:#f0ebff;color:#7043ea;font-size:21px;margin-bottom:15px}
+#dashboardContent .workspace-metric-label{font-size:12px;color:#776e85;font-weight:650;line-height:1.3}
+#dashboardContent .workspace-metric strong{display:block;width:100%;font-size:clamp(26px,2.6vw,35px);line-height:1.2;letter-spacing:-.045em;margin:5px 0 10px;color:#251a3c;overflow-wrap:anywhere}
+#dashboardContent .workspace-metric strong.workspace-metric-text{font-size:clamp(18px,1.65vw,23px);line-height:1.3;letter-spacing:-.025em;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#dashboardContent .workspace-metric small{margin-top:auto;color:#8a8295;font-size:11px;line-height:1.5}
+#dashboardContent .workspace-metric-accent{background:#ede8ff;border-color:#e0d6ff}
+#dashboardContent .workspace-metric-accent .workspace-metric-icon{background:#fff}
+#dashboardContent .workspace-main-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr);gap:20px;align-items:start}
+#dashboardContent .workspace-surface{min-width:0;border:1px solid #ebe7f1;border-radius:20px;background:#fff;padding:24px;box-shadow:0 8px 26px rgba(35,21,69,.035)}
+#dashboardContent .workspace-surface-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}
+#dashboardContent .workspace-section-eyebrow{color:#8a6bdb;font-size:10px;letter-spacing:.15em;font-weight:800}
+#dashboardContent .workspace-surface h3{font-size:20px;color:#261a3c;letter-spacing:-.035em;margin:6px 0}
+#dashboardContent .workspace-surface-head p{color:#857c90;font-size:12px;margin:0}
+#dashboardContent .workspace-text-action{background:none;border:0;color:#7043ea;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
+#dashboardContent .workspace-action-list{display:grid;gap:8px}
+#dashboardContent .workspace-action-list button{display:flex;align-items:center;gap:12px;width:100%;padding:13px 12px;text-align:left;border:1px solid #efebf5;border-radius:12px;background:#fbfaff;color:#332749;font:inherit;font-size:13px;font-weight:650;cursor:pointer}
+#dashboardContent .workspace-action-list button:hover{background:#f1ecff;border-color:#d9c9ff}
+#dashboardContent .workspace-action-list button span{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:#eee7ff;color:#6e41d9;font-size:18px}
+#dashboardContent .workspace-action-list button b{margin-left:auto;color:#8a6bdb}
+@media(max-width:1100px){#dashboardContent .workspace-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:780px){#dashboardContent .workspace-main-grid{grid-template-columns:minmax(0,1fr)}#dashboardContent .workspace-intro{align-items:flex-start;flex-direction:column;gap:18px}}
+@media(max-width:500px){#dashboardContent .workspace-metrics{gap:10px}#dashboardContent .workspace-metric{padding:15px;min-height:167px;border-radius:14px}#dashboardContent .workspace-metric strong{font-size:27px}#dashboardContent .workspace-metric strong.workspace-metric-text{font-size:18px}#dashboardContent .workspace-surface{padding:16px;border-radius:16px}#dashboardContent .workspace-intro{padding-top:15px}#dashboardContent .workspace-overline{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){#dashboardContent .workspace-metric{transition:none}}
+
+
+/* Shared operational dashboard v2: retailer, rider and administration */
+#dashboardContent .dashboard-hero{background:linear-gradient(115deg,#261a45,#50318f);padding:clamp(24px,3vw,36px);border-radius:20px;box-shadow:none}
+#dashboardContent .dashboard-hero h2{font-size:clamp(25px,2.6vw,36px);max-width:720px}
+#dashboardContent .dashboard-hero p{font-size:14px;line-height:1.7}
+#dashboardContent .dashboard-stat-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:15px}
+#dashboardContent .dashboard-stat-grid .stat-card{display:flex;flex-direction:column;align-items:flex-start;min-width:0;min-height:155px;padding:20px;border:1px solid #e9e6f0;border-radius:17px;background:#fff;box-shadow:0 5px 24px rgba(30,19,62,.025)}
+#dashboardContent .dashboard-stat-grid .stat-card:before{display:none}
+#dashboardContent .dashboard-stat-grid .stat-card>span{font-size:12px;line-height:1.4;color:#776e85}
+#dashboardContent .dashboard-stat-grid .stat-card .stat-value{display:block;max-width:100%;margin:13px 0 8px;font-size:clamp(26px,2.5vw,35px);line-height:1.15;letter-spacing:-.045em;overflow-wrap:anywhere}
+#dashboardContent .dashboard-stat-grid .stat-card .stat-text{font-size:clamp(17px,1.7vw,22px);line-height:1.3}
+#dashboardContent .dashboard-stat-grid .stat-card small{margin-top:auto;font-size:11px;line-height:1.5}
+#dashboardContent .dashboard-grid-3{gap:18px}
+#dashboardContent .dashboard-panel{border-radius:18px;border:1px solid #e9e6f0;box-shadow:0 5px 24px rgba(30,19,62,.025);padding:clamp(16px,2vw,24px)}
+#dashboardContent .panel-head{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}
+#dashboardContent .panel-head h2{font-size:20px;letter-spacing:-.03em}
+#dashboardContent .panel-head small{display:block;margin-top:4px;color:#80778e}
+#dashboardContent .quick-actions{display:grid;gap:9px}
+#dashboardContent .quick-actions button{border:1px solid #eae4f4;border-radius:11px;padding:13px 14px;background:#fbfaff;color:#3b2c53;text-align:left;font-size:13px;font-weight:650;cursor:pointer}
+#dashboardContent .quick-actions button:hover{background:#f0eaff;border-color:#d6c6f6}
+#dashboardContent .rider-earnings-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+#dashboardContent .rider-earnings-card{min-width:0;border:1px solid #e9e6f0;border-radius:17px;background:#fff;padding:20px}
+#dashboardContent .rider-earnings-card span{display:block;font-size:12px;color:#776e85}
+#dashboardContent .rider-earnings-card strong{display:block;margin:13px 0;font-size:clamp(18px,2vw,29px);line-height:1.25;letter-spacing:-.04em;overflow-wrap:anywhere}
+#dashboardContent .rider-earnings-card small{font-size:11px;color:#877d94}
+#dashboardContent .status-bar-row{margin:13px 0}
+#dashboardContent .status-bar-row>div:first-child{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#675d76}
+#dashboardContent .status-bar{height:8px;overflow:hidden;background:#eee9f8;border-radius:100px;margin-top:8px}
+#dashboardContent .status-bar i{display:block;height:100%;background:linear-gradient(90deg,#7650e9,#b393fa);border-radius:inherit}
+@media(max-width:1150px){#dashboardContent .dashboard-stat-grid,#dashboardContent .rider-earnings-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){#dashboardContent .dashboard-stat-grid,#dashboardContent .rider-earnings-grid{gap:10px}#dashboardContent .dashboard-stat-grid .stat-card,#dashboardContent .rider-earnings-card{padding:14px;min-height:140px}#dashboardContent .dashboard-stat-grid .stat-card .stat-value{font-size:25px}#dashboardContent .dashboard-stat-grid .stat-card .stat-text{font-size:17px}#dashboardContent .dashboard-grid-3{display:block}#dashboardContent .dashboard-grid-3>*+*{margin-top:14px}}
+
+
+/* Role-specific dashboard v2 — merchant, courier and platform operations */
+#dashboardContent .workspace-operations-hero{display:flex;align-items:center;justify-content:space-between;gap:22px;min-height:176px;margin-bottom:20px}
+#dashboardContent .workspace-operations-hero .button-primary{white-space:nowrap;border-radius:12px}
+#dashboardContent .workspace-operations-hero .role-pill{vertical-align:middle;font-size:10px;letter-spacing:.06em}
+#dashboardContent .dashboard-stat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+#dashboardContent .dashboard-stat-grid .stat-card{min-height:166px;gap:0}
+#dashboardContent .dashboard-stat-grid .stat-card .stat-value{margin-top:15px;overflow-wrap:anywhere;word-break:normal}
+#dashboardContent .dashboard-stat-grid .stat-card .stat-text{font-size:clamp(16px,1.5vw,21px);line-height:1.35}
+#dashboardContent .workspace-rider-hero{background:linear-gradient(120deg,#261943,#563c92);border-radius:20px;padding:clamp(23px,3vw,35px);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:20px}
+#dashboardContent .workspace-rider-hero h2{color:#fff;font-size:clamp(26px,2.6vw,36px);letter-spacing:-.045em;margin:8px 0}
+#dashboardContent .workspace-rider-hero p{color:#e7ddfa;line-height:1.65;font-size:14px;max-width:620px}
+#dashboardContent .workspace-rider-hero .eyebrow{color:#d3bfff;font-size:11px;letter-spacing:.15em}
+#dashboardContent .workspace-rider-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px;margin:20px 0}
+#dashboardContent .workspace-rider-metrics>div{min-width:0;padding:22px;border:1px solid #e9e6f0;border-radius:17px;background:#fff;display:flex;flex-direction:column;align-items:flex-start;min-height:156px;box-shadow:0 5px 24px rgba(30,19,62,.025)}
+#dashboardContent .workspace-rider-metrics span{font-size:12px;color:#776e85}
+#dashboardContent .workspace-rider-metrics strong{font-size:clamp(20px,2vw,30px);letter-spacing:-.04em;line-height:1.3;margin:14px 0 8px;overflow-wrap:anywhere}
+#dashboardContent .workspace-rider-metrics small{font-size:11px;color:#877d94;margin-top:auto}
+#dashboardContent .workspace-rider-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(250px,1fr);gap:18px;align-items:start}
+#dashboardContent .workspace-rider-layout>section,#dashboardContent .workspace-rider-layout>.rider-side-card{min-width:0;background:#fff;border:1px solid #e9e6f0;border-radius:18px;padding:24px;box-shadow:0 5px 24px rgba(30,19,62,.025)}
+#dashboardContent .workspace-rider-layout .rider-side-card button{width:100%;text-align:left;border-radius:11px;margin-top:8px}
+#dashboardContent .workspace-rider-layout .rider-section-head{display:flex;justify-content:space-between;align-items:start;gap:12px;margin-bottom:18px}
+#dashboardContent .workspace-rider-layout h3{font-size:20px;letter-spacing:-.03em}
+@media(max-width:1150px){#dashboardContent .workspace-rider-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:850px){#dashboardContent .workspace-rider-layout{grid-template-columns:minmax(0,1fr)}#dashboardContent .workspace-operations-hero,#dashboardContent .workspace-rider-hero{align-items:flex-start;flex-direction:column}}
+@media(max-width:560px){#dashboardContent .workspace-rider-metrics{gap:10px}#dashboardContent .workspace-rider-metrics>div{padding:14px;min-height:138px}#dashboardContent .workspace-rider-metrics strong{font-size:20px}#dashboardContent .workspace-rider-layout>section,#dashboardContent .workspace-rider-layout>.rider-side-card{padding:16px}#dashboardContent .workspace-operations-hero{min-height:0}}
+
 </style>
 </head>
 <body>
