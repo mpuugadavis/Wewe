@@ -72,12 +72,21 @@ class PawaPayProvider:
                 decoded = json.loads(raw)
             except json.JSONDecodeError:
                 decoded = {}
+            failure = decoded.get("failureReason")
+            if not isinstance(failure, dict):
+                failure = decoded.get("rejectionReason")
+            if not isinstance(failure, dict):
+                failure = {}
+            failure_code = failure.get("failureCode") or failure.get("rejectionCode") or decoded.get("errorCode")
+            failure_message = failure.get("failureMessage") or failure.get("rejectionMessage") or decoded.get("errorMessage") or decoded.get("message")
+            error_id = decoded.get("errorId")
+            suffix = f" (errorId={error_id})" if error_id else ""
             raise PawaPayAPIError(
-                "PawaPay API request failed.",
+                f"PawaPay API request failed{suffix}.",
                 stage=path,
                 http_status=exc.code,
-                failure_code=str(decoded.get("errorCode")) if decoded.get("errorCode") is not None else None,
-                failure_message=str(decoded.get("errorMessage")) if decoded.get("errorMessage") else None,
+                failure_code=str(failure_code) if failure_code is not None else None,
+                failure_message=str(failure_message) if failure_message else None,
             ) from None
         except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
             raise PawaPayAPIError(
@@ -127,14 +136,11 @@ class PawaPayProvider:
                     "provider": provider,
                 },
             },
-            "customerMessage": f"WEWE {request.reference}"[:22],
+            # Keep the customer-facing message within PawaPay's strict
+            # 4-22 character validation. The merchant reference belongs in
+            # clientReferenceId, not in this display field.
+            "customerMessage": "WEWE Payment",
             "clientReferenceId": request.reference[:64],
-            # PawaPay Merchant API v2 expects metadata as an array of
-            # key/value objects. The previous fieldName/fieldValue shape
-            # can trigger request-field validation errors on current sandbox.
-            "metadata": [
-                {"wewePaymentReference": request.reference[:180]},
-            ],
         }
         response = self._request("POST", "/v2/deposits", payload)
         status = str(response.get("status", "")).upper()
@@ -161,6 +167,13 @@ class PawaPayProvider:
             failure_code=str(failure.get("failureCode")) if failure.get("failureCode") else status or None,
             failure_message=str(failure.get("failureMessage")) if failure.get("failureMessage") else None,
         )
+
+    def get_deposit_status(self, deposit_id: str) -> dict:
+        """Fetch the provider-authoritative state for a deposit."""
+        response = self._request("GET", f"/v2/deposits/{deposit_id}")
+        if isinstance(response, list):
+            return response[0] if response and isinstance(response[0], dict) else {}
+        return response
 
     def verify_webhook(self, raw_body: bytes, signature: str) -> bool:
         # PawaPay v2 callback signatures use its HTTP-signature/public-key
