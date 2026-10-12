@@ -19,16 +19,23 @@ from app.limiter import limiter
 from app.observability import configure_logging
 from app.services.media_uploads import build_media_storage
 from app.services.flutterwave_adapter import build_flutterwave_provider
+from app.services.pawapay_adapter import build_pawapay_provider
 from app.services.payments import payment_providers
 from app.services.worker_health import worker_snapshot
 from app.routers import accounts, admin, auth, catalog, commerce, locations, operations, payments
 
 settings = get_settings()
 if settings.payment_mode == "EXTERNAL":
-    flutterwave_provider = build_flutterwave_provider()
-    payment_providers.register("MTN_MOMO", flutterwave_provider)
-    payment_providers.register("AIRTEL_MONEY", flutterwave_provider)
-    payment_providers.register("FLUTTERWAVE", flutterwave_provider)
+    if settings.payment_provider == "PAWAPAY":
+        pawapay_provider = build_pawapay_provider()
+        payment_providers.register("MTN_MOMO", pawapay_provider)
+        payment_providers.register("AIRTEL_MONEY", pawapay_provider)
+        payment_providers.register("PAWAPAY", pawapay_provider)
+    else:
+        flutterwave_provider = build_flutterwave_provider()
+        payment_providers.register("MTN_MOMO", flutterwave_provider)
+        payment_providers.register("AIRTEL_MONEY", flutterwave_provider)
+        payment_providers.register("FLUTTERWAVE", flutterwave_provider)
 configure_logging(settings.log_level)
 logger = logging.getLogger("wewe.api")
 
