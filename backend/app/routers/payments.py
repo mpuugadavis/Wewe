@@ -161,6 +161,73 @@ async def pawapay_payout_callback(request: Request) -> dict:
     }
 
 
+@router.post("/pawapay/refund-callback")
+@limiter.limit("120/minute")
+async def pawapay_refund_callback(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Apply final PawaPay refund outcomes to a local PaymentRefund."""
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_callback", "message": "PawaPay callback body must be valid JSON."},
+        ) from None
+    payload = _pawapay_operation_payload(payload, "refundId")
+    refund_id = payload["refundId"]
+    status = str(payload.get("status", "")).upper()
+
+    if status not in {"COMPLETED", "FAILED"}:
+        return {
+            "received": True,
+            "operation": "REFUND",
+            "refund_id": refund_id,
+            "ignored": True,
+            "status": status,
+        }
+
+    refund = db.scalar(
+        select(PaymentRefund).where(
+            PaymentRefund.external_reference == refund_id
+        )
+    )
+    if refund is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "refund_not_found",
+                "message": "No local refund attempt matches this PawaPay refundId.",
+            },
+        )
+
+    evidence = {
+        "provider": "PAWAPAY",
+        "refund_id": refund_id,
+        "status": status,
+        "payload": payload,
+    }
+    try:
+        resolve_refund_attempt(
+            db,
+            refund.id,
+            outcome="CONFIRMED" if status == "COMPLETED" else "FAILED",
+            evidence=evidence,
+        )
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+
+    return {
+        "received": True,
+        "operation": "REFUND",
+        "refund_id": refund_id,
+        "status": "CONFIRMED" if status == "COMPLETED" else "FAILED",
+    }
+
+
 @router.post("/flutterwave/webhook")
 @limiter.limit("120/minute")
 async def flutterwave_webhook(request: Request, db: Session = Depends(get_db)) -> dict:
