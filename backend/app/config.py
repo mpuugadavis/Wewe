@@ -27,8 +27,10 @@ class Settings(BaseSettings):
     pawapay_api_token: SecretStr | None = None
     pawapay_api_base_url: str = "https://api.sandbox.pawapay.io"
     pawapay_environment: Literal["SANDBOX", "LIVE"] = "SANDBOX"
+    pawapay_checkout_callback_url: str = "http://localhost:8000/api/v1/payments/pawapay/checkout-callback"
     pawapay_deposit_callback_url: str = "http://localhost:8000/api/v1/payments/pawapay/deposit-callback"
     pawapay_payout_callback_url: str = "http://localhost:8000/api/v1/payments/pawapay/payout-callback"
+    pawapay_refund_callback_url: str = "http://localhost:8000/api/v1/payments/pawapay/refund-callback"
     flutterwave_client_id: str | None = None
     flutterwave_client_secret: SecretStr | None = None
     flutterwave_webhook_secret_hash: SecretStr | None = None
@@ -231,10 +233,14 @@ class Settings(BaseSettings):
             webhook_secret = self.payment_webhook_secret.get_secret_value()
             if len(webhook_secret) < 32 or "replace" in webhook_secret.lower():
                 raise ValueError("PAYMENT_WEBHOOK_SECRET must be a unique secret of at least 32 characters")
+        if self.app_env == "production" and self.payment_provider == "PAWAPAY" and urlsplit(self.pawapay_checkout_callback_url).scheme != "https":
+            raise ValueError("PAWAPAY_CHECKOUT_CALLBACK_URL must use HTTPS in production")
         if self.app_env == "production" and self.payment_provider == "PAWAPAY" and urlsplit(self.pawapay_deposit_callback_url).scheme != "https":
             raise ValueError("PAWAPAY_DEPOSIT_CALLBACK_URL must use HTTPS in production")
         if self.app_env == "production" and self.payment_provider == "PAWAPAY" and urlsplit(self.pawapay_payout_callback_url).scheme != "https":
             raise ValueError("PAWAPAY_PAYOUT_CALLBACK_URL must use HTTPS in production")
+        if self.app_env == "production" and self.payment_provider == "PAWAPAY" and urlsplit(self.pawapay_refund_callback_url).scheme != "https":
+            raise ValueError("PAWAPAY_REFUND_CALLBACK_URL must use HTTPS in production")
         if self.app_env == "production" and self.payment_provider == "FLUTTERWAVE" and urlsplit(self.payment_callback_url).scheme != "https":
             raise ValueError("PAYMENT_CALLBACK_URL must use HTTPS in production")
         if self.app_env == "production" and self.payment_provider == "PAWAPAY" and self.pawapay_environment == "SANDBOX":
