@@ -541,6 +541,101 @@ img,video{max-width:100%}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* Retailer fulfilment operations workspace */
+.retailer-fulfillment-toolbar{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:12px 14px;margin-bottom:14px;border:1px solid #e6deef;border-radius:14px;
+  background:#fbf9fe;
+}
+.retailer-fulfillment-toolbar>div{display:flex;align-items:center;gap:9px;min-width:0}
+.retailer-fulfillment-toolbar>div>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.retailer-fulfillment-toolbar strong{font-size:12px;color:#38274b}
+.retailer-fulfillment-toolbar small{font-size:10px;color:#91869e}
+.retailer-live-dot{width:9px;height:9px;border-radius:50%;background:#30c982;box-shadow:0 0 0 5px rgba(48,201,130,.12);flex:none}
+.retailer-fulfillment-card{
+  position:relative;overflow:hidden;margin-bottom:13px;padding:18px 18px 16px;
+  border:1px solid #e4dceb;border-radius:18px;background:#fff;
+  box-shadow:0 8px 25px rgba(45,25,90,.045);
+}
+.retailer-fulfillment-accent{position:absolute;left:0;top:0;bottom:0;width:4px;background:#7a4ee6}
+.retailer-fulfillment-card.status-pending .retailer-fulfillment-accent{background:#d99718}
+.retailer-fulfillment-card.status-confirmed .retailer-fulfillment-accent{background:#7a4ee6}
+.retailer-fulfillment-card.status-preparing .retailer-fulfillment-accent{background:#e46c1b}
+.retailer-fulfillment-card.status-ready .retailer-fulfillment-accent{background:#26966d}
+.retailer-fulfillment-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding-left:5px;
+}
+.retailer-fulfillment-head h3{margin:4px 0 3px;font-size:17px;color:#30213e}
+.retailer-fulfillment-head small{color:#968ba1;font-size:10px}
+.retailer-fulfillment-eyebrow{
+  display:block;color:#806f91;font-size:9px;font-weight:900;letter-spacing:.8px;
+}
+.retailer-fulfillment-status{
+  flex:none;padding:7px 9px;border-radius:9px;background:#f0ebf8;color:#5e447f;
+  font-size:9px;font-weight:900;
+}
+.status-pending .retailer-fulfillment-status{background:#fff5dc;color:#996400}
+.status-preparing .retailer-fulfillment-status{background:#fff0e6;color:#b55c1c}
+.status-ready .retailer-fulfillment-status{background:#e8f7f0;color:#16724d}
+.retailer-fulfillment-summary{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:15px 0 11px;padding-left:5px;
+}
+.retailer-fulfillment-summary>div{
+  padding:11px 12px;border-radius:12px;background:#faf8fc;border:1px solid #eee8f3;min-width:0;
+}
+.retailer-fulfillment-summary span,.retailer-fulfillment-summary small{
+  display:block;color:#93889f;font-size:9px;
+}
+.retailer-fulfillment-summary b{display:block;margin:3px 0 1px;color:#39264d;font-size:16px}
+.retailer-fulfillment-items{
+  margin-left:5px;border-top:1px solid #eee8f3;border-bottom:1px solid #eee8f3;
+}
+.retailer-fulfillment-item{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;
+}
+.retailer-fulfillment-item+ .retailer-fulfillment-item{border-top:1px dashed #eee8f3}
+.retailer-fulfillment-item span{min-width:0}
+.retailer-fulfillment-item b{display:block;color:#40334d;font-size:11px;overflow-wrap:anywhere}
+.retailer-fulfillment-item small{display:block;margin-top:3px;color:#978ca2;font-size:9px}
+.retailer-fulfillment-item strong{flex:none;color:#463052;font-size:11px}
+.retailer-fulfillment-empty{padding:14px 0;color:#988da3;font-size:10px}
+.retailer-fulfillment-footer{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;margin:14px 0 0 5px;
+}
+.retailer-fulfillment-next{display:flex;flex-direction:column;gap:3px;min-width:0}
+.retailer-fulfillment-next span{
+  color:#94899f;font-size:8px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;
+}
+.retailer-fulfillment-next b{color:#493457;font-size:11px}
+.retailer-fulfillment-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.retailer-fulfillment-actions button{min-height:40px;padding:9px 13px;font-size:10px}
+.retailer-fulfillment-primary{min-width:180px}
+.retailer-fulfillment-reject{color:#9d433a!important;border-color:#e9cfcb!important;background:#fff!important}
+.retailer-fulfillment-history-head{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:27px 0 11px;
+}
+.retailer-fulfillment-history-head h3{margin:3px 0 0;font-size:17px;color:#352641}
+.retailer-fulfillment-history-head>small{color:#95899f;font-size:9px}
+.retailer-fulfillment-history .retailer-fulfillment-card{box-shadow:none}
+@media(max-width:700px){
+  .retailer-fulfillment-toolbar{align-items:stretch;flex-direction:column}
+  .retailer-fulfillment-toolbar .button-outline{width:100%}
+  .retailer-fulfillment-card{padding:16px 14px 14px}
+  .retailer-fulfillment-head{flex-direction:column;gap:9px}
+  .retailer-fulfillment-status{align-self:flex-start}
+  .retailer-fulfillment-summary{grid-template-columns:1fr 1fr}
+  .retailer-fulfillment-footer{align-items:stretch;flex-direction:column}
+  .retailer-fulfillment-actions{display:grid;grid-template-columns:1fr;width:100%}
+  .retailer-fulfillment-actions button{width:100%}
+  .retailer-fulfillment-primary{min-width:0}
+}
+@media(max-width:390px){
+  .retailer-fulfillment-summary{grid-template-columns:1fr}
+  .retailer-fulfillment-item{align-items:flex-start}
+  .retailer-fulfillment-item strong{font-size:10px}
+}
+
 </style>
 /* Dashboard UX polish: hierarchy, density, touch targets and resilient mobile cards */
 .dashboard .dash-side{box-shadow:8px 0 28px rgba(45,25,90,.035)}
