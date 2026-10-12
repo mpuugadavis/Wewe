@@ -144,6 +144,14 @@
       if (messages.length) return messages.join("; ");
     }
     if (payload?.message) return payload.message;
+    if (payload?.error?.details && Array.isArray(payload.error.details)) {
+      const messages = payload.error.details.map(item => {
+        const location = Array.isArray(item?.location) ? item.location.join(".") : "";
+        const message = item?.message || item?.msg;
+        return location && message ? `${location}: ${message}` : message;
+      }).filter(Boolean);
+      if (messages.length) return messages.join("; ");
+    }
     if (payload?.error?.message) return payload.error.message;
     if (payload?.error?.code) return `Request failed (${status}): ${payload.error.code}`;
     return `Request failed (${status}). Please try again.`;
