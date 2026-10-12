@@ -205,14 +205,14 @@ class Settings(BaseSettings):
             raise ValueError("PAYMENT_MODE=SIMULATED is forbidden in production")
         if self.app_env == "production" and self.payment_mode == "EXTERNAL" and not self.payment_webhook_secret:
             raise ValueError("PAYMENT_WEBHOOK_SECRET must be configured in production")
-        if self.payment_mode == "EXTERNAL" and (
+        if self.payment_mode == "EXTERNAL" and self.payment_provider == "FLUTTERWAVE" and (
             not self.flutterwave_client_id
             or not self.flutterwave_client_secret
             or not self.flutterwave_redirect_url
         ):
             raise ValueError(
                 "FLUTTERWAVE_CLIENT_ID, FLUTTERWAVE_CLIENT_SECRET and "
-                "FLUTTERWAVE_REDIRECT_URL are required when PAYMENT_MODE=EXTERNAL"
+                "FLUTTERWAVE_REDIRECT_URL are required when PAYMENT_PROVIDER=FLUTTERWAVE"
             )
         if self.flutterwave_client_id and "replace" in self.flutterwave_client_id.lower():
             raise ValueError("FLUTTERWAVE_CLIENT_ID must be a real client ID or be left empty")
