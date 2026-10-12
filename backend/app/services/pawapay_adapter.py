@@ -177,6 +177,38 @@ class PawaPayProvider:
             "customerMessage": "WEWE Payment",
             "clientReferenceId": request.reference[:64],
         }
+        # Resolve the wallet from pawaPay itself immediately before initiation.
+        # This removes the last hard-coded assumption about which Ugandan MMO owns
+        # the supplied MSISDN and gives us provider-specific validation before
+        # the financial request is sent.
+        prediction = self._request(
+            "POST",
+            "/v2/predict-provider",
+            {"phoneNumber": msisdn},
+        )
+        predicted_phone = str(prediction.get("phoneNumber") or "").strip()
+        predicted_provider = str(prediction.get("provider") or "").strip().upper()
+        if predicted_phone:
+            msisdn = self._msisdn(predicted_phone)
+            payload["payer"]["accountDetails"]["phoneNumber"] = msisdn
+        if predicted_provider and predicted_provider != provider:
+            raise PawaPayAPIError(
+                "The selected mobile-money network does not match the supplied phone number.",
+                stage="/v2/predict-provider",
+                http_status=422,
+                failure_code="PROVIDER_MISMATCH",
+                failure_message=f"PawaPay identified {predicted_provider}; WEWE selected {provider}.",
+            )
+        if not predicted_provider:
+            raise PawaPayAPIError(
+                "PawaPay could not identify the mobile-money provider for this phone number.",
+                stage="/v2/predict-provider",
+                http_status=422,
+                failure_code="PROVIDER_NOT_FOUND",
+                failure_message=str(prediction.get("message") or "No provider was returned."),
+                validation_errors=prediction,
+            )
+
         response = self._request("POST", "/v2/deposits", payload)
         status = str(response.get("status", "")).upper()
         if status == "ACCEPTED":
