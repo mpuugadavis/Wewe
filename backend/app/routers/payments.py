@@ -33,6 +33,45 @@ from app.services.state_transitions import aggregate_payment_status, is_payment_
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 
+def _pawapay_operation_payload(payload: object, identifier: str) -> dict:
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_callback", "message": "PawaPay callback payload is invalid."},
+        )
+    value = payload.get(identifier)
+    if not isinstance(value, str) or not value.strip():
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_callback", "message": f"PawaPay callback is missing {identifier}."},
+        )
+    return payload
+
+
+@router.post("/pawapay/checkout-callback")
+@limiter.limit("120/minute")
+async def pawapay_checkout_callback(request: Request) -> dict:
+    """Acknowledge PawaPay checkout lifecycle events.
+
+    A checkout is not itself proof of a captured deposit. The deposit callback
+    remains authoritative for WEWE order-payment state.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_callback", "message": "PawaPay callback body must be valid JSON."},
+        ) from None
+    payload = _pawapay_operation_payload(payload, "checkoutId")
+    return {
+        "received": True,
+        "operation": "CHECKOUT",
+        "checkout_id": payload["checkoutId"],
+        "status": payload.get("status"),
+    }
+
+
 
 @router.post("/pawapay/deposit-callback")
 @limiter.limit("120/minute")
