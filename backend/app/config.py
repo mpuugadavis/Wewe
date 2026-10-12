@@ -177,7 +177,13 @@ class Settings(BaseSettings):
 
     @property
     def trusted_host_list(self) -> list[str]:
-        return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
+        hosts = [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
+        # Local development commonly runs behind ngrok for payment-provider callbacks.
+        # Keep this convenience limited to non-production environments; production
+        # deployments must provide an explicit TRUSTED_HOSTS allow-list.
+        if self.app_env in {"development", "test"} and "*.ngrok-free.app" not in hosts:
+            hosts.append("*.ngrok-free.app")
+        return hosts
 
     @field_validator("max_request_body_bytes")
     @classmethod
