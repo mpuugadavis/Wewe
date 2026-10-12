@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     pawapay_deposit_callback_url: str = "http://localhost:8000/api/v1/payments/pawapay/deposit-callback"
     pawapay_payout_callback_url: str = "http://localhost:8000/api/v1/payments/pawapay/payout-callback"
     pawapay_refund_callback_url: str = "http://localhost:8000/api/v1/payments/pawapay/refund-callback"
+    pawapay_verify_callbacks: bool = False
     flutterwave_client_id: str | None = None
     flutterwave_client_secret: SecretStr | None = None
     flutterwave_webhook_secret_hash: SecretStr | None = None
@@ -245,6 +246,8 @@ class Settings(BaseSettings):
             raise ValueError("PAYMENT_CALLBACK_URL must use HTTPS in production")
         if self.app_env == "production" and self.payment_provider == "PAWAPAY" and self.pawapay_environment == "SANDBOX":
             raise ValueError("PawaPay sandbox payments are forbidden in production")
+        if self.app_env == "production" and self.payment_mode == "EXTERNAL" and self.payment_provider == "PAWAPAY" and not self.pawapay_verify_callbacks:
+            raise ValueError("PAWAPAY_VERIFY_CALLBACKS must be enabled in production")
         if self.pawapay_api_token and "replace" in self.pawapay_api_token.get_secret_value().lower():
             raise ValueError("PAWAPAY_API_TOKEN must be a real token or be left empty")
         if self.routing_provider == "GOOGLE_MAPS" and not self.google_maps_api_key:
