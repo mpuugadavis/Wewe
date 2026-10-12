@@ -13,12 +13,15 @@ from app.services.payments import PaymentInitiation, PaymentProviderUnavailable,
 
 class PawaPayAPIError(RuntimeError):
     def __init__(self, message: str, *, stage: str | None = None, http_status: int | None = None,
-                 failure_code: str | None = None, failure_message: str | None = None) -> None:
+                 failure_code: str | None = None, failure_message: str | None = None,
+                 request_id: str | None = None, validation_errors: object | None = None) -> None:
         super().__init__(message)
         self.stage = stage
         self.http_status = http_status
         self.failure_code = failure_code
         self.failure_message = failure_message
+        self.request_id = request_id
+        self.validation_errors = validation_errors
 
     def diagnostic(self) -> dict:
         return {
@@ -27,6 +30,8 @@ class PawaPayAPIError(RuntimeError):
             "http_status": self.http_status,
             "failure_code": self.failure_code,
             "failure_message": self.failure_message,
+            "request_id": self.request_id,
+            "validation_errors": self.validation_errors,
             "message": str(self),
         }
 
@@ -77,16 +82,46 @@ class PawaPayProvider:
                 failure = decoded.get("rejectionReason")
             if not isinstance(failure, dict):
                 failure = {}
-            failure_code = failure.get("failureCode") or failure.get("rejectionCode") or decoded.get("errorCode")
-            failure_message = failure.get("failureMessage") or failure.get("rejectionMessage") or decoded.get("errorMessage") or decoded.get("message")
-            error_id = decoded.get("errorId")
-            suffix = f" (errorId={error_id})" if error_id else ""
+
+            error = decoded.get("error")
+            if not isinstance(error, dict):
+                error = {}
+
+            # Preserve both payment-domain rejection envelopes and HTTP
+            # validation_error envelopes so provider diagnostics are not lost.
+            failure_code = (
+                failure.get("failureCode")
+                or failure.get("rejectionCode")
+                or error.get("code")
+                or decoded.get("errorCode")
+            )
+            failure_message = (
+                failure.get("failureMessage")
+                or failure.get("rejectionMessage")
+                or error.get("message")
+                or decoded.get("errorMessage")
+                or decoded.get("message")
+            )
+            request_id = (
+                decoded.get("request_id")
+                or decoded.get("requestId")
+                or error.get("request_id")
+                or error.get("requestId")
+            )
+            validation_errors = (
+                decoded.get("errors")
+                or decoded.get("validationErrors")
+                or error.get("errors")
+            )
+            suffix = f" (request_id={request_id})" if request_id else ""
             raise PawaPayAPIError(
                 f"PawaPay API request failed{suffix}.",
                 stage=path,
                 http_status=exc.code,
                 failure_code=str(failure_code) if failure_code is not None else None,
                 failure_message=str(failure_message) if failure_message else None,
+                request_id=str(request_id) if request_id else None,
+                validation_errors=validation_errors,
             ) from None
         except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
             raise PawaPayAPIError(
