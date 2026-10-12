@@ -590,6 +590,36 @@ img,video{max-width:100%}
   .dashboard-page-head h2{font-size:23px}
 }
 
+
+/* Retailer catalogue workspace */
+.retailer-product-toolbar{align-items:center}
+.retailer-product-toolbar>div{display:flex;align-items:center;gap:3px;flex-wrap:wrap}
+.retailer-product-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.retailer-product-card{min-width:0;overflow:hidden;border:1px solid #e8e2ef;border-radius:17px;background:#fff;box-shadow:0 7px 24px rgba(45,25,90,.045);transition:transform .18s,box-shadow .18s,border-color .18s}
+.retailer-product-card:hover{transform:translateY(-2px);border-color:#d7c9ef;box-shadow:0 12px 30px rgba(45,25,90,.08)}
+.retailer-product-media{position:relative;aspect-ratio:1.45;background:#f3eef9;display:grid;place-items:center;color:#7454a8;font-weight:900;overflow:hidden}
+.retailer-product-media img{width:100%;height:100%;object-fit:cover}
+.retailer-product-discount{position:absolute;top:10px;left:10px;padding:5px 8px;border-radius:8px;background:#fff;color:#b3472c;font-size:10px;font-weight:900;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.retailer-product-body{padding:14px}
+.retailer-product-body h3{margin:0 0 8px;font-size:15px;line-height:1.3;color:#2f2340;min-height:39px}
+.retailer-product-price{display:flex;align-items:center;gap:7px;font-size:15px;font-weight:900;color:#392451}
+.retailer-product-price del{font-size:10px;color:#978ca2;font-weight:600}
+.retailer-stock{display:inline-flex;margin-top:9px;padding:5px 8px;border-radius:8px;font-size:9px;font-weight:900}
+.retailer-stock.good{background:#eaf8f1;color:#16724d}.retailer-stock.warning{background:#fff5dc;color:#9a6500}.retailer-stock.danger{background:#fdeceb;color:#b33d36}
+.retailer-product-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:13px}
+.retailer-product-actions button{min-height:38px;padding:8px;font-size:10px}
+@media(max-width:1050px){.retailer-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){
+ .retailer-product-grid{grid-template-columns:1fr 1fr;gap:9px}
+ .retailer-product-body{padding:10px}
+ .retailer-product-body h3{font-size:12px;min-height:31px}
+ .retailer-product-price{font-size:12px}
+ .retailer-product-actions{grid-template-columns:1fr}
+ .retailer-product-actions button{width:100%}
+ .retailer-product-toolbar{align-items:stretch}
+}
+@media(max-width:380px){.retailer-product-grid{grid-template-columns:1fr}.retailer-product-media{aspect-ratio:1.6}}
+
 </head>
 <body>
   <header class="topbar" id="topbar">
