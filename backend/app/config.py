@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     payment_callback_url: str = "http://localhost:8000/api/v1/payments/webhooks"
     payment_webhook_secret: SecretStr | None = None
     payment_mode: Literal["DISABLED", "SIMULATED", "EXTERNAL"] = "DISABLED"
+    payment_provider: Literal["PAWAPAY", "FLUTTERWAVE"] = "PAWAPAY"
+    pawapay_api_token: SecretStr | None = None
+    pawapay_api_base_url: str = "https://api.sandbox.pawapay.io"
+    pawapay_environment: Literal["SANDBOX", "LIVE"] = "SANDBOX"
+    pawapay_deposit_callback_url: str = "http://localhost:8000/api/v1/payments/pawapay/deposit-callback"
+    pawapay_payout_callback_url: str = "http://localhost:8000/api/v1/payments/pawapay/payout-callback"
     flutterwave_client_id: str | None = None
     flutterwave_client_secret: SecretStr | None = None
     flutterwave_webhook_secret_hash: SecretStr | None = None
@@ -212,12 +218,12 @@ class Settings(BaseSettings):
             flutterwave_client_secret = self.flutterwave_client_secret.get_secret_value()
             if "replace" in flutterwave_client_secret.lower() or len(flutterwave_client_secret) < 16:
                 raise ValueError("FLUTTERWAVE_CLIENT_SECRET must be a real client secret or be left empty")
-        if self.app_env == "production" and self.payment_mode == "EXTERNAL" and self.flutterwave_environment == "SANDBOX":
+        if self.app_env == "production" and self.payment_mode == "EXTERNAL" and self.payment_provider == "FLUTTERWAVE" and self.flutterwave_environment == "SANDBOX":
             raise ValueError("Flutterwave sandbox payments are forbidden in production")
-        if self.app_env == "production" and self.payment_mode == "EXTERNAL" and self.flutterwave_redirect_url:
+        if self.app_env == "production" and self.payment_mode == "EXTERNAL" and self.payment_provider == "FLUTTERWAVE" and self.flutterwave_redirect_url:
             if urlsplit(self.flutterwave_redirect_url).scheme != "https":
                 raise ValueError("FLUTTERWAVE_REDIRECT_URL must use HTTPS in production")
-        if self.flutterwave_webhook_secret_hash:
+        if self.flutterwave_webhook_secret_hash and self.payment_provider == "FLUTTERWAVE":
             webhook_hash = self.flutterwave_webhook_secret_hash.get_secret_value()
             if "replace" in webhook_hash.lower() or len(webhook_hash) < 16:
                 raise ValueError("FLUTTERWAVE_WEBHOOK_SECRET_HASH must be a real webhook secret hash or be left empty")
@@ -225,8 +231,16 @@ class Settings(BaseSettings):
             webhook_secret = self.payment_webhook_secret.get_secret_value()
             if len(webhook_secret) < 32 or "replace" in webhook_secret.lower():
                 raise ValueError("PAYMENT_WEBHOOK_SECRET must be a unique secret of at least 32 characters")
-        if self.app_env == "production" and urlsplit(self.payment_callback_url).scheme != "https":
+        if self.app_env == "production" and self.payment_provider == "PAWAPAY" and urlsplit(self.pawapay_deposit_callback_url).scheme != "https":
+            raise ValueError("PAWAPAY_DEPOSIT_CALLBACK_URL must use HTTPS in production")
+        if self.app_env == "production" and self.payment_provider == "PAWAPAY" and urlsplit(self.pawapay_payout_callback_url).scheme != "https":
+            raise ValueError("PAWAPAY_PAYOUT_CALLBACK_URL must use HTTPS in production")
+        if self.app_env == "production" and self.payment_provider == "FLUTTERWAVE" and urlsplit(self.payment_callback_url).scheme != "https":
             raise ValueError("PAYMENT_CALLBACK_URL must use HTTPS in production")
+        if self.app_env == "production" and self.payment_provider == "PAWAPAY" and self.pawapay_environment == "SANDBOX":
+            raise ValueError("PawaPay sandbox payments are forbidden in production")
+        if self.pawapay_api_token and "replace" in self.pawapay_api_token.get_secret_value().lower():
+            raise ValueError("PAWAPAY_API_TOKEN must be a real token or be left empty")
         if self.routing_provider == "GOOGLE_MAPS" and not self.google_maps_api_key:
             raise ValueError("GOOGLE_MAPS_API_KEY is required when ROUTING_PROVIDER is GOOGLE_MAPS")
         if self.routing_provider == "OPENROUTESERVICE" and not self.openrouteservice_api_key:
