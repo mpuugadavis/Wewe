@@ -428,20 +428,18 @@
 
   function renderCategories() {
     const categories = [{ id: "all", name: "Everything" }, ...state.categories];
-    const categoryIcon = name => {
+    const categoryImage = name => {
       const key = String(name || "").toLowerCase();
-      if (key === "everything" || key === "all") return "◈";
-      if (/food|grocer|grocery|meal|restaurant|bakery|snack|drink|beverage/.test(key)) return "🍴";
-      if (/fashion|cloth|wear|shoe|footwear|bag|accessor/.test(key)) return "👟";
-      if (/electronic|phone|computer|laptop|tech|gadget/.test(key)) return "⌁";
-      if (/station|book|school|academic|study|office/.test(key)) return "✎";
-      if (/beauty|cosmetic|hair|skin/.test(key)) return "✦";
-      if (/home|house|furniture|decor|kitchen/.test(key)) return "⌂";
-      if (/health|care|pharmacy|fitness|sport/.test(key)) return "✚";
-      if (/service|repair|delivery|other/.test(key)) return "⚙";
-      return "◇";
+      if (/food|grocer|grocery|meal|restaurant|bakery|snack|drink|beverage/.test(key)) return "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=82";
+      if (/fashion|cloth|wear|shoe|footwear|bag|accessor/.test(key)) return "https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=600&q=82";
+      if (/electronic|phone|computer|laptop|tech|gadget/.test(key)) return "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=600&q=82";
+      if (/station|book|school|academic|study|office/.test(key)) return "https://images.unsplash.com/photo-1455885666463-2c6c4fce7b8b?auto=format&fit=crop&w=600&q=82";
+      if (/beauty|cosmetic|hair|skin/.test(key)) return "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=600&q=82";
+      if (/home|house|furniture|decor|kitchen/.test(key)) return "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=600&q=82";
+      if (/health|care|pharmacy|fitness|sport/.test(key)) return "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=600&q=82";
+      return "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=600&q=82";
     };
-    $("#categoryList").innerHTML = categories.map(category => `<button class="category ${state.activeCategory === category.id ? "active" : ""}" data-action="category" data-category-id="${escapeHtml(category.id)}" aria-label="Browse ${escapeHtml(category.name)}"><span class="cat-icon" aria-hidden="true">${categoryIcon(category.name)}</span><span>${escapeHtml(category.name)}</span></button>`).join("");
+    $("#categoryList").innerHTML = categories.map(category => `<button class="category ${state.activeCategory === category.id ? "active" : ""}" data-action="category" data-category-id="${escapeHtml(category.id)}" aria-label="Browse ${escapeHtml(category.name)}"><span class="category-image" style="background-image:url('${categoryImage(category.name)}')"></span><span class="category-label"><span>${escapeHtml(category.name)}</span><span>→</span></span></button>`).join("");
   }
 
   function renderRetailers() {
