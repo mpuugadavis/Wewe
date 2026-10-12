@@ -47,15 +47,14 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to use host postgres}
-      STORAGE_PROVIDER: S3
-      STORAGE_BUCKET: wewe-media
-      STORAGE_ENDPOINT: http://minio:9000
-      STORAGE_ACCESS_KEY: wewe-local
-      STORAGE_SECRET_KEY: wewe-local-storage-password
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-S3}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-wewe-media}
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://minio:9000}
+      STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL:-http://localhost:9000/wewe-media}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-wewe-local}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-wewe-local-storage-password}
     depends_on:
       migrate:
-        condition: service_completed_successfully
-      minio-init:
         condition: service_completed_successfully
     command: ["python", "-m", "app.workers.media_cleanup_worker"]
     restart: unless-stopped
@@ -86,18 +85,16 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to use host postgres}
-      STORAGE_PROVIDER: S3
-      STORAGE_BUCKET: wewe-media
-      STORAGE_ENDPOINT: http://minio:9000
-      STORAGE_PUBLIC_BASE_URL: http://localhost:9000/wewe-media
-      STORAGE_ACCESS_KEY: wewe-local
-      STORAGE_SECRET_KEY: wewe-local-storage-password
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-S3}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-wewe-media}
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://minio:9000}
+      STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL:-http://localhost:9000/wewe-media}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-wewe-local}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-wewe-local-storage-password}
     ports:
       - "8000:8000"
     depends_on:
       migrate:
-        condition: service_completed_successfully
-      minio-init:
         condition: service_completed_successfully
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
