@@ -869,6 +869,15 @@ body{background:radial-gradient(ellipse 75% 20% at 100% 4%,rgba(185,157,255,.11)
 #checkoutContents .button-primary{min-height:48px}
 @media(max-width:560px){.checkout-steps{gap:5px}.checkout-steps span{font-size:10px;padding:10px 5px}#checkoutContents .payment-options{grid-template-columns:1fr}}
 
+
+/* Basket editorial header and product image continuity */
+.cart-intro{display:flex;align-items:center;gap:14px;margin:12px 0 20px;padding:18px 20px;border-radius:18px;background:linear-gradient(120deg,#2d1556,#6a3bd5);color:#fff}
+.cart-intro-mark{display:grid;place-items:center;flex:0 0 44px;height:44px;border-radius:14px;background:rgba(255,255,255,.14);font-size:25px}
+.cart-intro strong{display:block;font-size:17px;line-height:1.4}
+.cart-intro small{display:block;margin-top:3px;color:#e6dfff;line-height:1.5}
+.product-modal-image img{display:block;width:100%;height:100%;object-fit:cover}
+@media(max-width:480px){.cart-intro{padding:14px;gap:11px}.cart-intro-mark{flex-basis:38px;height:38px}}
+
 </style>
 </head>
 <body>
