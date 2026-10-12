@@ -6,6 +6,8 @@
   <meta name="theme-color" content="#6d3df5">
   <meta name="wewe-api-base" content="">
   <title>WEWE | Around campus, around you</title>
+  <meta name="description" content="Discover food, fashion, tech and everyday essentials from shops around Makerere. Shop on WEWE with mobile money, campus delivery and pickup.">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap" rel="stylesheet">
@@ -1158,11 +1160,13 @@ button{font-weight:650}
 @media(prefers-reduced-motion:reduce){#modalContent .auth-submit{transition:none}}
 
 </style>
+  <link rel="stylesheet" href="brand.css">
 </head>
 <body>
+  <a class="skip-link" href="#products">Skip to products</a>
   <header class="topbar" id="topbar">
     <div class="shell topbar-inner">
-      <a class="logo" href="#home" aria-label="WEWE — campus marketplace"><span class="logo-symbol" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M8 14h32v25H8z" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/><path d="M16 14a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/><path d="M13 23l4 7 5-9 5 9 5-7" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="logo-word">WEWE</span></a>
+      <a class="logo" href="#home" aria-label="WEWE — campus marketplace"><img class="brand-logo" src="assets/brand/wewe-logo-purple.svg" width="337" height="80" alt="WEWE"></a>
       <nav class="nav-links" aria-label="Main navigation"><a class="active" href="#home">Discover</a><a href="#products">Shop</a><a href="#retailers">Retailers</a></nav>
       <div class="nav-spacer"></div>
       <button class="location" id="locationButton" aria-label="Choose delivery location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg><span><small>Delivery location</small><br>Choose at checkout ▾</span></button>
@@ -1173,34 +1177,28 @@ button{font-weight:650}
     </div>
   </header>
   <main id="storefront">
-    <section class="hero hero-v2" id="home">
-      <div class="hero-v2-copy">
-        <div class="hero-v2-badge"><span class="hero-v2-badge-dot"></span> Makerere's campus marketplace</div>
-        <h1>Everything you need.<br><span>Right around you.</span></h1>
-        <p>Food, fashion, electronics, stationery and everyday essentials — discovered from people and shops around your campus.</p>
-        <div class="hero-actions">
-          <a class="button-primary hero-v2-primary" href="#products">Start exploring <span>→</span></a>
-          <button class="button-outline hero-v2-secondary" id="sellCta">Sell on WEWE</button>
+    <section class="brand-hero" id="home" aria-labelledby="heroTitle">
+      <div class="shell brand-hero-inner">
+        <div class="brand-hero-copy">
+          <div class="brand-eyebrow"><span aria-hidden="true">✦</span> MAKERERE, MEET YOUR MARKETPLACE</div>
+          <h1 id="heroTitle">Your campus.<br>Your people.<br><em>Your kind of finds.</em></h1>
+          <p>From your next lunch to your favourite look. Discover everyday essentials from the shops and people around you.</p>
+          <div class="hero-actions">
+            <a class="button-primary" href="#products">Explore the marketplace <span aria-hidden="true">↗</span></a>
+            <button class="button-outline" id="sellCta">Sell on WEWE</button>
+          </div>
+          <div class="brand-hero-note"><img src="assets/brand/wewe-symbol-purple.svg" width="40" height="40" alt=""><span>Made for life around campus.<br><strong>Local shops. Mobile money. Delivery or pickup.</strong></span></div>
         </div>
-        <div class="hero-v2-proof">
-          <div class="hero-proof-avatars"><i>W</i><i>E</i><i>W</i><i>E</i></div>
-          <span><strong>Built around campus life</strong><br>Trusted sellers · Online payment · Campus delivery</span>
+        <div class="brand-editorial" aria-label="Explore food, style and everyday essentials">
+          <a class="editorial-tile editorial-food" href="#categoriesSection"><img src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&amp;fit=crop&amp;w=850&amp;q=85" width="850" height="1050" alt="A colourful spread of food" fetchpriority="high"><span class="editorial-label"><small>THE LUNCH BREAK EDIT</small><strong>Good food.<br>Better days.</strong><b aria-hidden="true">↗</b></span></a>
+          <a class="editorial-tile editorial-style" href="#categoriesSection"><img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&amp;fit=crop&amp;w=550&amp;q=82" width="550" height="550" alt="Red sneakers for a fresh everyday look"><span class="editorial-label"><small>A LITTLE SELF EXPRESSION</small><strong>Find your fit.</strong><b aria-hidden="true">↗</b></span></a>
+          <a class="editorial-tile editorial-study" href="#categoriesSection"><img src="https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&amp;fit=crop&amp;w=550&amp;q=82" width="550" height="550" alt="Laptop and desk essentials"><span class="editorial-label"><small>READY FOR WHAT'S NEXT</small><strong>Study. Create. Repeat.</strong><b aria-hidden="true">↗</b></span></a>
+          <div class="editorial-seal" aria-hidden="true"><img src="assets/brand/wewe-symbol-white.svg" width="42" height="42" alt=""><span>AROUND<br>YOU.</span></div>
         </div>
       </div>
-      <div class="hero-v2-visual" aria-label="WEWE campus shopping collection">
-        <div class="hero-v2-orbit orbit-one"></div><div class="hero-v2-orbit orbit-two"></div>
-        <div class="hero-v2-main-card">
-          <div class="hero-v2-main-image"></div>
-          <div class="hero-v2-main-label"><span>Today's campus pick</span><strong>Good food. Good mood.</strong></div>
-        </div>
-        <div class="hero-float-card hero-float-food"><div class="hero-float-image food-image"></div><div><small>Campus bites</small><strong>Lunch sorted</strong></div></div>
-        <div class="hero-float-card hero-float-style"><div class="hero-float-image style-image"></div><div><small>Fresh finds</small><strong>Style your day</strong></div></div>
-        <div class="hero-float-card hero-float-tech"><div class="hero-float-icon">⌁</div><div><small>Student essentials</small><strong>Tech & gadgets</strong></div></div>
-        <div class="hero-v2-sticker sticker-one">DELIVERED<br><b>AROUND CAMPUS</b></div>
-        <div class="hero-v2-sticker sticker-two">UGX<br><b>LOCAL PRICES</b></div>
-      </div>
+      <div class="brand-marquee" aria-hidden="true"><span>GOOD FINDS</span><i>✦</i><span>LOCAL CONNECTIONS</span><i>✦</i><span>CAMPUS ENERGY</span><i>✦</i><span>ALL AROUND YOU</span></div>
     </section>
-    <div class="trustbar"><div class="shell trust-inner"><div class="trust-item"><b>●</b> Campus-verified retailers</div><div class="trust-item"><b>↗</b> Quick campus delivery</div><div class="trust-item"><b>UGX</b> Prices you can trust</div><div class="trust-item"><b>♡</b> Local spend, shared growth</div></div></div>
+    <div class="trustbar"><div class="shell trust-inner"><div class="trust-item"><b>●</b> Discover campus retailers</div><div class="trust-item"><b>↗</b> Campus delivery &amp; pickup</div><div class="trust-item"><b>UGX</b> Local prices in UGX</div><div class="trust-item"><b>♡</b> Local spend, shared growth</div></div></div>
     <section class="section shell" id="categoriesSection"><div class="section-head"><div><div class="section-kicker">A little bit of everything</div><h2>What are you after?</h2></div><button class="text-link" id="allCategories">Browse all categories →</button></div><div class="category-showcase" id="categoryList"></div></section>
     <section class="products-section" id="products"><div class="shell section"><div class="section-head"><div><div class="section-kicker">Picked for campus life</div><h2 id="productHeading">Good finds, close by</h2><div class="section-count" id="productCount"></div></div><div class="filters"><select class="filter-select" id="availabilityFilter" aria-label="Filter availability"><option value="all">All availability</option><option value="in-stock">In stock</option><option value="nearby" disabled>Near me (unavailable)</option></select><select class="filter-select" id="sortFilter" aria-label="Sort products"><option value="featured">Sort: Featured</option><option value="price-low">Price: Low to high</option><option value="price-high">Price: High to low</option></select></div></div><div class="catalog-toolbar"><span class="catalog-label">Fresh on WEWE</span><span class="catalog-hint">Tap a product to see the story behind it</span></div><div class="product-grid" id="productGrid"></div></div></section>
     <section class="shell section commerce-rail-section" id="dealsSection">
@@ -1211,20 +1209,25 @@ button{font-weight:650}
       <div class="section-head"><div><div class="section-kicker">Pick up where you left off</div><h2>Recently viewed.</h2><p class="section-subcopy">Your browsing history stays on this device for a faster shopping experience.</p></div></div>
       <div class="rail-wrap"><button class="rail-arrow rail-prev" data-rail="recentRail" data-dir="-1" aria-label="Previous recently viewed">‹</button><div class="commerce-rail" id="recentRail" aria-live="polite"></div><button class="rail-arrow rail-next" data-rail="recentRail" data-dir="1" aria-label="Next recently viewed">›</button></div>
     </section>
+    <section class="shell section brand-how" aria-labelledby="howTitle">
+      <div class="section-head"><div><div class="section-kicker">Less effort. More living.</div><h2 id="howTitle">Your day, a little easier.</h2></div><p>One marketplace for the things that make campus feel like home.</p></div>
+      <ol class="brand-steps"><li><span>01</span><h3>Find your thing</h3><p>Browse the live catalog and discover the retailers around you.</p></li><li><span>02</span><h3>Make it yours</h3><p>Build your basket and choose MTN Mobile Money or Airtel Money.</p></li><li><span>03</span><h3>Get on with your day</h3><p>Choose campus delivery or pickup. Review your final total before paying.</p></li></ol>
+    </section>
     <section class="shell section" id="nearby"><div class="near-strip"><div class="near-copy"><div class="section-kicker">Close enough to wave</div><h3>Support the shops<br>around your corner.</h3><p>Find campus favourites, student-run brands and trusted neighbourhood shops. The best things are already nearby.</p><button class="text-link" id="nearbyButton">Explore nearby shops →</button></div><div class="near-photo" role="img" aria-label="Students sharing time together on campus"></div></div></section>
     <section class="shell section" id="retailers"><div class="section-head"><div><div class="section-kicker">Community favourites</div><h2>Good people, good shops.</h2></div><button class="text-link" id="retailerMore">Meet the retailers →</button></div><div class="seller-row" id="sellerRow"></div></section>
   </main>
-  <main class="dashboard hidden" id="dashboard"><aside class="dash-side"><div class="dash-brand"><span class="logo-symbol" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M8 14h32v25H8z" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/><path d="M16 14a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/><path d="M13 23l4 7 5-9 5 9 5-7" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="logo-word">WEWE</span> <span class="role-pill" id="sideRole"></span></div><div class="dash-role">YOUR WORKSPACE <span class="dash-live-dot" aria-hidden="true"></span></div><nav class="dash-nav" id="dashNav" aria-label="Workspace navigation"></nav><div class="dash-side-footer"><span class="dash-side-footer-icon" aria-hidden="true">✦</span><div><strong>Made for campus.</strong><small>Manage everything in one place.</small></div></div></aside><section class="dash-main"><div class="dash-top"><div class="dash-heading"><div class="dash-eyebrow"><span class="dash-eyebrow-line"></span> WEWE CONTROL CENTER</div><h1 id="dashTitle">Overview</h1><p id="dashSubtitle">Your live workspace.</p></div><div class="dash-user"><div class="avatar" id="dashAvatar"></div><div><b id="dashName">Account</b><div style="font-size:10px;color:#79847b;margin-top:3px" id="dashAccountRole">Account</div></div></div></div><div id="dashboardContent"></div></section></main>
+  <main class="dashboard hidden" id="dashboard"><aside class="dash-side"><div class="dash-brand"><img class="brand-logo" src="assets/brand/wewe-logo-white.svg" width="337" height="80" alt="WEWE"> <span class="role-pill" id="sideRole"></span></div><div class="dash-role">YOUR WORKSPACE <span class="dash-live-dot" aria-hidden="true"></span></div><nav class="dash-nav" id="dashNav" aria-label="Workspace navigation"></nav><div class="dash-side-footer"><span class="dash-side-footer-icon" aria-hidden="true">✦</span><div><strong>Made for campus.</strong><small>Manage everything in one place.</small></div></div></aside><section class="dash-main"><div class="dash-top"><div class="dash-heading"><div class="dash-eyebrow"><span class="dash-eyebrow-line"></span> WEWE CONTROL CENTER</div><h1 id="dashTitle">Overview</h1><p id="dashSubtitle">Your live workspace.</p></div><div class="dash-user"><div class="avatar" id="dashAvatar"></div><div><b id="dashName">Account</b><div style="font-size:10px;color:#79847b;margin-top:3px" id="dashAccountRole">Account</div></div></div></div><div id="dashboardContent"></div></section></main>
   <nav class="mobile-store-nav" aria-label="Quick navigation">
     <a href="#home"><span>⌂</span><small>Home</small></a>
     <a href="#products"><span>⌕</span><small>Shop</small></a>
     <button type="button" id="mobileCartNav"><span>▱</span><small>Cart</small><b id="mobileCartCount">0</b></button>
     <button type="button" id="mobileAccountNav"><span>◯</span><small>Account</small></button>
   </nav>
-  <footer class="footer" id="footer"><div class="shell footer-inner"><div><a class="logo" href="#home" aria-label="WEWE — campus marketplace"><span class="logo-symbol" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M8 14h32v25H8z" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/><path d="M16 14a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/><path d="M13 23l4 7 5-9 5 9 5-7" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="logo-word">WEWE</span></a><p>Good things happen around WEWE. Built for campus life in Makerere, Kampala.</p></div><div class="footer-links"><a href="#retailers">Become a retailer</a><a href="#nearby">Delivery info</a><a href="#home">Help & support</a><span>© 2026 WEWE</span></div></div></footer>
+  <footer class="footer" id="footer"><div class="shell footer-inner"><div><a class="logo" href="#home" aria-label="WEWE — campus marketplace"><img class="brand-logo" src="assets/brand/wewe-logo-white.svg" width="337" height="80" alt="WEWE"></a><p>Good things happen around WEWE. Built for campus life in Makerere, Kampala.</p></div><div class="footer-links"><a href="#retailers">Become a retailer</a><a href="#nearby">Delivery info</a><a href="#home">Help & support</a><span>© 2026 WEWE</span></div></div></footer>
   <div class="modal-backdrop" id="modalBackdrop" role="presentation"><div class="modal" id="modalContent" role="dialog" aria-modal="true"></div></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="app.js"></script>
   <script src="retailer-media.js"></script>
+  <script src="brand-ui.js"></script>
 </body>
 </html>
