@@ -378,6 +378,35 @@ button,a{min-height:36px}
   .stat-value{font-size:16px}
 }
 
+
+/* Production header compression: prevent tablet/phone navigation from crowding the viewport. */
+@media (max-width:980px){
+  .nav-links,.location{display:none}
+  .topbar-inner{gap:8px}
+  .searchbox{flex:1;min-width:0;width:auto;max-width:none}
+  .account{padding:10px 13px;white-space:nowrap}
+}
+
+/* Compact mobile header: keep search, cart and account access usable with one hand. */
+@media (max-width:600px){
+  .topbar{height:64px}
+  .topbar-inner{gap:5px}
+  .account{display:none}
+  .searchbox{height:40px}
+  .mobile-menu{display:grid}
+}
+
+/* Safe-area support for modern phones with gesture navigation/notches. */
+@media (max-width:780px){
+  .mobile-store-nav{bottom:max(7px,env(safe-area-inset-bottom))}
+  .footer{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
+  .dash-main{padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+}
+
+/* Prevent accidental horizontal page overflow from long marketplace content. */
+html,body{max-width:100%;overflow-x:clip}
+img,video{max-width:100%}
+
 /* Short landscape phones: keep content usable without huge hero */
 @media (max-width:900px) and (orientation:landscape) and (max-height:520px){
   .hero{display:grid;grid-template-columns:1fr 1fr}
