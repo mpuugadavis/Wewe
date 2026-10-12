@@ -839,6 +839,21 @@ body{background:radial-gradient(ellipse 75% 20% at 100% 4%,rgba(185,157,255,.11)
 @media(max-width:680px){html{scroll-padding-top:72px}.product-card{border-radius:16px}.empty-state{padding:20px}.modal{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
+
+/* Checkout and account workspaces — responsive visual hierarchy */
+#checkoutContents{min-width:0}
+#checkoutContents .field{margin-bottom:15px}
+#checkoutContents input,#checkoutContents select,#checkoutContents textarea{max-width:100%}
+#checkoutMap{border-radius:20px;overflow:hidden;border:1px solid #e4d9f6;box-shadow:0 12px 30px rgba(38,19,79,.08);background:#e9e5f2;isolation:isolate}
+#checkoutQuote{border-radius:18px;overflow:hidden}
+#selectedDeliveryLocation{line-height:1.5}
+#paymentProgress{border-radius:18px}
+.dashboard .button-primary,.dashboard .button-outline{min-height:40px}
+.dashboard input,.dashboard select,.dashboard textarea{max-width:100%}
+#dashboardContent{min-width:0}
+#dashboardContent img{max-width:100%}
+@media(max-width:760px){#checkoutMap{min-height:260px}#checkoutContents{overflow-wrap:anywhere}#dashboardContent{overflow-wrap:anywhere}}
+
 </style>
 </head>
 <body>
