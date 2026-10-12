@@ -359,6 +359,69 @@
       </article>`;
     }).join("") : '<div class="empty-state"><div class="empty-icon">⌕</div><h3>No products found</h3><p>Try another search, category or availability filter.</p><button class="button-outline" data-action="clear-search">Clear filters</button></div>';
     syncCartBadge();
+    renderDealRail();
+    renderRecentlyViewed();
+  }
+
+  function recentProductIds() {
+    try {
+      const ids = JSON.parse(localStorage.getItem("wewe_recent_products") || "[]");
+      return Array.isArray(ids) ? ids.filter(Boolean).slice(0, 8) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function rememberRecentlyViewed(productId) {
+    if (!productId) return;
+    const ids = recentProductIds().filter(id => id !== productId);
+    ids.unshift(productId);
+    localStorage.setItem("wewe_recent_products", JSON.stringify(ids.slice(0, 8)));
+    renderRecentlyViewed();
+  }
+
+  function renderProductRail(targetId, rows, emptyText) {
+    const target = $(targetId);
+    if (!target) return;
+    target.innerHTML = rows.length ? rows.map(({ product, listing }) => {
+      const image = safeImage(product.images?.[0]) || catalogFallbackImage(product);
+      const stock = Number(listing.stock_available || 0);
+      return \`<article class="product-card compact-product-card">
+        <div class="product-image"><img class="catalog-image-fallback" src="\${escapeHtml(image)}" alt="\${escapeHtml(product.name)}" loading="lazy" onerror="this.onerror=null;this.src='\${DEFAULT_CATALOG_IMAGE}'">
+          \${Number(listing.discount_percent || 0) > 0 ? \`<span class="rail-discount">-\${Number(listing.discount_percent)}%</span>\` : ""}
+        </div>
+        <div class="product-info">
+          <div class="product-seller">\${escapeHtml(listing.retailer_name || "Campus retailer")}</div>
+          <button class="product-title" data-action="product-details" data-product-id="\${escapeHtml(product.id)}">\${escapeHtml(product.name)}</button>
+          <div class="product-price-row"><div class="product-price">\${priceMarkup(listing)}</div><button class="add-button" data-action="add-cart" data-listing-id="\${escapeHtml(listing.retailer_product_id)}" \${stock < 1 ? "disabled" : ""}>\${stock < 1 ? "Unavailable" : "Add"}</button></div>
+        </div>
+      </article>\`;
+    }).join("") : \`<div class="rail-empty">\${escapeHtml(emptyText)}</div>\`;
+  }
+
+  function renderDealRail() {
+    const rows = [];
+    for (const product of state.products) {
+      for (const listing of productListings(product)) {
+        if (Number(listing.discount_percent || 0) > 0 && Number(listing.stock_available || 0) > 0) rows.push({ product, listing });
+      }
+    }
+    rows.sort((a, b) => Number(b.listing.discount_percent || 0) - Number(a.listing.discount_percent || 0));
+    renderProductRail("#dealRail", rows.slice(0, 8), "No discounted products are available right now.");
+  }
+
+  function renderRecentlyViewed() {
+    const ids = new Set(recentProductIds());
+    const orderIds = recentProductIds();
+    const rows = [];
+    for (const product of state.products) {
+      if (!ids.has(product.id)) continue;
+      const listings = productListings(product);
+      const listing = listings.find(item => Number(item.stock_available || 0) > 0) || listings[0];
+      if (listing) rows.push({ product, listing, order: orderIds.indexOf(product.id) });
+    }
+    rows.sort((a, b) => a.order - b.order);
+    renderProductRail("#recentRail", rows, "Products you open will appear here.");
   }
 
   function renderCategories() {
@@ -586,6 +649,7 @@
   async function showProduct(productId) {
     const product = state.products.find(item => item.id === productId);
     if (!product) return;
+    rememberRecentlyViewed(productId);
     setModal(`<div class="product-modal"><div class="product-modal-image">${safeImage(product.images?.[0]) ? `<img src="${escapeHtml(safeImage(product.images[0]))}" alt="${escapeHtml(product.name)}">` : '<span>WEWE</span>'}</div><div class="product-modal-copy"><button class="close-modal" data-action="close-modal" aria-label="Close">×</button><div class="section-kicker">Campus marketplace</div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.description || "Details are provided by the retailer.")}</p><h3>Available listings</h3><label class="field detail-quantity-field">Quantity<input id="detailQuantity" type="number" min="1" max="100" value="1"></label><div id="productListings"><p class="api-state">Loading listings…</p></div><h3>Customer reviews</h3><div id="productReviews"><p class="api-state">Loading reviews…</p></div><div id="reviewFormSlot"></div></div></div>`, true);
     const listings = productListings(product);
     $("#productListings").innerHTML = listings.length ? listings.map(listing => `<div class="listing-row"><span><b>${escapeHtml(listing.retailer_name)}</b><small>${Number(listing.stock_available) > 0 ? `${Number(listing.stock_available)} available` : "Out of stock"}</small></span><span class="listing-price">${priceMarkup(listing)}</span><button class="add-button" data-action="add-cart" data-listing-id="${escapeHtml(listing.retailer_product_id)}" ${Number(listing.stock_available) < 1 ? "disabled" : ""}>Add</button></div>`).join("") : '<p>No active listings.</p>';
