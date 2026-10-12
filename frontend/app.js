@@ -467,7 +467,7 @@
   async function renderCartContents() {
     const cart = await ensureCart();
     const items = cart.items || [];
-    $("#cartContents").innerHTML = items.length ? `<div class="cart-lines">${items.map(item => `<div class="cart-line">
+    $("#cartContents").innerHTML = items.length ? `<div class="cart-intro"><span class="cart-intro-mark" aria-hidden="true">✦</span><div><strong>Your campus picks</strong><small>Review your basket, then choose delivery or pickup.</small></div></div><div class="cart-lines">${items.map(item => `<div class="cart-line">
       <div><b>${escapeHtml(item.product_name)}</b><small>${escapeHtml(item.retailer_name)} · ${money(item.unit_price_ugx)} each</small></div>
       <div class="cart-line-controls"><button data-action="cart-quantity" data-item-id="${escapeHtml(item.id)}" data-quantity="${Number(item.quantity) - 1}" ${Number(item.quantity) <= 1 ? "disabled" : ""} aria-label="Decrease quantity">−</button><span>${Number(item.quantity)}</span><button data-action="cart-quantity" data-item-id="${escapeHtml(item.id)}" data-quantity="${Number(item.quantity) + 1}" aria-label="Increase quantity">+</button><button data-action="remove-cart" data-item-id="${escapeHtml(item.id)}" aria-label="Remove item">Remove</button></div>
       <b>${money(item.line_total_ugx)}</b></div>`).join("")}</div><div class="cart-summary"><p>Subtotal <b>${money(cart.subtotal_ugx)}</b></p><p>Delivery fee <span>Calculated securely at checkout</span></p><button class="button-primary" data-action="checkout">Continue to checkout</button></div>` : '<div class="api-state"><p>Your cart is empty.</p><button class="button-outline" data-action="close-modal">Continue shopping</button></div>';
@@ -650,7 +650,7 @@
     const product = state.products.find(item => item.id === productId);
     if (!product) return;
     rememberRecentlyViewed(productId);
-    setModal(`<div class="product-modal"><div class="product-modal-image">${safeImage(product.images?.[0]) ? `<img src="${escapeHtml(safeImage(product.images[0]))}" alt="${escapeHtml(product.name)}">` : '<span>WEWE</span>'}</div><div class="product-modal-copy"><button class="close-modal" data-action="close-modal" aria-label="Close">×</button><div class="section-kicker">Campus marketplace</div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.description || "Details are provided by the retailer.")}</p><h3>Available listings</h3><label class="field detail-quantity-field">Quantity<input id="detailQuantity" type="number" min="1" max="100" value="1"></label><div id="productListings"><p class="api-state">Loading listings…</p></div><h3>Customer reviews</h3><div id="productReviews"><p class="api-state">Loading reviews…</p></div><div id="reviewFormSlot"></div></div></div>`, true);
+    setModal(`<div class="product-modal"><div class="product-modal-image"><img src="${escapeHtml(safeImage(product.images?.[0]) || catalogFallbackImage(product))}" alt="${escapeHtml(product.name)}" loading="eager"></div><div class="product-modal-copy"><button class="close-modal" data-action="close-modal" aria-label="Close">×</button><div class="section-kicker">Campus marketplace</div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.description || "Details are provided by the retailer.")}</p><h3>Available listings</h3><label class="field detail-quantity-field">Quantity<input id="detailQuantity" type="number" min="1" max="100" value="1"></label><div id="productListings"><p class="api-state">Loading listings…</p></div><h3>Customer reviews</h3><div id="productReviews"><p class="api-state">Loading reviews…</p></div><div id="reviewFormSlot"></div></div></div>`, true);
     const listings = productListings(product);
     $("#productListings").innerHTML = listings.length ? listings.map(listing => `<div class="listing-row"><span><b>${escapeHtml(listing.retailer_name)}</b><small>${Number(listing.stock_available) > 0 ? `${Number(listing.stock_available)} available` : "Out of stock"}</small></span><span class="listing-price">${priceMarkup(listing)}</span><button class="add-button" data-action="add-cart" data-listing-id="${escapeHtml(listing.retailer_product_id)}" ${Number(listing.stock_available) < 1 ? "disabled" : ""}>Add</button></div>`).join("") : '<p>No active listings.</p>';
     try {
@@ -1108,7 +1108,7 @@
     if (!state.user) return showAuth();
     const cart = await ensureCart();
     if (!cart.items?.length) return showToast("Add at least one item before checkout.");
-    setModal('<div class="modal-head"><div><div class="section-kicker">Secure checkout</div><h2>Choose delivery</h2></div><button class="close-modal" data-action="close-modal">×</button></div><div id="checkoutContents"><p class="api-state">Loading campus locations…</p></div>', true);
+    setModal('<div class="modal-head"><div><div class="section-kicker">WEWE · Secure checkout</div><h2>Almost at your doorstep.</h2><p class="checkout-heading-note">Choose how you would like to receive your order, then pay securely with mobile money.</p></div><button class="close-modal" data-action="close-modal" aria-label="Close checkout">×</button></div><div class="checkout-steps" aria-label="Checkout steps"><span class="is-current">01 · Delivery</span><span>02 · Payment</span><span>03 · Confirmation</span></div><div id="checkoutContents"><p class="api-state">Loading campus locations…</p></div>', true);
     let saved, campuses, pickupPoints, publicPoints;
     try {
       [saved, campuses, pickupPoints] = await Promise.all([
@@ -1148,7 +1148,7 @@
       '<div class="field"><span>Payment method</span><div class="payment-options"><label class="payment-option selected"><input type="radio" name="payment_method" value="MTN_MOMO" checked> <b>MTN Mobile Money</b><small>Pay securely from your MTN line.</small></label><label class="payment-option"><input type="radio" name="payment_method" value="AIRTEL_MONEY"> <b>Airtel Money</b><small>Pay securely from your Airtel line.</small></label></div></div>' +
       '<label class="field">Email for payment receipt<input name="email" type="email" value="' + escapeHtml(state.user?.email || "") + '" placeholder="you@example.com" required autocomplete="email"></label>' +
       '<label class="field" data-payment-phone>Mobile money phone<input name="phone" type="tel" placeholder="+256700000000" required autocomplete="tel"></label>' +
-      '<div id="checkoutQuote" class="checkout-quote"><p class="api-state">Calculating delivery route…</p></div><p class="form-message" aria-live="polite"></p><button class="button-primary">Place order</button></form>';
+      '<div id="checkoutQuote" class="checkout-quote"><p class="api-state">Calculating delivery route…</p></div><p class="form-message" aria-live="polite"></p><p class="checkout-assurance">Your final total is shown above. Payment is processed securely through mobile money.</p><button class="button-primary">Place order &amp; continue to payment</button></form>';
     if (profile.preferred_delivery_point_id && $('select[name="delivery_point_id"]')) {
       $('select[name="delivery_point_id"]').value = profile.preferred_delivery_point_id;
     }

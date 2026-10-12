@@ -816,6 +816,138 @@ img,video{max-width:100%}
 @media(max-width:420px){.product-modal-image{min-height:190px}.cart-line{padding:14px}.cart-summary{padding:16px}.product-modal-copy .listing-row{padding:12px}}
 @media(prefers-reduced-motion:reduce){.product-modal *, .cart-line *{scroll-behavior:auto}}
 
+
+/* WEWE premium marketplace refinements */
+html{scroll-behavior:smooth;scroll-padding-top:90px}
+body{background:radial-gradient(ellipse 75% 20% at 100% 4%,rgba(185,157,255,.11),transparent),#f9f7fc}
+:where(button,a,input,select,textarea):focus-visible{outline:3px solid #a18aff;outline-offset:3px}
+:where(.product-card,.category){transition:transform .24s ease,box-shadow .24s ease}
+@media(hover:hover) and (pointer:fine){.product-card:hover{transform:translateY(-5px);box-shadow:0 24px 48px rgba(51,25,97,.14)}.category:hover{transform:translateY(-4px);box-shadow:0 16px 34px rgba(60,28,112,.13)}}
+.product-image{background:linear-gradient(145deg,#f3eefe,#ece7f8)}
+.product-image img{transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+@media(hover:hover) and (pointer:fine){.product-card:hover .product-image img{transform:scale(1.055)}}
+.product-card{overflow:hidden;border:1px solid rgba(98,68,153,.1);box-shadow:0 9px 28px rgba(40,24,74,.06)}
+.product-title{line-height:1.35;text-wrap:pretty}
+.section-kicker{text-transform:uppercase;letter-spacing:.14em;font-weight:800}
+.category-image{background-position:center;background-size:cover}
+.modal-backdrop{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.modal{box-shadow:0 35px 100px rgba(21,11,49,.22)}
+.api-state{line-height:1.65}
+.empty-state{border:1px dashed #c9b8ed;background:linear-gradient(145deg,#fff,#f6f1ff);border-radius:22px;padding:32px}
+.button-primary,.add-button{transition:transform .2s ease,filter .2s ease}
+@media(hover:hover){.button-primary:hover,.add-button:not(:disabled):hover{filter:brightness(1.06);transform:translateY(-1px)}}
+@media(max-width:680px){html{scroll-padding-top:72px}.product-card{border-radius:16px}.empty-state{padding:20px}.modal{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+
+/* Checkout and account workspaces — responsive visual hierarchy */
+#checkoutContents{min-width:0}
+#checkoutContents .field{margin-bottom:15px}
+#checkoutContents input,#checkoutContents select,#checkoutContents textarea{max-width:100%}
+#checkoutMap{border-radius:20px;overflow:hidden;border:1px solid #e4d9f6;box-shadow:0 12px 30px rgba(38,19,79,.08);background:#e9e5f2;isolation:isolate}
+#checkoutQuote{border-radius:18px;overflow:hidden}
+#selectedDeliveryLocation{line-height:1.5}
+#paymentProgress{border-radius:18px}
+.dashboard .button-primary,.dashboard .button-outline{min-height:40px}
+.dashboard input,.dashboard select,.dashboard textarea{max-width:100%}
+#dashboardContent{min-width:0}
+#dashboardContent img{max-width:100%}
+@media(max-width:760px){#checkoutMap{min-height:260px}#checkoutContents{overflow-wrap:anywhere}#dashboardContent{overflow-wrap:anywhere}}
+
+
+/* Guided mobile-money checkout */
+.checkout-heading-note{color:var(--muted);font-size:14px;line-height:1.6;margin:8px 0 0;max-width:560px}
+.checkout-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0 24px}
+.checkout-steps span{padding:11px 9px;border:1px solid var(--line);border-radius:12px;text-align:center;font-size:12px;font-weight:700;color:var(--muted);background:#faf8fd}
+.checkout-steps .is-current{color:#5b2cce;background:#eee7ff;border-color:#c9b5fa}
+.checkout-assurance{font-size:12px;line-height:1.6;color:var(--muted);margin:16px 0 10px}
+#checkoutContents .payment-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#checkoutContents .payment-option{border-radius:16px;padding:14px;min-width:0}
+#checkoutContents .payment-option small{display:block;line-height:1.5}
+#checkoutContents .checkout-quote{background:linear-gradient(145deg,#fff,#f7f3ff);border:1px solid #e5dbfa;padding:16px}
+#checkoutContents .checkout-total{border-top:1px solid #ddd0f7;padding-top:14px;font-size:19px}
+#checkoutContents .button-primary{min-height:48px}
+@media(max-width:560px){.checkout-steps{gap:5px}.checkout-steps span{font-size:10px;padding:10px 5px}#checkoutContents .payment-options{grid-template-columns:1fr}}
+
+
+/* Basket editorial header and product image continuity */
+.cart-intro{display:flex;align-items:center;gap:14px;margin:12px 0 20px;padding:18px 20px;border-radius:18px;background:linear-gradient(120deg,#2d1556,#6a3bd5);color:#fff}
+.cart-intro-mark{display:grid;place-items:center;flex:0 0 44px;height:44px;border-radius:14px;background:rgba(255,255,255,.14);font-size:25px}
+.cart-intro strong{display:block;font-size:17px;line-height:1.4}
+.cart-intro small{display:block;margin-top:3px;color:#e6dfff;line-height:1.5}
+.product-modal-image img{display:block;width:100%;height:100%;object-fit:cover}
+@media(max-width:480px){.cart-intro{padding:14px;gap:11px}.cart-intro-mark{flex-basis:38px;height:38px}}
+
+
+/* WEWE unified professional dashboard design system */
+.dashboard{--dash-ink:#211635;--dash-muted:#746a84;--dash-purple:#6d3df5;--dash-border:#e9e3f1;--dash-paper:#fff;background:#f7f5fb;color:var(--dash-ink);min-height:100vh}
+.dashboard .dash-side{background:linear-gradient(165deg,#24113f 0%,#321753 55%,#201039 100%);color:#f6f1ff;border-right:1px solid rgba(255,255,255,.08)}
+.dashboard .dash-brand{padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,.12)}
+.dashboard .dash-brand .logo-word{letter-spacing:.045em}
+.dashboard .dash-role{font-size:10px;font-weight:800;letter-spacing:.18em;color:#bdb0d7;margin-top:28px;display:flex;align-items:center;gap:10px}
+.dash-live-dot{height:7px;width:7px;border-radius:50%;background:#9df0bb;box-shadow:0 0 0 4px rgba(157,240,187,.12)}
+.dashboard .dash-nav{display:flex;flex-direction:column;gap:5px}
+.dashboard .dash-nav button,.dashboard .dash-nav a{border-radius:13px;transition:background .2s ease,transform .2s ease,color .2s ease}
+.dashboard .dash-nav button:hover,.dashboard .dash-nav a:hover{background:rgba(255,255,255,.11);color:#fff}
+.dashboard .dash-nav .active,.dashboard .dash-nav [aria-current="page"]{background:linear-gradient(100deg,rgba(157,121,255,.27),rgba(157,121,255,.12));color:#fff;box-shadow:inset 3px 0 #bda3ff}
+.dash-side-footer{margin-top:auto;padding:17px 12px;border:1px solid rgba(255,255,255,.13);border-radius:16px;display:flex;align-items:center;gap:11px;background:rgba(255,255,255,.055)}
+.dash-side-footer-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex-shrink:0;background:rgba(174,141,255,.2);color:#e0d0ff;font-size:22px}
+.dash-side-footer strong,.dash-side-footer small{display:block}.dash-side-footer strong{font-size:12px;color:#fff}.dash-side-footer small{font-size:11px;line-height:1.5;color:#c4b7d9;margin-top:4px}
+.dashboard .dash-main{min-width:0;background:radial-gradient(ellipse 50% 24% at 90% 0%,rgba(179,151,255,.11),transparent),#f7f5fb}
+.dashboard .dash-top{background:rgba(255,255,255,.92);border-bottom:1px solid var(--dash-border);box-shadow:0 8px 24px rgba(37,19,76,.035);gap:18px}
+.dash-eyebrow{display:flex;align-items:center;gap:8px;color:#7954d2;font-size:10px;font-weight:800;letter-spacing:.16em;margin-bottom:7px}
+.dash-eyebrow-line{display:inline-block;width:20px;height:2px;border-radius:2px;background:#9b76ef}
+.dashboard .dash-top h1{font-size:clamp(24px,2.5vw,36px);line-height:1.15;letter-spacing:-.045em;color:#24143d}
+.dashboard .dash-top p{color:#786f85;line-height:1.55}
+.dashboard .dash-user{border:1px solid #e9e3f2;border-radius:16px;padding:9px 13px;background:#fff;box-shadow:0 5px 14px rgba(50,27,90,.04)}
+.dashboard .avatar{box-shadow:0 0 0 3px #f1eaff}
+#dashboardContent{min-width:0}
+#dashboardContent :where(.stat-card,.metric-card,.kpi-card){background:linear-gradient(145deg,#fff,#fcfaff);border:1px solid #e9e2f1;border-radius:18px;box-shadow:0 10px 28px rgba(47,25,87,.055)}
+#dashboardContent :where(.panel,.dash-card,.dashboard-card,.workspace-card){border-radius:20px;border-color:#e8e2ef;box-shadow:0 12px 30px rgba(44,25,77,.045)}
+#dashboardContent :where(h2,h3){letter-spacing:-.025em;color:#2b1946}
+#dashboardContent :where(table){border-collapse:separate;border-spacing:0;width:100%}
+#dashboardContent :where(th){text-transform:uppercase;font-size:11px;letter-spacing:.075em;color:#756987;background:#f6f2fc}
+#dashboardContent :where(td,th){padding:12px 14px;border-bottom:1px solid #eee9f5;text-align:left}
+#dashboardContent :where(input,select,textarea){border-radius:11px;border-color:#e3daef;background:#fff}
+#dashboardContent :where(button){min-height:36px}
+#dashboardContent :where(.button-primary){background:linear-gradient(110deg,#6d3df5,#8658f5);color:#fff;box-shadow:0 7px 16px rgba(101,54,212,.14)}
+#dashboardContent :where(.api-state){border-radius:14px}
+@media(max-width:1000px){.dash-side-footer{display:none}.dashboard .dash-top{padding-top:20px;padding-bottom:20px}}
+@media(max-width:680px){.dashboard .dash-top{align-items:flex-start;flex-wrap:wrap}.dashboard .dash-user{padding:7px 10px}.dashboard .dash-top h1{font-size:25px}#dashboardContent :where(table){display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}#dashboardContent :where(td,th){white-space:nowrap}.dash-eyebrow{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.dashboard .dash-nav button,.dashboard .dash-nav a{transition:none}}
+
+
+/* Dashboard components shared by operations, retailer, rider and admin */
+#dashboardContent .dashboard-hero{position:relative;isolation:isolate;overflow:hidden;background:linear-gradient(118deg,#281344,#54309a 67%,#7954d8);color:#fff;border:1px solid rgba(255,255,255,.13);border-radius:24px;padding:clamp(22px,3vw,36px);box-shadow:0 22px 48px rgba(50,24,101,.16)}
+#dashboardContent .dashboard-hero:after{content:"";position:absolute;width:230px;height:230px;border:1px solid rgba(255,255,255,.13);border-radius:50%;right:-60px;top:-105px;box-shadow:0 0 0 34px rgba(255,255,255,.035),0 0 0 75px rgba(255,255,255,.025);z-index:-1;pointer-events:none}
+#dashboardContent .dashboard-hero h2{color:#fff;font-size:clamp(24px,2.7vw,38px);line-height:1.15;letter-spacing:-.04em}
+#dashboardContent .dashboard-hero p{color:#e8defe;max-width:640px;line-height:1.65}
+#dashboardContent .dashboard-hero .eyebrow{color:#d5c1ff;letter-spacing:.14em;text-transform:uppercase;font-weight:800;font-size:11px}
+#dashboardContent .dashboard-hero .button-outline{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.09)}
+#dashboardContent .dashboard-page-head{margin:6px 0 22px}
+#dashboardContent .dashboard-page-head h2{font-size:clamp(22px,2.3vw,31px);margin:6px 0 8px}
+#dashboardContent .dashboard-page-head p{color:#786d87;line-height:1.6}
+#dashboardContent .dashboard-page-head .eyebrow{font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#7651cb}
+#dashboardContent .dashboard-panel{background:#fff;border:1px solid #e9e3f2;border-radius:20px;box-shadow:0 12px 34px rgba(41,23,78,.055);padding:clamp(16px,2.5vw,26px);min-width:0}
+#dashboardContent .dashboard-stat-grid{gap:15px}
+#dashboardContent .stat-card{position:relative;overflow:hidden;padding:clamp(17px,2vw,23px)}
+#dashboardContent .stat-card:before{content:"";position:absolute;right:-18px;top:-26px;width:90px;height:90px;border-radius:50%;background:rgba(120,82,227,.06);pointer-events:none}
+#dashboardContent .stat-card>span{font-size:12px;font-weight:650;color:#736982}
+#dashboardContent .stat-card .stat-value{font-size:clamp(24px,2.6vw,36px);line-height:1.2;letter-spacing:-.04em;color:#291647}
+#dashboardContent .stat-card small{color:#877d94;line-height:1.5}
+#dashboardContent .dashboard-list-item{padding:15px 0;border-bottom:1px solid #eee9f4;display:flex;align-items:center;justify-content:space-between;gap:16px}
+#dashboardContent .dashboard-list-item:last-child{border-bottom:0}
+#dashboardContent .dashboard-list-item b{overflow-wrap:anywhere}
+#dashboardContent .dashboard-list-item small{display:block;margin-top:5px;color:#81768e}
+#dashboardContent .dashboard-table{max-width:100%;overflow-x:auto;border:1px solid #eee8f5;border-radius:16px}
+#dashboardContent .dashboard-table-head{background:#f5f1fb;color:#685a7b;font-size:11px;font-weight:800;letter-spacing:.04em}
+#dashboardContent .dashboard-table-row{background:#fff;border-top:1px solid #eee8f5}
+#dashboardContent .dashboard-table-row:hover{background:#fbf9ff}
+#dashboardContent .dashboard-empty{padding:clamp(28px,5vw,58px);text-align:center;border:1px dashed #d9c9f0;border-radius:20px;background:linear-gradient(140deg,#fff,#f8f4ff)}
+#dashboardContent .dashboard-empty .empty-icon{margin-inline:auto}
+#dashboardContent .dashboard-empty p{color:#7b7089;line-height:1.6}
+@media(max-width:680px){#dashboardContent .dashboard-hero{border-radius:18px}#dashboardContent .dashboard-hero:after{width:140px;height:140px}#dashboardContent .dashboard-list-item{align-items:flex-start;flex-wrap:wrap}#dashboardContent .dashboard-panel{border-radius:16px}}
+
 </style>
 </head>
 <body>
@@ -873,7 +1005,7 @@ img,video{max-width:100%}
     <section class="shell section" id="nearby"><div class="near-strip"><div class="near-copy"><div class="section-kicker">Close enough to wave</div><h3>Support the shops<br>around your corner.</h3><p>Find campus favourites, student-run brands and trusted neighbourhood shops. The best things are already nearby.</p><button class="text-link" id="nearbyButton">Explore nearby shops →</button></div><div class="near-photo" role="img" aria-label="Students sharing time together on campus"></div></div></section>
     <section class="shell section" id="retailers"><div class="section-head"><div><div class="section-kicker">Community favourites</div><h2>Good people, good shops.</h2></div><button class="text-link" id="retailerMore">Meet the retailers →</button></div><div class="seller-row" id="sellerRow"></div></section>
   </main>
-  <main class="dashboard hidden" id="dashboard"><aside class="dash-side"><div class="dash-brand"><span class="logo-symbol" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M8 14h32v25H8z" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/><path d="M16 14a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/><path d="M13 23l4 7 5-9 5 9 5-7" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="logo-word">WEWE</span> <span class="role-pill" id="sideRole"></span></div><div class="dash-role">Workspace</div><nav class="dash-nav" id="dashNav"></nav></aside><section class="dash-main"><div class="dash-top"><div><h1 id="dashTitle">Overview</h1><p id="dashSubtitle">Your live workspace.</p></div><div class="dash-user"><div class="avatar" id="dashAvatar"></div><div><b id="dashName">Account</b><div style="font-size:10px;color:#79847b;margin-top:3px" id="dashAccountRole">Account</div></div></div></div><div id="dashboardContent"></div></section></main>
+  <main class="dashboard hidden" id="dashboard"><aside class="dash-side"><div class="dash-brand"><span class="logo-symbol" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M8 14h32v25H8z" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/><path d="M16 14a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/><path d="M13 23l4 7 5-9 5 9 5-7" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="logo-word">WEWE</span> <span class="role-pill" id="sideRole"></span></div><div class="dash-role">YOUR WORKSPACE <span class="dash-live-dot" aria-hidden="true"></span></div><nav class="dash-nav" id="dashNav" aria-label="Workspace navigation"></nav><div class="dash-side-footer"><span class="dash-side-footer-icon" aria-hidden="true">✦</span><div><strong>Made for campus.</strong><small>Manage everything in one place.</small></div></div></aside><section class="dash-main"><div class="dash-top"><div class="dash-heading"><div class="dash-eyebrow"><span class="dash-eyebrow-line"></span> WEWE CONTROL CENTER</div><h1 id="dashTitle">Overview</h1><p id="dashSubtitle">Your live workspace.</p></div><div class="dash-user"><div class="avatar" id="dashAvatar"></div><div><b id="dashName">Account</b><div style="font-size:10px;color:#79847b;margin-top:3px" id="dashAccountRole">Account</div></div></div></div><div id="dashboardContent"></div></section></main>
   <nav class="mobile-store-nav" aria-label="Quick navigation">
     <a href="#home"><span>⌂</span><small>Home</small></a>
     <a href="#products"><span>⌕</span><small>Shop</small></a>
