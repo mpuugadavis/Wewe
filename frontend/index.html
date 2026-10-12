@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#6d3df5">
-  <meta name="wewe-api-base" content="http://localhost:8000/api/v1">
+  <meta name="wewe-api-base" content="">
   <title>WEWE | Around campus, around you</title>
   <style>:root{
   --brand:#6c3df4;--brand-2:#8b67ff;--brand-dark:#4a23ad;--ink:#17131f;--muted:#756e82;
@@ -740,6 +740,41 @@ img,video{max-width:100%}
 }
 @media(max-width:390px){.rider-earnings-grid{grid-template-columns:1fr}}
 
+
+/* WEWE visual refresh */
+.hero-v2{min-height:650px;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);background:#160d2c;color:#fff;isolation:isolate}
+.hero-v2-copy{position:relative;z-index:5;padding:88px 5% 76px max(7vw,48px);display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.hero-v2-copy:after{content:"";position:absolute;left:-120px;bottom:-170px;width:430px;height:430px;border-radius:50%;background:rgba(140,92,255,.2);filter:blur(4px);z-index:-1}
+.hero-v2-badge{display:inline-flex;align-items:center;gap:9px;width:max-content;padding:8px 12px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);border-radius:99px;color:#dcd2f7;font-size:10px;font-weight:900;letter-spacing:.5px;text-transform:uppercase}
+.hero-v2-badge-dot{width:7px;height:7px;border-radius:50%;background:#a98cff;box-shadow:0 0 0 5px rgba(169,140,255,.12)}
+.hero-v2 h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(50px,5.5vw,82px);line-height:.94;letter-spacing:-3px;font-weight:400;margin:22px 0;color:#fff}
+.hero-v2 h1 span{color:#a98cff}
+.hero-v2-copy>p{font-size:16px;line-height:1.75;color:#bdb2d2;max-width:560px;margin:0 0 29px}
+.hero-v2-primary{background:#9b72ff!important;color:#fff!important;box-shadow:0 16px 34px rgba(128,75,255,.3)!important;padding:13px 20px}
+.hero-v2-primary:hover{background:#ae8aff!important}
+.hero-v2-secondary{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.18);color:#fff}
+.hero-v2-secondary:hover{background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.3)}
+.hero-v2-proof{display:flex;align-items:center;gap:11px;margin-top:31px;color:#9589aa;font-size:10px;line-height:1.45}
+.hero-v2-proof strong{color:#eee9f7;font-size:11px}
+.hero-proof-avatars{display:flex;padding-left:5px}.hero-proof-avatars i{width:27px;height:27px;margin-left:-5px;border:2px solid #160d2c;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#9b72ff,#5730a7);color:#fff;font-style:normal;font-size:9px;font-weight:900}.hero-proof-avatars i:nth-child(2){background:linear-gradient(135deg,#f2a35b,#bb5e2a)}.hero-proof-avatars i:nth-child(3){background:linear-gradient(135deg,#71b8a1,#367a68)}.hero-proof-avatars i:nth-child(4){background:linear-gradient(135deg,#df78a7,#8f3d67)}
+.hero-v2-visual{position:relative;min-height:650px;overflow:hidden;background:radial-gradient(circle at 50% 45%,#4b2679 0,#271447 40%,#160d2c 74%);display:grid;place-items:center}
+.hero-v2-visual:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 65% 20%,rgba(190,155,255,.14),transparent 30%),radial-gradient(circle at 20% 80%,rgba(226,90,151,.12),transparent 25%)}
+.hero-v2-main-card{position:relative;width:min(58%,440px);aspect-ratio:.84;border:8px solid rgba(255,255,255,.09);border-radius:30px;background:#fff;box-shadow:0 35px 80px rgba(0,0,0,.32);overflow:hidden;transform:rotate(2.5deg);z-index:3}
+.hero-v2-main-image{position:absolute;inset:0;background:url("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1000&q=88") center/cover}.hero-v2-main-image:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 48%,rgba(20,9,38,.82))}
+.hero-v2-main-label{position:absolute;left:24px;right:24px;bottom:22px;z-index:2}.hero-v2-main-label span{display:block;color:#d8cbed;text-transform:uppercase;font-size:8px;letter-spacing:1.4px;font-weight:900;margin-bottom:5px}.hero-v2-main-label strong{font-family:Georgia,serif;font-size:27px;font-weight:400;color:#fff}
+.hero-v2-orbit{position:absolute;border:1px solid rgba(185,155,255,.18);border-radius:50%;z-index:1}.orbit-one{width:600px;height:600px;transform:rotate(17deg)}.orbit-two{width:770px;height:380px;transform:rotate(-27deg)}
+.hero-float-card{position:absolute;z-index:6;width:210px;padding:9px;display:flex;align-items:center;gap:10px;border:1px solid rgba(255,255,255,.18);border-radius:17px;background:rgba(35,18,60,.88);backdrop-filter:blur(15px);box-shadow:0 18px 38px rgba(0,0,0,.25);animation:heroFloat 5s ease-in-out infinite}.hero-float-card small{display:block;color:#9e91b4;font-size:8px;text-transform:uppercase;letter-spacing:.7px;font-weight:900}.hero-float-card strong{display:block;color:#fff;font-size:11px;margin-top:2px}.hero-float-image{width:51px;height:51px;flex:none;border-radius:12px;background-size:cover;background-position:center}.food-image{background-image:url("https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=300&q=82")}.style-image{background-image:url("https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=300&q=82")}
+.hero-float-food{left:6%;top:18%;animation-delay:-1s}.hero-float-style{right:5%;bottom:18%;animation-delay:-2.2s}.hero-float-tech{left:9%;bottom:13%;animation-delay:-3.4s}.hero-float-icon{width:51px;height:51px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#7c55dc,#42218a);font-size:23px;color:#fff}
+.hero-v2-sticker{position:absolute;z-index:7;padding:9px 12px;background:#fff;color:#24143d;font-size:8px;line-height:1.2;letter-spacing:1px;font-weight:900;box-shadow:0 12px 28px rgba(0,0,0,.2);transform:rotate(-8deg)}.hero-v2-sticker b{font-size:9px}.sticker-one{right:8%;top:13%}.sticker-two{left:4%;top:48%;transform:rotate(8deg);background:#9b72ff;color:#fff}
+@keyframes heroFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-9px) rotate(.7deg)}}
+.trustbar{background:#120a24;border-bottom:1px solid rgba(255,255,255,.08)}.trust-item{color:#aaa0bb}.trust-item b{color:#a98cff}
+#categoriesSection{padding-top:72px;padding-bottom:70px}#categoriesSection h2,.products-section h2,.commerce-rail-section h2,#retailers h2{font-size:42px}
+.categories{grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}.category{position:relative;min-height:138px;padding:20px 12px 16px;border-radius:19px;background:linear-gradient(145deg,#fff,#faf8ff);overflow:hidden}.category:before{content:"";position:absolute;width:80px;height:80px;border-radius:50%;right:-30px;top:-30px;background:#f0e9ff}.cat-icon{position:relative;width:50px;height:50px;border-radius:16px;background:#eee7ff;color:#6c3df4;font-size:21px;box-shadow:inset 0 0 0 1px #e2d8fa}
+.products-section{background:#f4f0f9}.products-section .section{padding-top:72px;padding-bottom:72px}.product-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}.product-card{border-radius:20px;border-color:#e9e2f1;box-shadow:0 5px 20px rgba(42,22,73,.055)}.product-image{height:255px}.product-card:hover{transform:translateY(-7px);box-shadow:0 22px 50px rgba(42,22,73,.12)}.product-info{padding:17px}.product-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}.stock-pill{padding:4px 7px;border-radius:99px;background:#eaf8f1;color:#16724d;font-size:9px;font-weight:900}.stock-pill.low{background:#fff5dc;color:#986400}.stock-pill.out{background:#fdebed;color:#b43b48}.product-price-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px}.product-price{font-size:15px;font-weight:950;color:#342044}.quick-add{position:absolute;left:12px;bottom:12px;border:1px solid rgba(255,255,255,.75);background:rgba(255,255,255,.95);color:#41236d;padding:8px 10px;border-radius:10px;font-size:10px;font-weight:900;box-shadow:0 7px 18px rgba(24,10,43,.15)}
+.commerce-rail-section{padding-top:72px;padding-bottom:30px}.section-subcopy{margin:8px 0 0;color:#83788e;font-size:12px}.near-strip{min-height:330px;border-radius:26px;background:linear-gradient(125deg,#21113f,#4b2679)}.near-copy{padding:54px}.near-copy h3{font-size:40px}.near-photo{min-height:330px;background-image:url("https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1100&q=86")}.seller-card{border-radius:19px;padding:19px;box-shadow:0 5px 20px rgba(45,25,90,.05)}.footer{background:#11091f;padding:58px 0}
+@media(max-width:1000px){.hero-v2{grid-template-columns:1fr;min-height:auto}.hero-v2-copy{padding:72px 6% 44px}.hero-v2-visual{min-height:570px}.hero-v2-main-card{width:min(50%,390px)}.categories{grid-template-columns:repeat(4,1fr)}.product-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:680px){.hero-v2-copy{padding:54px 20px 35px}.hero-v2 h1{font-size:clamp(45px,13vw,65px);letter-spacing:-2.2px}.hero-v2-copy>p{font-size:14px}.hero-v2-visual{min-height:500px}.hero-v2-main-card{width:58%;border-width:6px}.hero-v2-main-label{left:16px;right:16px;bottom:16px}.hero-v2-main-label strong{font-size:21px}.hero-float-card{width:170px;padding:7px;gap:7px}.hero-float-image,.hero-float-icon{width:43px;height:43px}.hero-float-food{left:3%;top:12%}.hero-float-style{right:3%;bottom:17%}.hero-float-tech{left:4%;bottom:6%}.hero-v2-sticker{display:none}.categories{grid-template-columns:repeat(2,1fr);gap:9px}#categoriesSection h2,.products-section h2,.commerce-rail-section h2,#retailers h2{font-size:32px}.product-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.product-image{height:190px}.product-info{padding:12px}.product-price{font-size:12px}.product-title{font-size:12px}.add-button{padding:7px 8px;font-size:9px}.trust-inner{grid-template-columns:1fr 1fr;padding-left:20px;padding-right:20px}.near-strip{grid-template-columns:1fr}.near-photo{min-height:210px}.near-copy{padding:32px 25px}.near-copy h3{font-size:32px}}
+@media(max-width:430px){.hero-v2-visual{min-height:440px}.hero-v2-main-card{width:62%}.hero-float-card{width:150px}.hero-float-card strong{font-size:10px}.hero-float-style{bottom:12%}.hero-float-tech{bottom:4%}.product-image{height:170px}.quick-add{left:8px;bottom:8px;padding:7px 8px}}
 </style>
 </head>
 <body>
@@ -756,22 +791,31 @@ img,video{max-width:100%}
     </div>
   </header>
   <main id="storefront">
-    <section class="hero" id="home">
-      <div class="hero-copy"><div class="eyebrow">Your campus. Your people. Your marketplace.</div><h1>Good things<br>happen <em>around</em><br>WEWE.</h1><p>Discover the food, finds and everyday essentials your campus community has to offer. Delivered right to you.</p><div class="hero-actions"><a class="button-primary" href="#products">Shop what’s nearby <span>→</span></a><button class="button-outline" id="sellCta">I’m a retailer</button></div><div class="hero-proof"><span class="proof-dot"></span> Verified campus sellers · Secure online payment</div></div>
-      <div class="hero-image" role="region" aria-label="WEWE campus shopping highlights">
-        <div class="hero-slider" id="heroSlider">
-          <div class="hero-slide active" style="background-image:url('https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1400&q=88')" role="img" aria-label="University students together on campus"></div>
-          <div class="hero-slide" style="background-image:url('https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1400&q=88')" role="img" aria-label="Students using laptops while studying"></div>
-          <div class="hero-slide" style="background-image:url('https://images.unsplash.com/photo-1529390079861-591de354faf5?auto=format&fit=crop&w=1400&q=88')" role="img" aria-label="Students socialising together"></div>
-          <div class="hero-slide" style="background-image:url('https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?auto=format&fit=crop&w=1400&q=88')" role="img" aria-label="University campus buildings"></div>
+    <section class="hero hero-v2" id="home">
+      <div class="hero-v2-copy">
+        <div class="hero-v2-badge"><span class="hero-v2-badge-dot"></span> Makerere's campus marketplace</div>
+        <h1>Everything you need.<br><span>Right around you.</span></h1>
+        <p>Food, fashion, electronics, stationery and everyday essentials — discovered from people and shops around your campus.</p>
+        <div class="hero-actions">
+          <a class="button-primary hero-v2-primary" href="#products">Start exploring <span>→</span></a>
+          <button class="button-outline hero-v2-secondary" id="sellCta">Sell on WEWE</button>
         </div>
-        <div class="hero-slider-controls" id="heroSliderControls" aria-label="Hero slides">
-          <button class="hero-slider-dot active" type="button" data-slide="0" aria-label="Show slide 1"></button>
-          <button class="hero-slider-dot" type="button" data-slide="1" aria-label="Show slide 2"></button>
-          <button class="hero-slider-dot" type="button" data-slide="2" aria-label="Show slide 3"></button>
-          <button class="hero-slider-dot" type="button" data-slide="3" aria-label="Show slide 4"></button>
+        <div class="hero-v2-proof">
+          <div class="hero-proof-avatars"><i>W</i><i>E</i><i>W</i><i>E</i></div>
+          <span><strong>Built around campus life</strong><br>Trusted sellers · Online payment · Campus delivery</span>
         </div>
-        <div class="image-note"><strong>Made for Makerere</strong>Food, fashion, essentials & more.</div>
+      </div>
+      <div class="hero-v2-visual" aria-label="WEWE campus shopping collection">
+        <div class="hero-v2-orbit orbit-one"></div><div class="hero-v2-orbit orbit-two"></div>
+        <div class="hero-v2-main-card">
+          <div class="hero-v2-main-image"></div>
+          <div class="hero-v2-main-label"><span>Today's campus pick</span><strong>Good food. Good mood.</strong></div>
+        </div>
+        <div class="hero-float-card hero-float-food"><div class="hero-float-image food-image"></div><div><small>Campus bites</small><strong>Lunch sorted</strong></div></div>
+        <div class="hero-float-card hero-float-style"><div class="hero-float-image style-image"></div><div><small>Fresh finds</small><strong>Style your day</strong></div></div>
+        <div class="hero-float-card hero-float-tech"><div class="hero-float-icon">⌁</div><div><small>Student essentials</small><strong>Tech & gadgets</strong></div></div>
+        <div class="hero-v2-sticker sticker-one">DELIVERED<br><b>AROUND CAMPUS</b></div>
+        <div class="hero-v2-sticker sticker-two">UGX<br><b>LOCAL PRICES</b></div>
       </div>
     </section>
     <div class="trustbar"><div class="shell trust-inner"><div class="trust-item"><b>●</b> Campus-verified retailers</div><div class="trust-item"><b>↗</b> Quick campus delivery</div><div class="trust-item"><b>UGX</b> Prices you can trust</div><div class="trust-item"><b>♡</b> Local spend, shared growth</div></div></div>
