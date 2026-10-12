@@ -149,6 +149,86 @@ class PawaPayProvider:
             raise ValueError("Enter a valid Ugandan mobile number, for example +256700000000")
         return cleaned
 
+    def _validate_active_configuration(self, provider: str, amount: Decimal) -> None:
+        """Validate this merchant account can accept this exact Uganda deposit."""
+        config = self._request(
+            "GET",
+            "/v2/active-conf?country=UGA&operationType=DEPOSIT",
+        )
+        countries = config.get("countries") if isinstance(config, dict) else None
+        if not isinstance(countries, list):
+            raise PawaPayAPIError(
+                "PawaPay active configuration returned no countries.",
+                stage="/v2/active-conf",
+                http_status=200,
+                failure_code="INVALID_ACTIVE_CONFIGURATION",
+                validation_errors=config,
+            )
+        ug = next((c for c in countries if isinstance(c, dict) and c.get("country") == "UGA"), None)
+        if not isinstance(ug, dict):
+            raise PawaPayAPIError(
+                "Uganda is not enabled on this PawaPay account.",
+                stage="/v2/active-conf",
+                http_status=422,
+                failure_code="COUNTRY_NOT_CONFIGURED",
+            )
+        providers = ug.get("providers")
+        entry = next((
+            p for p in providers or []
+            if isinstance(p, dict) and p.get("provider") == provider
+        ), None)
+        if not isinstance(entry, dict):
+            raise PawaPayAPIError(
+                f"{provider} is not enabled for deposits on this PawaPay account.",
+                stage="/v2/active-conf",
+                http_status=422,
+                failure_code="PROVIDER_NOT_CONFIGURED",
+                validation_errors={"available_providers": [p.get("provider") for p in providers or [] if isinstance(p, dict)]},
+            )
+        currencies = entry.get("currencies")
+        currency = next((
+            x for x in currencies or []
+            if isinstance(x, dict) and x.get("currency") == "UGX"
+        ), None)
+        if not isinstance(currency, dict):
+            raise PawaPayAPIError(
+                f"{provider} is not configured for UGX deposits.",
+                stage="/v2/active-conf",
+                http_status=422,
+                failure_code="CURRENCY_NOT_CONFIGURED",
+            )
+        operation = (currency.get("operationTypes") or {}).get("DEPOSIT")
+        if not isinstance(operation, dict):
+            raise PawaPayAPIError(
+                f"{provider} has no UGX deposit configuration.",
+                stage="/v2/active-conf",
+                http_status=422,
+                failure_code="DEPOSIT_NOT_CONFIGURED",
+            )
+        if str(operation.get("status", "")).upper() not in {"OPERATIONAL", "OPEN"}:
+            raise PawaPayAPIError(
+                f"{provider} is not operational for UGX deposits.",
+                stage="/v2/active-conf",
+                http_status=422,
+                failure_code="PROVIDER_NOT_OPERATIONAL",
+                validation_errors={"status": operation.get("status")},
+            )
+        minimum = operation.get("minAmount")
+        maximum = operation.get("maxAmount")
+        try:
+            if minimum is not None and amount < Decimal(str(minimum)):
+                raise ValueError
+            if maximum is not None and amount > Decimal(str(maximum)):
+                raise ValueError
+        except ValueError:
+            raise PawaPayAPIError(
+                f"Payment amount is outside the configured range for {provider}.",
+                stage="/v2/active-conf",
+                http_status=422,
+                failure_code="AMOUNT_OUT_OF_BOUNDS",
+                validation_errors={"minAmount": minimum, "maxAmount": maximum, "amount": str(amount)},
+            ) from None
+
     def initiate(self, request: PaymentRequest) -> PaymentInitiation:
         provider = self._NETWORKS.get(request.method)
         if provider is None:
@@ -159,6 +239,8 @@ class PawaPayProvider:
         amount = Decimal(request.amount_ugx)
         if amount <= 0 or amount != amount.to_integral_value():
             raise ValueError("PawaPay requires a positive whole-UGX payment amount.")
+
+        self._validate_active_configuration(provider, amount)
 
         payload = {
             "depositId": deposit_id,
