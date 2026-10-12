@@ -407,6 +407,20 @@ button,a{min-height:36px}
 html,body{max-width:100%;overflow-x:clip}
 img,video{max-width:100%}
 
+/* Commerce discovery rails */
+.commerce-rail-section{padding-top:46px;padding-bottom:46px}
+.section-subcopy{margin:7px 0 0;color:var(--muted);font-size:12px;max-width:620px}
+.commerce-rail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(220px,260px);gap:14px;overflow-x:auto;padding:4px 2px 12px;scroll-snap-type:x proximity;scrollbar-width:thin}
+.commerce-rail .product-card{scroll-snap-align:start}
+.compact-product-card .product-image{height:190px}
+.rail-discount{position:absolute;left:11px;top:11px;background:#fff;color:#18734f;border-radius:8px;padding:5px 7px;font-size:10px;font-weight:900;box-shadow:0 6px 15px rgba(20,10,40,.12)}
+.rail-empty{grid-column:1/-1;padding:34px 20px;border:1px dashed #d7cee7;border-radius:16px;background:#fff;color:var(--muted);text-align:center;font-size:12px}
+@media(max-width:600px){
+  .commerce-rail-section{padding-top:34px;padding-bottom:34px}
+  .commerce-rail{grid-auto-columns:minmax(190px,72vw);gap:10px}
+  .compact-product-card .product-image{height:175px}
+}
+
 /* Short landscape phones: keep content usable without huge hero */
 @media (max-width:900px) and (orientation:landscape) and (max-height:520px){
   .hero{display:grid;grid-template-columns:1fr 1fr}
@@ -466,6 +480,14 @@ img,video{max-width:100%}
     <div class="trustbar"><div class="shell trust-inner"><div class="trust-item"><b>●</b> Campus-verified retailers</div><div class="trust-item"><b>↗</b> Quick campus delivery</div><div class="trust-item"><b>UGX</b> Prices you can trust</div><div class="trust-item"><b>♡</b> Local spend, shared growth</div></div></div>
     <section class="section shell" id="categoriesSection"><div class="section-head"><div><div class="section-kicker">A little bit of everything</div><h2>What are you after?</h2></div><button class="text-link" id="allCategories">Browse all categories →</button></div><div class="categories" id="categoryList"></div></section>
     <section class="products-section" id="products"><div class="shell section"><div class="section-head"><div><div class="section-kicker">Picked for campus life</div><h2 id="productHeading">Good finds, close by</h2><div class="section-count" id="productCount"></div></div><div class="filters"><select class="filter-select" id="availabilityFilter" aria-label="Filter availability"><option value="all">All availability</option><option value="in-stock">In stock</option><option value="nearby" disabled>Near me (unavailable)</option></select><select class="filter-select" id="sortFilter" aria-label="Sort products"><option value="featured">Sort: Featured</option><option value="price-low">Price: Low to high</option><option value="price-high">Price: High to low</option></select></div></div><div class="product-grid" id="productGrid"></div></div></section>
+    <section class="shell section commerce-rail-section" id="dealsSection">
+      <div class="section-head"><div><div class="section-kicker">Save more on campus</div><h2>Deals worth catching.</h2><p class="section-subcopy">Discounted products from WEWE retailers, updated with the live catalog.</p></div></div>
+      <div class="commerce-rail" id="dealRail" aria-live="polite"></div>
+    </section>
+    <section class="shell section commerce-rail-section" id="recentSection">
+      <div class="section-head"><div><div class="section-kicker">Pick up where you left off</div><h2>Recently viewed.</h2><p class="section-subcopy">Your browsing history stays on this device for a faster shopping experience.</p></div></div>
+      <div class="commerce-rail" id="recentRail" aria-live="polite"></div>
+    </section>
     <section class="shell section" id="nearby"><div class="near-strip"><div class="near-copy"><div class="section-kicker">Close enough to wave</div><h3>Support the shops<br>around your corner.</h3><p>Find campus favourites, student-run brands and trusted neighbourhood shops. The best things are already nearby.</p><button class="text-link" id="nearbyButton">Explore nearby shops →</button></div><div class="near-photo" role="img" aria-label="Students sharing time together on campus"></div></div></section>
     <section class="shell section" id="retailers"><div class="section-head"><div><div class="section-kicker">Community favourites</div><h2>Good people, good shops.</h2></div><button class="text-link" id="retailerMore">Meet the retailers →</button></div><div class="seller-row" id="sellerRow"></div></section>
   </main>
