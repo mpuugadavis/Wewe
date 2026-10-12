@@ -1442,15 +1442,24 @@
         if (!product || !listing) return "";
         const listingId = listing.retailer_product_id || listing.id;
         const price = Number(listing.price_ugx || 0);
+        const original = Number(listing.original_price_ugx || 0);
         const stock = Number(listing.stock_available || 0);
-        return '<div class="dashboard-list-item"><div class="dashboard-item-main"><span class="mini-product-image placeholder">W</span><span><b>' +
-          escapeHtml(product.name || "Unnamed product") + '</b><small>' + money(price) + ' · ' + stock + ' available</small></span></div>' +
-          '<div class="row-actions"><button data-action="edit-retailer-product" data-listing-id="' + escapeHtml(listingId) +
-          '" data-name="' + escapeHtml(product.name || "") + '" data-price="' + price + '" data-original-price="' + Number(listing.original_price_ugx || 0) + '">Edit</button>' +
-          '<button data-action="deactivate-retailer-product" data-listing-id="' + escapeHtml(listingId) + '">Deactivate</button></div></div>';
+        const images = Array.isArray(listing.image_urls) ? listing.image_urls : (Array.isArray(product.image_urls) ? product.image_urls : []);
+        const image = images.find(url => safeImage(url)) || "";
+        const discount = original > price && price > 0 ? Math.round((1 - price / original) * 100) : 0;
+        const stockLabel = stock <= 0 ? "Out of stock" : stock <= 5 ? "Low stock · " + stock : stock + " in stock";
+        return '<article class="retailer-product-card">' +
+          '<div class="retailer-product-media">' + (image ? '<img src="' + escapeHtml(safeImage(image)) + '" alt="" loading="lazy">' : '<span>WEWE</span>') +
+          (discount ? '<span class="retailer-product-discount">-' + discount + '%</span>' : '') + '</div>' +
+          '<div class="retailer-product-body"><h3>' + escapeHtml(product.name || "Unnamed product") + '</h3>' +
+          '<div class="retailer-product-price">' + money(price) + (original > price ? '<del>' + money(original) + '</del>' : '') + '</div>' +
+          '<span class="retailer-stock ' + (stock <= 0 ? 'danger' : stock <= 5 ? 'warning' : 'good') + '">' + escapeHtml(stockLabel) + '</span>' +
+          '<div class="retailer-product-actions"><button data-action="edit-retailer-product" data-listing-id="' + escapeHtml(listingId) +
+          '" data-name="' + escapeHtml(product.name || "") + '" data-price="' + price + '" data-original-price="' + original + '">Edit price</button>' +
+          '<button class="button-outline" data-action="deactivate-retailer-product" data-listing-id="' + escapeHtml(listingId) + '">Deactivate</button></div></div></article>';
       }).filter(Boolean).join("");
-      const content = '<div class="dashboard-toolbar"><span class="muted">' + products.length + ' listings</span><button class="button-primary" data-action="new-product">Add product</button></div>' +
-        (items || dashboardEmpty("No listings yet.", "Add your first product to start selling on WEWE."));
+      const content = '<div class="dashboard-toolbar retailer-product-toolbar"><div><strong>' + products.length + ' listings</strong><span class="muted"> · Keep prices and stock current</span></div><button class="button-primary" data-action="new-product">＋ Add product</button></div>' +
+        '<div class="retailer-product-grid">' + (items || dashboardEmpty("No listings yet.", "Add your first product to start selling on WEWE.")) + '</div>';
       return dashboardPage("Products", "Create, price, stock and manage your active campus listings.", content);
     }
     if (section === "fulfillments") {
