@@ -854,6 +854,21 @@ body{background:radial-gradient(ellipse 75% 20% at 100% 4%,rgba(185,157,255,.11)
 #dashboardContent img{max-width:100%}
 @media(max-width:760px){#checkoutMap{min-height:260px}#checkoutContents{overflow-wrap:anywhere}#dashboardContent{overflow-wrap:anywhere}}
 
+
+/* Guided mobile-money checkout */
+.checkout-heading-note{color:var(--muted);font-size:14px;line-height:1.6;margin:8px 0 0;max-width:560px}
+.checkout-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0 24px}
+.checkout-steps span{padding:11px 9px;border:1px solid var(--line);border-radius:12px;text-align:center;font-size:12px;font-weight:700;color:var(--muted);background:#faf8fd}
+.checkout-steps .is-current{color:#5b2cce;background:#eee7ff;border-color:#c9b5fa}
+.checkout-assurance{font-size:12px;line-height:1.6;color:var(--muted);margin:16px 0 10px}
+#checkoutContents .payment-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#checkoutContents .payment-option{border-radius:16px;padding:14px;min-width:0}
+#checkoutContents .payment-option small{display:block;line-height:1.5}
+#checkoutContents .checkout-quote{background:linear-gradient(145deg,#fff,#f7f3ff);border:1px solid #e5dbfa;padding:16px}
+#checkoutContents .checkout-total{border-top:1px solid #ddd0f7;padding-top:14px;font-size:19px}
+#checkoutContents .button-primary{min-height:48px}
+@media(max-width:560px){.checkout-steps{gap:5px}.checkout-steps span{font-size:10px;padding:10px 5px}#checkoutContents .payment-options{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
