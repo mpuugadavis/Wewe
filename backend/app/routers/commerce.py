@@ -794,8 +794,8 @@ def create_payment(
                         "reason": "provider_validation_error",
                         "provider": provider_name,
                         "stage": exc.stage,
-                        "provider_code": exc.provider_code,
-                        "request_id": exc.request_id,
+                        "provider_code": exc.failure_code,
+                        "provider_message": exc.failure_message,
                     },
                 )
                 db.commit()
