@@ -264,7 +264,9 @@ class PaymentCreate(BaseModel):
     """Online payment only: WEWE is online-payment-only and cash is out of scope (COM-PAY-004 / COM-MULTI-001)."""
 
     method: Literal["MTN_MOMO", "AIRTEL_MONEY"]
-    phone: str = Field(min_length=9, max_length=32)
+    # Accept normal human-entered Ugandan formats before applying the
+    # canonical 13-character +2567XXXXXXXX validation below.
+    phone: str = Field(min_length=9, max_length=64)
     email: str | None = Field(default=None, max_length=320)
 
     @field_validator("email")
@@ -277,12 +279,13 @@ class PaymentCreate(BaseModel):
         except EmailNotValidError as exc:
             raise ValueError("Enter a valid email address for mobile-money checkout") from exc
 
-    @field_validator("phone")
+    @field_validator("phone", mode="before")
     @classmethod
     def normalize_payment_phone(cls, value: str) -> str:
-        # Accept the common Ugandan formats customers actually enter at
-        # checkout, then canonicalize to E.164 before the provider adapter sees
-        # the number. Flutterwave v4 receives the canonical number only.
+        if not isinstance(value, str):
+            raise ValueError("Enter a valid Ugandan mobile number, for example +256700000000")
+        # Normalize first so Pydantic's length constraints apply to the
+        # canonicalized value rather than rejecting a harmless formatted input.
         cleaned = value.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
         if cleaned.startswith("00"):
             cleaned = "+" + cleaned[2:]
