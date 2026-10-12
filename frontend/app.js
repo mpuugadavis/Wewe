@@ -386,17 +386,17 @@
     target.innerHTML = rows.length ? rows.map(({ product, listing }) => {
       const image = safeImage(product.images?.[0]) || catalogFallbackImage(product);
       const stock = Number(listing.stock_available || 0);
-      return \`<article class="product-card compact-product-card">
-        <div class="product-image"><img class="catalog-image-fallback" src="\${escapeHtml(image)}" alt="\${escapeHtml(product.name)}" loading="lazy" onerror="this.onerror=null;this.src='\${DEFAULT_CATALOG_IMAGE}'">
-          \${Number(listing.discount_percent || 0) > 0 ? \`<span class="rail-discount">-\${Number(listing.discount_percent)}%</span>\` : ""}
+      return `<article class="product-card compact-product-card">
+        <div class="product-image"><img class="catalog-image-fallback" src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_CATALOG_IMAGE}'">
+          ${Number(listing.discount_percent || 0) > 0 ? `<span class="rail-discount">-${Number(listing.discount_percent)}%</span>` : ""}
         </div>
         <div class="product-info">
-          <div class="product-seller">\${escapeHtml(listing.retailer_name || "Campus retailer")}</div>
-          <button class="product-title" data-action="product-details" data-product-id="\${escapeHtml(product.id)}">\${escapeHtml(product.name)}</button>
-          <div class="product-price-row"><div class="product-price">\${priceMarkup(listing)}</div><button class="add-button" data-action="add-cart" data-listing-id="\${escapeHtml(listing.retailer_product_id)}" \${stock < 1 ? "disabled" : ""}>\${stock < 1 ? "Unavailable" : "Add"}</button></div>
+          <div class="product-seller">${escapeHtml(listing.retailer_name || "Campus retailer")}</div>
+          <button class="product-title" data-action="product-details" data-product-id="${escapeHtml(product.id)}">${escapeHtml(product.name)}</button>
+          <div class="product-price-row"><div class="product-price">${priceMarkup(listing)}</div><button class="add-button" data-action="add-cart" data-listing-id="${escapeHtml(listing.retailer_product_id)}" ${stock < 1 ? "disabled" : ""}>${stock < 1 ? "Unavailable" : "Add"}</button></div>
         </div>
-      </article>\`;
-    }).join("") : \`<div class="rail-empty">\${escapeHtml(emptyText)}</div>\`;
+      </article>`;
+    }).join("") : `<div class="rail-empty">${escapeHtml(emptyText)}</div>`;
   }
 
   function renderDealRail() {
