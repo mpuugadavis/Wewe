@@ -1194,13 +1194,14 @@
   async function retryOnlinePayment(orderId, method, phone, email) {
     if (!["MTN_MOMO", "AIRTEL_MONEY"].includes(method)) throw new Error("Choose an online mobile-money payment method.");
     if (!phone) throw new Error("Enter the mobile-money phone number.");
-    if (!email) throw new Error("Enter an email address for the payment receipt.");
+    const receiptEmail = String(email || state.user?.email || "").trim();
+    if (!receiptEmail) throw new Error("Add an email address to your account before paying.");
     const normalizedPhone = normalizeUgandanPaymentPhone(phone);
     const idempotencyKey = crypto.randomUUID();
     const payment = await apiFetch(`/orders/${encodeURIComponent(orderId)}/payments`, {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify({ method, phone: normalizedPhone, email })
+      body: JSON.stringify({ method, phone: normalizedPhone, email: receiptEmail })
     });
     const checkoutUrl = safeImage(payment?.checkout_url);
     $("#modalContent").innerHTML = `<div class="modal-head"><div><div class="section-kicker">Payment retry</div><h2>Continue payment</h2></div><button class="close-modal" data-action="close-modal">×</button></div><p>${escapeHtml(payment?.status || "Payment initiated")}</p>${checkoutUrl ? `<p><a class="button-primary" href="${escapeHtml(checkoutUrl)}" target="_blank" rel="noopener noreferrer">Continue mobile payment</a></p>` : ""}<p id="paymentProgress" class="api-state">Waiting for mobile-money confirmation…</p><button class="button-outline" data-action="close-modal">Close</button>`;
