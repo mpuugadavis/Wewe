@@ -110,19 +110,45 @@ async def pawapay_deposit_callback(
     if status not in {"COMPLETED", "FAILED"}:
         return {"received": True, "ignored": True, "status": status}
 
-    currency = str(payload.get("currency", "")).upper()
+    # Callback payloads are notifications, not the authoritative payment
+    # record. Ask PawaPay for the deposit status so WEWE does not depend on
+    # callback field names such as depositedAmount/currency varying by API
+    # representation.
     try:
-        amount = Decimal(str(payload.get("amount")))
+        pawapay = payment_providers.get("PAWAPAY")
+        status_payload = pawapay.get_deposit_status(deposit_id)  # type: ignore[attr-defined]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "provider_status_unavailable",
+                "message": "PawaPay callback was received, but its authoritative deposit status could not be retrieved.",
+                "error_type": type(exc).__name__,
+            },
+        ) from None
+
+    authoritative_status = str(status_payload.get("status", "")).upper()
+    if authoritative_status not in {"COMPLETED", "FAILED"}:
+        return {"received": True, "ignored": True, "status": authoritative_status or status}
+
+    currency = str(status_payload.get("currency", "")).upper()
+    raw_amount = (
+        status_payload.get("amount")
+        or status_payload.get("depositedAmount")
+        or status_payload.get("requestedAmount")
+    )
+    try:
+        amount = Decimal(str(raw_amount))
     except (InvalidOperation, TypeError):
         raise HTTPException(
             status_code=422,
-            detail={"code": "invalid_callback_amount", "message": "PawaPay returned an invalid amount."},
+            detail={"code": "invalid_callback_amount", "message": "PawaPay returned an invalid deposit amount."},
         ) from None
 
     if currency != "UGX" or not amount.is_finite() or amount != amount.to_integral_value() or amount <= 0:
         raise HTTPException(
             status_code=422,
-            detail={"code": "callback_details_mismatch", "message": "PawaPay callback amount or currency is invalid."},
+            detail={"code": "callback_details_mismatch", "message": "PawaPay deposit amount or currency is invalid."},
         )
 
     normalized = PaymentWebhookIn(
@@ -130,7 +156,7 @@ async def pawapay_deposit_callback(
         provider_event_id=deposit_id,
         amount_ugx=int(amount),
         currency="UGX",
-        status="SUCCESSFUL" if status == "COMPLETED" else "FAILED",
+        status="SUCCESSFUL" if authoritative_status == "COMPLETED" else "FAILED",
     )
     # PawaPay v2 callbacks are asynchronous. The provider's final callback is
     # the authoritative outcome; the common handler below performs idempotency,
@@ -139,7 +165,7 @@ async def pawapay_deposit_callback(
         "PAWAPAY",
         normalized,
         request,
-        signature=request.headers.get("X-Webhook-Signature", "pawapay-callback"),
+        signature=request.headers.get("X-Pawapay-Signature") or request.headers.get("X-Webhook-Signature", "pawapay-callback"),
         db=db,
     )
 
