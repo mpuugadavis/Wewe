@@ -816,6 +816,29 @@ img,video{max-width:100%}
 @media(max-width:420px){.product-modal-image{min-height:190px}.cart-line{padding:14px}.cart-summary{padding:16px}.product-modal-copy .listing-row{padding:12px}}
 @media(prefers-reduced-motion:reduce){.product-modal *, .cart-line *{scroll-behavior:auto}}
 
+
+/* WEWE premium marketplace refinements */
+html{scroll-behavior:smooth;scroll-padding-top:90px}
+body{background:radial-gradient(ellipse 75% 20% at 100% 4%,rgba(185,157,255,.11),transparent),#f9f7fc}
+:where(button,a,input,select,textarea):focus-visible{outline:3px solid #a18aff;outline-offset:3px}
+:where(.product-card,.category){transition:transform .24s ease,box-shadow .24s ease}
+@media(hover:hover) and (pointer:fine){.product-card:hover{transform:translateY(-5px);box-shadow:0 24px 48px rgba(51,25,97,.14)}.category:hover{transform:translateY(-4px);box-shadow:0 16px 34px rgba(60,28,112,.13)}}
+.product-image{background:linear-gradient(145deg,#f3eefe,#ece7f8)}
+.product-image img{transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+@media(hover:hover) and (pointer:fine){.product-card:hover .product-image img{transform:scale(1.055)}}
+.product-card{overflow:hidden;border:1px solid rgba(98,68,153,.1);box-shadow:0 9px 28px rgba(40,24,74,.06)}
+.product-title{line-height:1.35;text-wrap:pretty}
+.section-kicker{text-transform:uppercase;letter-spacing:.14em;font-weight:800}
+.category-image{background-position:center;background-size:cover}
+.modal-backdrop{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.modal{box-shadow:0 35px 100px rgba(21,11,49,.22)}
+.api-state{line-height:1.65}
+.empty-state{border:1px dashed #c9b8ed;background:linear-gradient(145deg,#fff,#f6f1ff);border-radius:22px;padding:32px}
+.button-primary,.add-button{transition:transform .2s ease,filter .2s ease}
+@media(hover:hover){.button-primary:hover,.add-button:not(:disabled):hover{filter:brightness(1.06);transform:translateY(-1px)}}
+@media(max-width:680px){html{scroll-padding-top:72px}.product-card{border-radius:16px}.empty-state{padding:20px}.modal{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
 </style>
 </head>
 <body>
