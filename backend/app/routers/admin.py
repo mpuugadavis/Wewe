@@ -353,6 +353,10 @@ def verify_delivery_agent(
     agent = db.scalar(select(DeliveryAgent).where(DeliveryAgent.user_id == user_id).with_for_update())
     if agent is None:
         raise HTTPException(status_code=404, detail={"code": "agent_not_found", "message": "Delivery agent was not found."})
+    if payload.status == "VERIFIED":
+        rider_user = db.get(User, user_id)
+        if rider_user is None or not rider_user.profile_image_storage_key:
+            raise HTTPException(status_code=409, detail={"code": "rider_photo_required", "message": "Upload a rider identification photo before approval."})
     agent.verification_status = payload.status
     _audit(db, principal.user.id, "AGENT_VERIFICATION_CHANGED", "delivery_agent", user_id, {"to": payload.status, "reason": payload.reason})
     db.commit()
@@ -539,6 +543,8 @@ def assign_delivery(assignment_id: UUID, payload: AdminDeliveryAssignment, princ
     agent_user = db.get(User, agent.user_id)
     if agent_user is None or agent_user.status != "ACTIVE":
         raise HTTPException(status_code=409, detail={"code": "agent_unavailable", "message": "Choose an active delivery agent."})
+    if not agent_user.profile_image_storage_key:
+        raise HTTPException(status_code=409, detail={"code": "rider_photo_required", "message": "The delivery agent must upload an identification photo before assignment."})
     active = db.scalar(select(DeliveryAssignment.id).where(DeliveryAssignment.agent_id == agent.user_id, DeliveryAssignment.status.in_(["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"])))
     if active:
         raise HTTPException(status_code=409, detail={"code": "agent_busy", "message": "Delivery agent already has an active assignment."})
