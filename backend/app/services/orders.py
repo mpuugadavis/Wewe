@@ -27,7 +27,6 @@ from app.models import (
     utcnow,
 )
 from app.schemas import CheckoutIn
-from app.security import hash_token
 from app.services.delivery_pricing import (
     DELIVERY,
     PICKUP,
@@ -191,7 +190,6 @@ def create_order(db: Session, customer: User, checkout: CheckoutIn, idempotency_
     quotes, _routing_provider = _checkout_delivery_quotes(db, checkout, list(grouped), delivery_point)
     pricing_config = _resolve_pricing_config_or_unavailable(db)
     delivery_total = calculate_multi_retailer_delivery_total(quotes.values(), pricing_config)
-    delivery_confirmation_codes: dict[str, str] = {}
     order = Order(
         order_number=f"WW-{secrets.token_hex(5).upper()}",
         customer_id=customer.id,
@@ -243,23 +241,18 @@ def create_order(db: Session, customer: User, checkout: CheckoutIn, idempotency_
                 )
             )
         if checkout.delivery_method == "DELIVERY":
-            confirmation_code = f"{secrets.randbelow(100_000_000):08d}"
             db.add(
                 DeliveryAssignment(
                     fulfillment_id=fulfillment.id,
                     status="UNASSIGNED",
                     pickup_point_id=retailer.location_id,
                     dropoff_point_id=delivery_point.id,
-                    confirmation_code_hash=hash_token(confirmation_code),
                 )
             )
-            delivery_confirmation_codes[str(fulfillment.id)] = confirmation_code
     customer_notification: dict[str, Any] = {
         "order_id": str(order.id),
         "order_number": order.order_number,
     }
-    if delivery_confirmation_codes:
-        customer_notification["delivery_confirmation_codes"] = delivery_confirmation_codes
     db.add(
         NotificationOutbox(
             user_id=customer.id,
@@ -428,7 +421,7 @@ def recompute_order_status(db: Session, order: Order) -> None:
         return
     states = {fulfillment.status for fulfillment in fulfillments}
     terminal = states.issubset({"DELIVERED", "REJECTED", "CANCELLED"})
-    if terminal and "DELIVERED" in states and "REJECTED" in states:
+    if terminal and "DELIVERED" in states and states != {"DELIVERED"}:
         order.status = "PARTIALLY_DELIVERED"
         order.delivered_at = utcnow()
     elif terminal and states == {"DELIVERED"}:

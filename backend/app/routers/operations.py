@@ -1,3 +1,4 @@
+from app.services.delivery_confirmation import issue_delivery_confirmation
 from datetime import datetime, timezone
 from hmac import compare_digest
 from uuid import UUID
@@ -362,7 +363,7 @@ def accept_delivery(
     agent.availability_status = "BUSY"
     db.add(DeliveryEvent(assignment_id=assignment.id, actor_user_id=principal.user.id, previous_status="UNASSIGNED", new_status="ACCEPTED"))
     if order:
-        db.add(NotificationOutbox(user_id=order.customer_id, event_type="DELIVERY_ASSIGNED", payload={"order_id": str(order.id), "order_number": order.order_number}))
+        issue_delivery_confirmation(db, assignment, order)
     db.commit()
     return _delivery_view(db, assignment, reveal_destination=True)
 
@@ -475,8 +476,8 @@ def update_delivery_status(
         fulfillment.status, payload.status
     ):
         raise HTTPException(status_code=409, detail={"code": "invalid_transition", "message": f"Cannot move a {fulfillment.status.lower()} fulfillment to {payload.status.lower()}."})
-    if payload.status == "DELIVERED" and assignment.confirmation_code_hash is not None:
-        if not payload.confirmation_code or not compare_digest(
+    if payload.status == "DELIVERED":
+        if not assignment.confirmation_code_hash or not payload.confirmation_code or not compare_digest(
             hash_token(payload.confirmation_code),
             assignment.confirmation_code_hash,
         ):
@@ -493,9 +494,15 @@ def update_delivery_status(
     elif payload.status == "DELIVERED":
         fulfillment.status = "DELIVERED"
         assignment.delivered_at = now
+        assignment.confirmation_code_hash = None
         _consume_fulfillment_inventory(db, fulfillment)
         recompute_order_status(db, order)
-        db.add(NotificationOutbox(user_id=order.customer_id, event_type="ORDER_DELIVERED", payload={"order_id": str(order.id), "order_number": order.order_number}))
+        db.add(NotificationOutbox(
+            user_id=order.customer_id,
+            event_type="ORDER_DELIVERED" if order.status in {"DELIVERED", "PARTIALLY_DELIVERED"} else "DELIVERY_COMPLETED",
+            payload={"order_id": str(order.id), "order_number": order.order_number,
+                     "message": f"Delivery confirmed for {order.order_number}. " + ("Your order is now closed." if order.status in {"DELIVERED", "PARTIALLY_DELIVERED"} else "Your other deliveries are still in progress.")},
+        ))
         # Payments settle online through the provider webhook; a completed
         # delivery never marks a payment successful (cash is out of scope).
         assignment_count = db.scalar(

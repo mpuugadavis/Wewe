@@ -7,6 +7,8 @@ checkout/pricing services.
 
 from __future__ import annotations
 
+from app.services.delivery_confirmation import issue_delivery_confirmation
+
 from datetime import timedelta, timezone
 from math import asin, cos, radians, sin, sqrt
 from uuid import UUID
@@ -390,11 +392,5 @@ def accept_offer(db: Session, agent_id: UUID, offer_id: UUID) -> DeliveryAssignm
             note="Accepted instant dispatch offer",
         )
     )
-    db.add(
-        NotificationOutbox(
-            user_id=order.customer_id,
-            event_type="DELIVERY_ASSIGNED",
-            payload={"order_id": str(order.id), "order_number": order.order_number},
-        )
-    )
+    issue_delivery_confirmation(db, assignment, order)
     return assignment

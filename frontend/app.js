@@ -1603,7 +1603,7 @@
         : row.status === "PICKED_UP"
           ? `<button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="OUT_FOR_DELIVERY">Start delivery</button>`
           : row.status === "OUT_FOR_DELIVERY"
-            ? `<form data-form="delivery-code" data-id="${escapeHtml(row.id)}" class="rider-code-form"><input name="confirmation_code" required minlength="4" maxlength="12" placeholder="Customer code"><button class="rider-primary-action">Complete delivery</button></form>`
+            ? `<form data-form="delivery-code" data-id="${escapeHtml(row.id)}" class="rider-code-form"><label>Customer handover code<input name="confirmation_code" required inputmode="numeric" pattern="[0-9]{8}" minlength="8" maxlength="8" autocomplete="off" placeholder="8-digit code"></label><small>Ask the customer for the code from their WEWE notifications or email after handing over their delivery.</small><button class="rider-primary-action">Complete delivery</button></form>`
             : "";
     const currentStep = row.status === "ACCEPTED" ? "Confirm pickup at the retailer." :
       row.status === "PICKED_UP" ? "Start the delivery route." :

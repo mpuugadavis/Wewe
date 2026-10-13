@@ -1,3 +1,4 @@
+from app.services.delivery_confirmation import issue_delivery_confirmation
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -551,7 +552,7 @@ def assign_delivery(assignment_id: UUID, payload: AdminDeliveryAssignment, princ
     db.add(DeliveryEvent(assignment_id=assignment.id, actor_user_id=principal.user.id, previous_status=previous, new_status="ACCEPTED", note="Assigned by administrator"))
     _audit(db, principal.user.id, "DELIVERY_ASSIGNED", "delivery", assignment.id, {"agent_user_id": str(agent.user_id)})
     if order:
-        db.add(NotificationOutbox(user_id=order.customer_id, event_type="DELIVERY_ASSIGNED", payload={"order_id": str(order.id), "order_number": order.order_number}))
+        issue_delivery_confirmation(db, assignment, order)
     db.commit()
     return {"id": assignment.id, "agent_user_id": agent.user_id, "status": assignment.status}
 
