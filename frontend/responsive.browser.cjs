@@ -23,7 +23,7 @@ const categories = ["Food & drinks","Fashion","Electronics","Stationery","Beauty
 const products = categories.map((category, i) => ({
   id: "p" + i, category_id: category.id,
   name: i === 0 ? "Fresh lunch with a very long product name for wrapping checks" : category.name + " campus favourite",
-  description: "Everyday essentials from a local campus shop", images: i === 0 ? ["https://images.unsplash.com/photo-1504674900247-0877df9cc836?test=1", "https://images.unsplash.com/photo-1542838132-92c53300491e?test=2"] : [],
+  description: "Everyday essentials from a local campus shop", images: i === 0 ? ["/api/v1/products/images/fixture-media?v=abc123", "https://images.unsplash.com/photo-1542838132-92c53300491e?test=2"] : [],
   listings: [{ retailer_product_id: "l" + i, retailer_name: "Makerere community shop with a long business name", price_ugx: 12500 + i * 1000, original_price_ugx: 18000, discount_percent: 15, stock_available: 12 }]
 }));
 const point = { id: "d1", name: "Makerere main campus delivery destination with long directions", latitude: 0.335, longitude: 32.57, is_private: false, directions: "Meet at the entrance" };
@@ -52,6 +52,9 @@ async function runCase(browser, engine, width, height = 900) {
   await page.addInitScript(() => { window.WEWE_API_BASE = "/api/v1"; });
   await page.route("**/*", async route => {
     const request = route.request(), url = new URL(request.url());
+    if (url.pathname === "/api/v1/products/images/fixture-media") {
+      return route.fulfill({ status: 200, contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500"><rect width="500" height="500" fill="#7952d6"/></svg>' });
+    }
     if (url.pathname.startsWith("/api/v1/")) {
       const endpoint = url.pathname.slice(7);
       let body;
@@ -110,6 +113,7 @@ async function runCase(browser, engine, width, height = 900) {
     await page.locator("#productGalleryMain").waitFor();
     assert.equal(await page.locator(".product-gallery-thumb").count(), 2, "Product detail shows every stored photo");
     const firstPhoto = await page.locator("#productGalleryMain").getAttribute("src");
+    assert.ok(firstPhoto.includes("/api/v1/products/images/fixture-media?v=abc123"), "Relative production media URLs resolve on the active API origin");
     await page.locator('[data-action="product-gallery-select"][data-index="1"]').click();
     assert.notEqual(await page.locator("#productGalleryMain").getAttribute("src"), firstPhoto, "Clicking a thumbnail changes the active image");
     await page.locator('[data-action="product-gallery-prev"]').click();
