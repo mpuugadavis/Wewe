@@ -37,6 +37,10 @@ class MediaStorageError(RuntimeError):
     """Raised when object storage cannot complete an operation."""
 
 
+class MediaStoragePermissionError(MediaStorageError):
+    """Storage credentials do not permit the requested upload."""
+
+
 class MediaStorageNotFoundError(MediaStorageError):
     """Raised when an object does not exist in object storage."""
 
@@ -98,7 +102,11 @@ class S3CompatibleMediaStorage:
                     "CacheControl": "public,max-age=31536000,immutable",
                 },
             )
-        except (BotoCoreError, ClientError) as exc:
+        except ClientError as exc:
+            if str(exc.response.get("Error", {}).get("Code", "")) in {"AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "ExpiredToken"}:
+                raise MediaStoragePermissionError("Object storage upload permission denied.") from exc
+            raise MediaStorageError("Object storage upload failed.") from exc
+        except BotoCoreError as exc:
             raise MediaStorageError("Object storage upload failed.") from exc
         if self.public_base_url:
             return f"{self.public_base_url}/{key}"

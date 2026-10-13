@@ -23,6 +23,7 @@ from app.schemas import CategoryOut, ProductCreate, ProductImageReorder, Product
 from app.services.media_storage import (
     MAX_PRODUCT_IMAGES,
     MediaStorageError,
+    MediaStoragePermissionError,
     MediaStorageNotFoundError,
     MediaValidationError,
     build_product_object_key,
@@ -416,7 +417,10 @@ def upload_product_image(
             size_bytes=len(sanitized),
         )
     except MediaStorageError as exc:
-        raise HTTPException(status_code=503, detail={"code": "media_storage_error", "message": "Product image storage is temporarily unavailable."}) from exc
+        raise HTTPException(status_code=503, detail={
+            "code": "media_storage_permission_denied" if isinstance(exc, MediaStoragePermissionError) else "media_storage_error",
+            "message": "Photo uploads need a storage permission update. Please contact WEWE support; your existing photo has not changed." if isinstance(exc, MediaStoragePermissionError) else "Photo storage is temporarily unavailable. Please try again.",
+        }) from exc
 
     image = ProductImage(
         product_id=listing.product_id,

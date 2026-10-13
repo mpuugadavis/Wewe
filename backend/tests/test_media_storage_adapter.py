@@ -335,3 +335,15 @@ def test_product_media_cleanup_rechecks_reference_before_delete(database):
     assert result.candidates == 1
     assert result.deleted == 1
     assert storage.deleted == ["products/race.webp"]
+
+
+@pytest.mark.parametrize("code", ["AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "ExpiredToken"])
+def test_upload_permission_errors_are_actionable(monkeypatch, code):
+    fake = FakeS3Client()
+    def denied(*args, **kwargs):
+        raise ClientError({"Error": {"Code": code}}, "PutObject")
+    fake.upload_fileobj = denied
+    monkeypatch.setattr(media_storage.boto3, "client", lambda *args, **kwargs: fake)
+    storage = media_storage.S3CompatibleMediaStorage(bucket="test", access_key="test", secret_key="test", endpoint="https://storage.test", public_base_url=None)
+    with pytest.raises(media_storage.MediaStoragePermissionError):
+        storage.put(key="profiles/test.webp", content=BytesIO(b"image"), content_type="image/webp", size_bytes=5)

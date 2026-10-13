@@ -23,6 +23,7 @@ from app.models import (
 from app.schemas import CustomerProfileUpdate, DeliveryAgentProfileUpdate, LocationCreate, LocationOut, RetailerAvailabilityUpdate, RetailerProfileUpdate
 from app.services.media_storage import (
     MediaStorageError,
+    MediaStoragePermissionError,
     MediaStorageNotFoundError,
     MediaValidationError,
     build_profile_object_key,
@@ -89,7 +90,10 @@ def _replace_profile_image(user: User, file: UploadFile, db: Session) -> None:
         db.commit()
     except MediaStorageError as exc:
         db.rollback()
-        raise HTTPException(status_code=503, detail={"code": "media_storage_error", "message": "Profile image storage is temporarily unavailable."}) from exc
+        raise HTTPException(status_code=503, detail={
+            "code": "media_storage_permission_denied" if isinstance(exc, MediaStoragePermissionError) else "media_storage_error",
+            "message": "Photo uploads need a storage permission update. Please contact WEWE support; your existing photo has not changed." if isinstance(exc, MediaStoragePermissionError) else "Photo storage is temporarily unavailable. Please try again.",
+        }) from exc
     except Exception:
         db.rollback()
         try:
