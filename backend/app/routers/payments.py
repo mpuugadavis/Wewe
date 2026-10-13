@@ -110,6 +110,10 @@ async def pawapay_deposit_callback(
     if status not in {"COMPLETED", "FAILED"}:
         return {"received": True, "ignored": True, "status": status}
 
+    return _reconcile_pawapay_deposit(deposit_id, db)
+
+
+def _reconcile_pawapay_deposit(deposit_id: str, db: Session) -> dict:
     # Callback payloads are notifications, not the authoritative payment
     # record. Ask PawaPay for the deposit status so WEWE does not depend on
     # callback field names such as depositedAmount/currency varying by API
@@ -129,7 +133,7 @@ async def pawapay_deposit_callback(
 
     authoritative_status = str(status_payload.get("status", "")).upper()
     if authoritative_status not in {"COMPLETED", "FAILED"}:
-        return {"received": True, "ignored": True, "status": authoritative_status or status}
+        return {"received": True, "ignored": True, "status": authoritative_status or "UNKNOWN"}
 
     currency = str(status_payload.get("currency", "")).upper()
     raw_amount = (
@@ -158,16 +162,7 @@ async def pawapay_deposit_callback(
         currency="UGX",
         status="SUCCESSFUL" if authoritative_status == "COMPLETED" else "FAILED",
     )
-    # PawaPay v2 callbacks are asynchronous. The provider's final callback is
-    # the authoritative outcome; the common handler below performs idempotency,
-    # amount matching, order-state transitions, notifications and allocation.
-    return await provider_webhook(
-        "PAWAPAY",
-        normalized,
-        request,
-        signature=request.headers.get("X-Pawapay-Signature") or request.headers.get("X-Webhook-Signature", "pawapay-callback"),
-        db=db,
-    )
+    return _apply_payment_event("PAWAPAY", normalized, db)
 
 
 @router.post("/pawapay/payout-callback")
@@ -410,8 +405,14 @@ async def provider_webhook(
         adapter = payment_providers.get(provider_name)
     except PaymentProviderUnavailable:
         raise HTTPException(status_code=503, detail={"code": "payment_provider_unavailable", "message": "This payment provider is not configured."}) from None
+    if provider_name == "PAWAPAY":
+        return _reconcile_pawapay_deposit(payload.provider_reference, db)
     if not adapter.verify_webhook(await request.body(), signature):
         raise HTTPException(status_code=401, detail={"code": "invalid_signature", "message": "Payment callback signature is invalid."})
+    return _apply_payment_event(provider_name, payload, db)
+
+
+def _apply_payment_event(provider_name: str, payload: PaymentWebhookIn, db: Session) -> dict:
     event_id = f"{provider_name}:{payload.provider_event_id}"
     prior_event = db.scalar(
         select(PaymentEvent).where(PaymentEvent.provider_event_id == event_id)
@@ -588,6 +589,46 @@ async def provider_webhook(
         )
     db.commit()
     return {"received": True, "status": payment.status}
+
+
+@router.post("/orders/{order_id}/refresh")
+@limiter.limit("30/minute")
+def refresh_order_payments(
+    order_id: UUID,
+    request: Request,
+    principal: Principal = Depends(require_roles("CUSTOMER", "ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    order = db.get(Order, order_id)
+    if order is None or (principal.user.role == "CUSTOMER" and order.customer_id != principal.user.id):
+        raise HTTPException(status_code=404, detail={"code": "order_not_found", "message": "Order was not found."})
+    pending = db.scalars(select(Payment).where(
+        Payment.order_id == order.id,
+        Payment.provider == "PAWAPAY",
+        Payment.status.in_(["PENDING", "UNKNOWN"]),
+    ).order_by(Payment.created_at.desc()).limit(5)).all()
+    for payment in pending:
+        _reconcile_pawapay_deposit(str(payment.provider_reference or payment.attempt_reference), db)
+    db.refresh(order)
+    return {"order_id": order.id, "payment_status": order.payment_status}
+
+
+@router.post("/{payment_id}/refresh")
+@limiter.limit("30/minute")
+def refresh_payment(
+    payment_id: UUID,
+    request: Request,
+    principal: Principal = Depends(require_roles("CUSTOMER", "ADMIN")),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Recover missed callbacks using only the provider's verified deposit record."""
+    payment = db.get(Payment, payment_id)
+    if payment is None or (principal.user.role == "CUSTOMER" and payment.customer_id != principal.user.id):
+        raise HTTPException(status_code=404, detail={"code": "payment_not_found", "message": "Payment was not found."})
+    if payment.provider == "PAWAPAY" and payment.status in {"PENDING", "UNKNOWN"}:
+        _reconcile_pawapay_deposit(str(payment.provider_reference or payment.attempt_reference), db)
+        db.refresh(payment)
+    return get_payment(payment_id, principal, db)
 
 
 @router.get("/{payment_id}")

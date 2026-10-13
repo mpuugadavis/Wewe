@@ -217,3 +217,14 @@ def test_stale_rider_location_is_not_exposed(client: TestClient, database):
     delivery = response.json()["deliveries"][0]
     assert delivery["location_status"] == "STALE"
     assert delivery["location"] is None
+
+
+def test_completed_delivery_hides_rider_location(client, database):
+    order, _, headers, _, assignment = _tracking_fixture(database, client)
+    assignment.status = "DELIVERED"
+    database.commit()
+    response = client.get(f"/api/v1/orders/{order.id}/tracking", headers=headers)
+    assert response.status_code == 200
+    delivery = response.json()["deliveries"][0]
+    assert delivery["location"] is None
+    assert delivery["rider"] is None

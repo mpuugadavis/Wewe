@@ -252,6 +252,7 @@
   }
 
   function setModal(content, wide = false) {
+    stopOrderTracking();
     const modal = $("#modalContent");
     modal.classList.toggle("modal-wide", wide);
     modal.innerHTML = content;
@@ -260,8 +261,7 @@
   }
 
   function closeModal() {
-    if (state.orderTrackingTimer) clearInterval(state.orderTrackingTimer);
-    state.orderTrackingTimer = null;
+    stopOrderTracking();
     $("#modalBackdrop").classList.remove("open");
     document.body.classList.remove("modal-open");
   }
@@ -1255,13 +1255,14 @@
   async function watchPaymentStatus(paymentId) {
     const progress = $("#paymentProgress");
     if (!progress) return;
-    const deadline = Date.now() + 60000;
+    const deadline = Date.now() + 120000;
     while (Date.now() < deadline) {
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       try {
-        const payment = await apiFetch(`/payments/${encodeURIComponent(paymentId)}`);
+        if ($("#paymentProgress") !== progress) return;
+        const payment = await apiFetch(`/payments/${encodeURIComponent(paymentId)}/refresh`, { method: "POST" });
         const current = $("#paymentProgress");
-        if (!current) return;
+        if (current !== progress) return;
         if (payment.status === "SUCCESSFUL") {
           current.className = "api-state api-success";
           current.textContent = "Payment confirmed. Your order is being processed.";
@@ -1275,15 +1276,16 @@
         if (payment.status === "UNKNOWN") {
           current.className = "api-state api-error";
           current.textContent = "Payment status is being reconciled. Please do not retry yet.";
-          return;
+          continue;
         }
         current.textContent = "Waiting for mobile-money confirmation…";
       } catch {
-        // A transient polling failure must not change the payment state or create a retry.
+        if ($("#paymentProgress") !== progress) return;
+        progress.textContent = "Confirmation is temporarily unavailable. Retrying automatically; please do not pay again.";
       }
     }
     const current = $("#paymentProgress");
-    if (current) current.textContent = "Still waiting for confirmation. You can close this window; the payment status remains on the order.";
+    if (current === progress) current.textContent = "Still waiting for confirmation. You can close this window; the payment status remains on the order.";
   }
 
   async function retryOnlinePayment(orderId, method, phone, email) {
@@ -1367,6 +1369,22 @@
   function syncIncomePolling() {
     if (state.incomeRefreshTimer) clearInterval(state.incomeRefreshTimer);
     state.incomeRefreshTimer = null;
+    if (state.user?.role === "CUSTOMER" && ["overview", "orders"].includes(state.dashboardSection)) {
+      const user = state.user, section = state.dashboardSection;
+      let refreshing = false;
+      state.incomeRefreshTimer = setInterval(async () => {
+        if (refreshing || document.hidden || $("#dashboard")?.classList.contains("hidden")) return;
+        if (state.user !== user || state.dashboardSection !== section) return syncIncomePolling();
+        refreshing = true;
+        try {
+          const view = await customerDashboard();
+          if (state.user === user && state.dashboardSection === section) $("#dashboardContent").innerHTML = view;
+        } catch {
+          // Keep the last known order details during a temporary outage.
+        } finally { refreshing = false; }
+      }, 5000);
+      return;
+    }
     if (!["RETAILER", "DELIVERY_AGENT"].includes(state.user?.role)) return;
     if (!["overview", "earnings"].includes(state.dashboardSection)) return;
     state.incomeRefreshTimer = setInterval(() => {
@@ -1380,7 +1398,7 @@
 
   async function customerDashboard() {
     const section=state.dashboardSection, orders=await apiFetch("/orders"), notes=await apiFetch("/notifications"), points=await apiFetch("/locations/me/delivery-points");
-    if(section==="orders") return dashboardPage("My orders","Track purchases, payment status and delivery progress.",renderOrders(orders,true));
+    if(section==="orders") return dashboardPage("My orders","Open Track order for live delivery progress. Updates every 5 seconds.",renderOrders(orders,true));
     if(section==="wishlist"){const items=await apiFetch("/wishlist");return dashboardPage("Saved items","Products you want to come back to.",(items||[]).map(x=>`<div class="dashboard-list-item"><div><b>${escapeHtml(x.product_name||x.name)}</b><small>${escapeHtml(x.retailer_name||"Campus retailer")}</small></div><b>${money(x.price_ugx)}</b></div>`).join("")||dashboardEmpty("No saved products yet.","Browse the shop and save items you like."));}
     if(section==="addresses") return dashboardPage("Delivery points","Manage where WEWE should bring your orders.",`<div class="dashboard-toolbar"><button class="button-primary" data-action="new-address">Add delivery point</button></div>${points.map(x=>`<div class="dashboard-list-item"><div><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.directions||"Saved campus destination")}</small></div><button class="button-outline" data-action="delete-address" data-id="${escapeHtml(x.id)}">Remove</button></div>`).join("")||dashboardEmpty("No delivery points.","Add a hall, hostel or approved pickup destination.")}`);
     if(section==="notifications"){const notes=await apiFetch("/notifications?limit=50");return dashboardPage("Notifications","Important updates from your WEWE activity.",notes.map(x=>`<div class="notification-row"><div><b>${escapeHtml(x.event_type||"WEWE update")}</b><small>${escapeHtml(x.created_at||"")}</small><p>${escapeHtml(x.payload?.message||x.payload?.title||"You have a new WEWE update.")}</p></div>${x.read_at?"":`<button class="button-outline" data-action="read-notification" data-id="${escapeHtml(x.id)}">Mark read</button>`}</div>`).join("")||dashboardEmpty("You are all caught up.","New notifications will appear here."));}if(section==="profile"){const profile=await apiFetch("/users/me/profile");return dashboardPage("Profile & preferences","Keep your account and delivery preferences up to date.",`<form data-form="customer-profile" class="api-form dashboard-form"><label class="field">Preferred delivery point<select name="preferred_delivery_point_id"><option value="">None selected</option>${points.map(x=>`<option value="${escapeHtml(x.id)}" ${profile.preferred_delivery_point_id===x.id?"selected":""}>${escapeHtml(x.name)}</option>`).join("")}</select></label><label><input type="checkbox" name="marketing_opt_in" ${profile.marketing_opt_in?"checked":""}> Receive WEWE updates</label><button class="button-primary">Save preferences</button></form>`);}
@@ -1400,7 +1418,7 @@
 
   function renderOrders(orders, actions = false) {
     if (!orders.length) return "";
-    return orders.map(order => `<div class="order-card"><div class="panel-head"><div><b>${escapeHtml(order.order_number)}</b><small>${formatDate(order.created_at)}</small></div>${statusBadge(order.status)}</div><div>${(order.items || []).map(item => `${escapeHtml(item.product_name || item.name)} × ${Number(item.quantity)}`).join(", ")}</div><div class="panel-head"><span>Payment ${statusBadge(order.payment_status)}</span><b>${money(order.total_ugx)}</b></div>${actions ? `<div class="row-actions"><button data-action="order-details" data-id="${escapeHtml(order.id)}">Details</button>${["PENDING","CONFIRMED","PREPARING"].includes(order.status) ? `<button data-action="cancel-order" data-id="${escapeHtml(order.id)}">Cancel</button>` : ""}<button data-action="reorder" data-id="${escapeHtml(order.id)}">Order again</button></div>` : ""}</div>`).join("");
+    return orders.map(order => `<div class="order-card"><div class="panel-head"><div><b>${escapeHtml(order.order_number)}</b><small>${formatDate(order.created_at)}</small></div>${statusBadge(order.status)}</div><div>${(order.items || []).map(item => `${escapeHtml(item.product_name || item.name)} × ${Number(item.quantity)}`).join(", ")}</div><div class="panel-head"><span>Payment ${statusBadge(order.payment_status)}</span><b>${money(order.total_ugx)}</b></div>${actions ? `<div class="row-actions"><button data-action="order-details" data-id="${escapeHtml(order.id)}">Track order</button>${["PENDING","CONFIRMED","PREPARING"].includes(order.status) ? `<button data-action="cancel-order" data-id="${escapeHtml(order.id)}">Cancel</button>` : ""}<button data-action="reorder" data-id="${escapeHtml(order.id)}">Order again</button></div>` : ""}</div>`).join("");
   }
 
   function retailerFulfillmentMeta(row) {
@@ -1673,6 +1691,8 @@
   function stopRiderLocationTracking() {
     if (state.riderLocationWatchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(state.riderLocationWatchId);
     state.riderLocationWatchId = null;
+    if (state.riderLocationHeartbeat) clearInterval(state.riderLocationHeartbeat);
+    state.riderLocationHeartbeat = null;
   }
 
   async function publishRiderLocation(position) {
@@ -1699,6 +1719,19 @@
       () => showToast("WEWE could not refresh your location. Keep location permission enabled while online."),
       options
     );
+    // Obtain a fresh fix even while stationary; never re-send an old location as live.
+    const rider = state.user;
+    let locating = false;
+    state.riderLocationHeartbeat = setInterval(async () => {
+      if (locating || state.user !== rider || state.riderLocationWatchId === null) return;
+      locating = true;
+      try {
+        const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { ...options, maximumAge: 0 }));
+        if (state.user === rider && state.riderLocationWatchId !== null) await publishRiderLocation(position);
+      } catch (error) {
+        if (error.status === 409 || error.status === 403) stopRiderLocationTracking();
+      } finally { locating = false; }
+    }, 25000);
   }
 
   function syncRiderOfferPolling() {
@@ -1946,6 +1979,7 @@
   function stopOrderTracking() {
     if (state.orderTrackingTimer) clearInterval(state.orderTrackingTimer);
     state.orderTrackingTimer = null;
+    state.trackedOrderId = null;
   }
 
   function orderTrackingView(tracking) {
@@ -1975,7 +2009,7 @@
     const currentStage = stages.indexOf(order.status);
     const timeline = stages.map((stage, index) => '<div class="tracking-step ' + (index <= currentStage ? "done" : "") + ' ' + (stage === order.status ? "current" : "") + '"><span>' + (index <= currentStage ? "✓" : index + 1) + '</span><div><b>' + escapeHtml(stage.replaceAll("_", " ")) + '</b><small>' + (stage === order.status ? "Current status" : index < currentStage ? "Completed" : "Waiting") + '</small></div></div>').join("");
     return '<div class="modal-head"><div><div class="section-kicker">Order</div><h2>' + escapeHtml(order.order_number) + '</h2></div><button class="close-modal" data-action="close-modal">×</button></div>' +
-      '<p>' + statusBadge(order.status) + ' ' + statusBadge(order.payment_status) + '</p><div class="tracking-timeline">' + timeline + '</div>' +
+      '<p>' + statusBadge(order.status) + ' ' + statusBadge(order.payment_status) + '</p>' + (tracking.payment_check_unavailable ? '<p class="api-state">Payment confirmation is temporarily unavailable. Please do not pay again; WEWE will retry.</p>' : '') + '<div class="tracking-timeline">' + timeline + '</div>' +
       '<section class="order-tracking-panel"><div class="panel-head"><div><h3>Live delivery tracking</h3><small>Updates automatically while your delivery is active.</small></div><span class="tracking-refresh-dot"></span></div>' + orderTrackingView(tracking) + '</section>' +
       (order.items || []).map(item => '<div class="listing-row"><span>' + escapeHtml(item.product_name) + ' × ' + Number(item.quantity) + '</span><b>' + money(item.line_total_ugx) + '</b></div>').join("") +
       '<div class="checkout-totals"><p>Subtotal <b>' + money(order.subtotal_ugx) + '</b></p><p>Delivery <b>' + money(order.delivery_fee_ugx) + '</b></p><p>Total <b>' + money(order.total_ugx) + '</b></p></div>';
@@ -1983,18 +2017,41 @@
 
   async function showOrder(orderId) {
     stopOrderTracking();
-    const [order, tracking] = await Promise.all([apiFetch("/orders/" + encodeURIComponent(orderId)), apiFetch("/orders/" + encodeURIComponent(orderId) + "/tracking")]);
-    setModal(renderOrderModal(order, tracking), true);
-    if ((tracking.deliveries || []).some(item => ["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(item.status))) {
-      state.orderTrackingTimer = setInterval(async () => {
+    const token = {};
+    state.trackedOrderId = token;
+    const load = async () => {
+      const path = "/orders/" + encodeURIComponent(orderId);
+      let [order, tracking] = await Promise.all([apiFetch(path), apiFetch(path + "/tracking")]);
+      if (["PENDING", "UNKNOWN"].includes(order.payment_status)) {
         try {
-          const [freshOrder, freshTracking] = await Promise.all([apiFetch("/orders/" + encodeURIComponent(orderId)), apiFetch("/orders/" + encodeURIComponent(orderId) + "/tracking")]);
-          if (!$("#modalBackdrop")?.classList.contains("open")) return stopOrderTracking();
-          $("#modalContent").innerHTML = renderOrderModal(freshOrder, freshTracking);
-          if (!(freshTracking.deliveries || []).some(item => ["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(item.status))) stopOrderTracking();
-        } catch {}
-      }, 5000);
+          await apiFetch("/payments/orders/" + encodeURIComponent(orderId) + "/refresh", { method: "POST" });
+          order = await apiFetch(path);
+        } catch {
+          tracking.payment_check_unavailable = true;
+        }
+      }
+      return [order, tracking];
+    };
+    const [order, tracking] = await load();
+    if (state.trackedOrderId !== token) return;
+    setModal(renderOrderModal(order, tracking), true);
+    state.trackedOrderId = token;
+    const terminal = order => ["DELIVERED", "CANCELLED", "REJECTED"].includes(order.status);
+    async function refresh() {
+      if (state.trackedOrderId !== token || !$("#modalBackdrop")?.classList.contains("open")) return;
+      try {
+        const [freshOrder, freshTracking] = await load();
+        if (state.trackedOrderId !== token || !$("#modalBackdrop")?.classList.contains("open")) return;
+        $("#modalContent").innerHTML = renderOrderModal(freshOrder, freshTracking);
+        if (terminal(freshOrder)) return stopOrderTracking();
+      } catch {
+        if (state.trackedOrderId !== token) return;
+        const status = $(".order-tracking-panel .panel-head small");
+        if (status) status.textContent = "Connection interrupted. Retrying automatically…";
+      }
+      if (state.trackedOrderId === token) state.orderTrackingTimer = setTimeout(refresh, 5000);
     }
+    if (!terminal(order)) state.orderTrackingTimer = setTimeout(refresh, 5000);
   }
 
   async function newProduct() {

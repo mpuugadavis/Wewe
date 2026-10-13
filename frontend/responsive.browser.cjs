@@ -47,7 +47,8 @@ async function runCase(browser, engine, width, height = 900) {
   const page = await context.newPage();
   const errors = [];
   const calls = [];
-  let failCatalog = false;
+  let failCatalog = false, trackingStage = 0, failTracking = false, orderPaid = false;
+  const trackedOrder = () => ({ id: "order1", order_number: "WEWE-TEST-001", status: trackingStage === 3 ? "DELIVERED" : trackingStage ? "OUT_FOR_DELIVERY" : "PREPARING", payment_status: orderPaid ? "PAID" : "PENDING", subtotal_ugx: 25000, delivery_fee_ugx: 3500, total_ugx: 28500, items: [] });
   page.on("pageerror", error => errors.push(error.message));
   await page.addInitScript(() => { window.WEWE_API_BASE = "/api/v1"; });
   await page.route("**/*", async route => {
@@ -80,8 +81,15 @@ async function runCase(browser, engine, width, height = 900) {
         fulfillments: body.delivery_method === "PICKUP" ? [] : [{ retailer_name: "Campus shop", route_distance_km: 2.4, delivery_fee_ugx: 3500 }]
       };
       else if (endpoint === "/orders" && request.method() === "POST") response = { id: "order1", order_number: "WEWE-TEST-001", subtotal_ugx: 25000, delivery_fee_ugx: 3500, total_ugx: 28500, status: "PENDING", payment_status: "PENDING" };
+      else if (endpoint === "/payments/orders/order1/refresh") { orderPaid = true; response = { payment_status: "PAID" }; }
+      else if (endpoint === "/orders") response = [trackedOrder()];
+      else if (endpoint === "/orders/order1") response = trackedOrder();
+      else if (endpoint === "/orders/order1/tracking") {
+        if (failTracking) { status = 503; response = { detail: "Temporary tracking outage" }; }
+        else response = { deliveries: trackingStage === 0 ? [] : [{ status: trackingStage === 3 ? "DELIVERED" : "OUT_FOR_DELIVERY", retailer_name: "Campus shop", rider: trackingStage === 3 ? null : { name: "Assigned rider", transport_mode: "Bicycle" }, location_status: trackingStage === 2 ? "STALE" : "LIVE", location: trackingStage === 1 ? { latitude: 0.3485, longitude: 32.5815, accuracy_m: 8, updated_at: new Date().toISOString() } : null, pickup: { name: "Campus shop" }, dropoff: { name: "Customer hostel" } }] };
+      }
       else if (endpoint.endsWith("/payments")) response = { id: "payment1", status: "PENDING" };
-      else if (endpoint === "/payments/payment1") response = { id: "payment1", status: "SUCCESSFUL" };
+      else if (endpoint === "/payments/payment1/refresh") response = { id: "payment1", status: "SUCCESSFUL" };
       return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(response) });
     }
     // Exercise the map-unavailable path deterministically; location selection/quotes still work.
@@ -172,9 +180,29 @@ async function runCase(browser, engine, width, height = 900) {
     const order = calls.find(call => call.endpoint === "/orders" && call.method === "POST");
     assert.deepEqual(order.body, { delivery_method: "DELIVERY", delivery_point_id: "d1" });
     assert.ok(order.headers["idempotency-key"], "Order retains idempotency");
+    await page.getByText("Payment confirmed. Your order is being processed.", { exact: true }).waitFor({ timeout: 10000 });
+    assert.ok(calls.some(call => call.endpoint === "/payments/payment1/refresh" && call.method === "POST"));
     await page.keyboard.press("Escape");
     await page.locator("#accountButton").click();
     await page.locator("#dashboardContent .workspace-intro").waitFor();
+    await page.locator('[data-action="order-details"]').first().click();
+    await page.getByText("No delivery assignment yet", { exact: true }).waitFor();
+    assert.ok(calls.some(call => call.endpoint === "/payments/orders/order1/refresh" && call.method === "POST"), "Reopening an order recovers missed payment confirmation");
+    trackingStage = 1;
+    await page.getByText("Rider location is live", { exact: true }).waitFor({ timeout: 10000 });
+    await noOverflow(page, "Live tracking " + width, "#modalContent");
+    assert.ok((await page.getByRole("link", { name: "Open in Maps" }).getAttribute("href")).includes("0.3485"));
+    failTracking = true;
+    await page.getByText("Connection interrupted. Retrying automatically…", { exact: true }).waitFor({ timeout: 10000 });
+    failTracking = false; trackingStage = 2;
+    await page.getByText("Updating rider location…", { exact: true }).waitFor({ timeout: 10000 });
+    assert.equal(await page.locator(".tracking-coordinates").count(), 0);
+    trackingStage = 3;
+    await page.getByText("Live rider location is no longer shared for this completed delivery.", { exact: true }).waitFor({ timeout: 10000 });
+    const trackingCalls = calls.filter(call => call.endpoint === "/orders/order1/tracking").length;
+    await page.waitForTimeout(5500);
+    assert.equal(calls.filter(call => call.endpoint === "/orders/order1/tracking").length, trackingCalls, "Completed deliveries stop tracking");
+    await page.keyboard.press("Escape");
     await noOverflow(page, "Customer workspace " + width);
     if (width <= 780) assert.equal(await page.locator(".mobile-store-nav").isVisible(), false);
     await page.getByRole("button", { name: "Back to shop", exact: true }).click();
