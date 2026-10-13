@@ -25,6 +25,7 @@ from app.models import (
     Order,
     Retailer,
     RetailerFulfillment,
+    User,
     utcnow,
 )
 
