@@ -321,6 +321,9 @@ def accept_offer(db: Session, agent_id: UUID, offer_id: UUID) -> DeliveryAssignm
         raise OfferUnavailableError("This delivery has already been assigned.")
     if agent.verification_status != "VERIFIED" or agent.availability_status != "AVAILABLE":
         raise OfferUnavailableError("You must be verified and available to accept this delivery.")
+    rider_user = db.get(User, agent_id)
+    if rider_user is None or rider_user.status != "ACTIVE" or not rider_user.profile_image_storage_key:
+        raise OfferUnavailableError("An approved rider identification photo is required before accepting deliveries.")
     if _active_assignment_exists(db, agent_id):
         raise OfferUnavailableError("Complete your active delivery before accepting another.")
 
