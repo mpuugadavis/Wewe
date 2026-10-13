@@ -365,6 +365,7 @@ def upload_product_image(
     listing = db.scalar(
         select(RetailerProduct)
         .where(RetailerProduct.id == listing_id, RetailerProduct.retailer_id == retailer.id)
+        .with_for_update()
     )
     if listing is None:
         raise HTTPException(status_code=404, detail={"code": "listing_not_found", "message": "Product listing was not found."})
