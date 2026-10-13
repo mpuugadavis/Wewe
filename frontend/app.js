@@ -347,7 +347,7 @@
       const stock = Number(listing.stock_available || 0);
       const stockLabel = stock < 1 ? "Out of stock" : stock <= 5 ? stock + " left" : "In stock";
       const stockClass = stock < 1 ? "out" : stock <= 5 ? "low" : "";
-      return `<article class="product-card" data-product-id="${productId}" data-listing-id="${listingId}">
+      return `<article class="product-card" data-action="product-details" data-product-id="${productId}" data-listing-id="${listingId}" tabindex="0" role="group" aria-label="View ${escapeHtml(product.name)} details">
         <div class="product-image"><img class="catalog-image-fallback" src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_CATALOG_IMAGE}'">
           <button class="wish-button ${wished ? "is-wished" : ""}" aria-label="${wished ? "Remove from" : "Add to"} wishlist" data-action="toggle-wishlist" data-product-id="${productId}">${wished ? "♥" : "♡"}</button>
           <button class="quick-add" data-action="add-cart" data-listing-id="${listingId}" ${stock < 1 ? "disabled" : ""}>${stock < 1 ? "Unavailable" : "Quick add"}</button>
@@ -388,7 +388,7 @@
     target.innerHTML = rows.length ? rows.map(({ product, listing }) => {
       const image = safeImage(product.images?.[0]) || catalogFallbackImage(product);
       const stock = Number(listing.stock_available || 0);
-      return `<article class="product-card compact-product-card">
+      return `<article class="product-card compact-product-card" data-action="product-details" data-product-id="${escapeHtml(product.id)}" tabindex="0" role="group" aria-label="View ${escapeHtml(product.name)} details">
         <div class="product-image"><img class="catalog-image-fallback" src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_CATALOG_IMAGE}'">
           ${Number(listing.discount_percent || 0) > 0 ? `<span class="rail-discount">-${Number(listing.discount_percent)}%</span>` : ""}
         </div>
@@ -647,12 +647,14 @@
   }
 
   let productGalleryImages = [];
+  let productGalleryIndex = 0;
 
   function selectProductGalleryImage(index) {
     const image = $("#productGalleryMain");
     if (!image || !productGalleryImages.length) return;
     const next = (Number(index) + productGalleryImages.length) % productGalleryImages.length;
     const current = Number.isFinite(next) ? next : 0;
+    productGalleryIndex = current;
     image.src = productGalleryImages[current];
     const counter = $("#productGalleryStatus");
     if (counter) counter.textContent = `${current + 1} of ${productGalleryImages.length}`;
@@ -667,6 +669,7 @@
     const product = state.products.find(item => item.id === productId);
     if (!product) return;
     rememberRecentlyViewed(productId);
+    productGalleryIndex = 0;
     productGalleryImages = [...new Set((product.images || []).map(safeImage).filter(Boolean))];
     if (!productGalleryImages.length) productGalleryImages = [catalogFallbackImage(product)];
     const galleryThumbnails = productGalleryImages.map((url, index) => `<button type="button" class="product-gallery-thumb ${index === 0 ? "active" : ""}" data-action="product-gallery-select" data-index="${index}" aria-pressed="${index === 0}" aria-label="View image ${index + 1}"><img src="${escapeHtml(url)}" alt="" loading="lazy"></button>`).join("");
@@ -2123,8 +2126,8 @@
     }
     if (action === "product-details") return showProduct(button.dataset.productId);
     if (action === "product-gallery-select") return selectProductGalleryImage(Number(button.dataset.index));
-    if (action === "product-gallery-prev") return selectProductGalleryImage((Number($("#productGalleryStatus")?.textContent?.split(" ")[0]) || 1) - 2);
-    if (action === "product-gallery-next") return selectProductGalleryImage(Number($("#productGalleryStatus")?.textContent?.split(" ")[0]) || 1);
+    if (action === "product-gallery-prev") return selectProductGalleryImage(productGalleryIndex - 1);
+    if (action === "product-gallery-next") return selectProductGalleryImage(productGalleryIndex + 1);
     if (action === "add-cart") {
       const detailQuantity = $("#detailQuantity")?.value;
       await addToCart(button.dataset.listingId, detailQuantity || button.dataset.quantity || 1);
@@ -2412,6 +2415,14 @@
       }
 
       if (target === $("#modalBackdrop")) closeModal();
+    });
+
+    document.addEventListener("keydown", event => {
+      if ((event.key === "Enter" || event.key === " ") && event.target instanceof Element &&
+          event.target.matches(".product-card[data-action=product-details]")) {
+        event.preventDefault();
+        showProduct(event.target.dataset.productId).catch(error => showToast(error.message));
+      }
     });
 
     document.addEventListener("change", async event => {
