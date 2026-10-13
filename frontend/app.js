@@ -1984,45 +1984,64 @@
 
   async function newProduct() {
     const categories = state.categories.length ? state.categories : await apiFetch("/categories");
-    setModal(`<div class="modal-head"><h2>Add a product</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-product" class="api-form"><label class="field">Product name<input name="name" required minlength="2" maxlength="220"></label><label class="field">Description<textarea name="description"></textarea></label><label class="field">Category<select name="category_id" required>${categories.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" required></label><label class="field">Old price (UGX) <small class="muted">Optional — used to show a discount</small><input name="original_price_ugx" type="number" min="1" step="1" placeholder="e.g. 50000"></label><label class="field">Stock quantity<input name="stock_quantity" type="number" min="0" step="1" required></label><label class="field">Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple><small class="muted">JPEG, PNG or WebP · up to 12 photos · max 5 MiB each.</small></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Create product</button></form>`);
+    setModal(`<div class="modal-head"><h2>Add a product</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-product" class="api-form"><label class="field">Product name<input name="name" required minlength="2" maxlength="220"></label><label class="field">Description<textarea name="description" rows="4" maxlength="5000" placeholder="Describe the quality, sizes, colours, features and what is included."></textarea></label><label class="field">Category<select name="category_id" required>${categories.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" required></label><label class="field">Old price (UGX) <small class="muted">Optional — used to show a discount</small><input name="original_price_ugx" type="number" min="1" step="1" placeholder="e.g. 50000"></label><label class="field">Stock quantity<input name="stock_quantity" type="number" min="0" step="1" required></label><label class="field">Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple required><small class="muted">JPEG, PNG or WebP · up to 12 photos · max 5 MiB each.</small></label><p data-product-upload-progress class="muted" aria-live="polite"></p><p class="form-message" aria-live="polite"></p><button class="button-primary">Create product</button></form>`);
   }
 
   async function createProduct(form) {
     const values = Object.fromEntries(new FormData(form));
-    const files = [...(form.elements.images?.files || [])];
+    const files = form._wewePendingUploads || [...(form.elements.images?.files || [])];
+    if (!files.length) throw new Error("Choose at least one product photo before creating a listing.");
     if (files.length > 12) throw new Error("Choose no more than 12 product photos.");
     for (const file of files) {
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Only JPEG, PNG and WebP product photos are supported.");
-      if (file.size > 5 * 1024 * 1024) throw new Error("Each product photo must be 5 MiB or smaller.");
+      if (!file.size || file.size > 5 * 1024 * 1024) throw new Error("Each product photo must be between 1 byte and 5 MiB.");
     }
-    const product = await apiFetch("/retailers/me/products", { method: "POST", body: JSON.stringify({
-      name: values.name,
-      description: values.description || null,
-      category_id: values.category_id,
-      price_ugx: Number(values.price_ugx),
-      original_price_ugx: values.original_price_ugx ? Number(values.original_price_ugx) : null,
-      stock_quantity: Number(values.stock_quantity),
-      image_urls: []
-    }) });
-    const listingId = product?.listings?.[0]?.retailer_product_id;
-    let uploadFailures = 0;
-    if (listingId) {
-      for (const file of files) {
-        try {
-          const formData = new FormData();
-          formData.append("file", file, file.name);
-          formData.append("alt_text", values.name);
-          await apiFetch(`/retailers/me/products/${encodeURIComponent(listingId)}/images`, { method: "POST", body: formData });
-        } catch {
-          uploadFailures += 1;
-        }
+    let listingId = form.dataset.createdListingId;
+    if (!listingId) {
+      const product = await apiFetch("/retailers/me/products", { method: "POST", body: JSON.stringify({
+        name: values.name.trim(),
+        description: values.description?.trim() || null,
+        category_id: values.category_id,
+        price_ugx: Number(values.price_ugx),
+        original_price_ugx: values.original_price_ugx ? Number(values.original_price_ugx) : null,
+        stock_quantity: Number(values.stock_quantity),
+        image_urls: []
+      }) });
+      listingId = product?.listings?.[0]?.retailer_product_id;
+      if (!listingId) throw new Error("Product was created but the server did not return a listing ID. Refresh your products before retrying.");
+      form.dataset.createdListingId = listingId;
+      form._wewePendingUploads = files;
+    }
+    const progress = form.querySelector("[data-product-upload-progress]");
+    const remaining = [];
+    const problems = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      if (progress) progress.textContent = `Uploading photo ${index + 1} of ${files.length}…`;
+      try {
+        const formData = new FormData();
+        formData.append("file", file, file.name);
+        formData.append("alt_text", values.name.trim());
+        await apiFetch(`/retailers/me/products/${encodeURIComponent(listingId)}/images`, { method: "POST", body: formData });
+      } catch (error) {
+        remaining.push(file);
+        problems.push(`${file.name}: ${error.message}`);
       }
     }
-    showToast(uploadFailures ? "Product created, but one or more photos failed to upload." : "Product created successfully.");
+    form._wewePendingUploads = remaining;
+    if (remaining.length) {
+      if (progress) progress.textContent = `${files.length - remaining.length} photo(s) uploaded. ${remaining.length} remaining.`;
+      const button = form.querySelector("button.button-primary");
+      if (button) button.textContent = "Retry remaining photo uploads";
+      form.querySelectorAll("input:not([name=images]),textarea,select").forEach(control => { control.disabled = true; });
+      throw new Error(`Product saved, but ${remaining.length} photo(s) could not upload. Retry below. ${problems.join("; ")}`);
+    }
+    if (progress) progress.textContent = "All product photos uploaded."; 
+    showToast("Product and photos saved successfully.");
     closeModal();
     await renderDashboard();
+    await loadCatalog();
   }
-
   async function editRetailerProduct(button) {
     setModal(`<div class="modal-head"><h2>Update listing</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="edit-retailer-product" data-listing-id="${escapeHtml(button.dataset.listingId)}" class="api-form"><p>${escapeHtml(button.dataset.name)}</p><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" value="${Number(button.dataset.price)}" required></label><label class="field">Old price (UGX) <small class="muted">Optional — must be higher than the current price</small><input name="original_price_ugx" type="number" min="1" step="1" value="${button.dataset.originalPrice ? Number(button.dataset.originalPrice) : ""}"></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Save pricing</button></form>`);
   }
