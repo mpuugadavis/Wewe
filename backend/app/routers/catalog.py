@@ -78,6 +78,18 @@ def _listing_rows(db: Session, product_ids: list[UUID]) -> dict[UUID, list[dict]
     return output
 
 
+def _public_product_image_url(image: ProductImage) -> str:
+    """Serve private R2/S3 objects through the existing public catalog endpoint.
+
+    Avoid storing or exposing private-bucket hostnames in customer-facing URLs.
+    Keep validated external URLs for legacy catalog images.
+    """
+    if not image.storage_key:
+        return image.url
+    version = image.storage_key.rsplit("/", 1)[-1].split(".", 1)[0]
+    return f"/api/v1/products/images/{image.id}?v={version}"
+
+
 def _serialize_products(db: Session, products: list[Product]) -> list[dict]:
     if not products:
         return []
@@ -93,7 +105,7 @@ def _serialize_products(db: Session, products: list[Product]) -> list[dict]:
             "name": product.name,
             "description": product.description,
             "images": [
-                image.url
+                _public_product_image_url(image)
                 for image in images
                 if image.product_id == product.id and (image.storage_key or image.url)
             ],
@@ -454,7 +466,7 @@ def list_product_images(
     return [
         {
             "id": image.id,
-            "url": image.url,
+            "url": _public_product_image_url(image),
             "alt_text": image.alt_text,
             "sort_order": image.sort_order,
             "content_type": image.content_type,
@@ -548,7 +560,7 @@ def reorder_product_images(
     return [
         {
             "id": image.id,
-            "url": image.url,
+            "url": _public_product_image_url(image),
             "alt_text": image.alt_text,
             "sort_order": image.sort_order,
             "content_type": image.content_type,
