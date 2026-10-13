@@ -344,8 +344,6 @@ def accept_delivery(
         raise HTTPException(status_code=409, detail={"code": "rider_photo_required", "message": "An approved rider identification photo is required to accept deliveries."})
     if agent.availability_status != "AVAILABLE":
         raise HTTPException(status_code=409, detail={"code": "agent_offline", "message": "Set your delivery availability to available first."})
-    if not principal.user.profile_image_storage_key:
-        raise HTTPException(status_code=409, detail={"code": "rider_photo_required", "message": "An approved rider identification photo is required for delivery work."})
     active = db.scalar(
         select(DeliveryAssignment.id).where(
             DeliveryAssignment.agent_id == principal.user.id,
