@@ -1532,7 +1532,7 @@
         const price = Number(listing.price_ugx || 0);
         const original = Number(listing.original_price_ugx || 0);
         const stock = Number(listing.stock_available || 0);
-        const images = Array.isArray(listing.image_urls) ? listing.image_urls : (Array.isArray(product.image_urls) ? product.image_urls : []);
+        const images = Array.isArray(product.images) ? product.images : [];
         const image = images.find(url => safeImage(url)) || "";
         const discount = original > price && price > 0 ? Math.round((1 - price / original) * 100) : 0;
         const stockLabel = stock <= 0 ? "Out of stock" : stock <= 5 ? "Low stock · " + stock : stock + " in stock";
