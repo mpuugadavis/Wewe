@@ -169,7 +169,10 @@
       }
     });
     reloadGallery().catch(error => { gallery.innerHTML = `<p class="wewe-media-note">${escapeHtml(error.message)}</p>`; });
+    let pendingUploads = [];
     input.addEventListener("change", () => {
+      pendingUploads = [];
+      form.querySelector("button[type=submit]").textContent = "Upload images";
       preview.replaceChildren();
       [...input.files].slice(0, MAX_FILES).forEach(file => {
         const img = document.createElement("img");
@@ -182,35 +185,41 @@
 
     form.addEventListener("submit", async event => {
       event.preventDefault();
-      const files = [...input.files];
+      const files = pendingUploads.length ? pendingUploads : [...input.files];
       const message = modal.querySelector(".form-message");
       const progress = modal.querySelector("#wewe-media-progress");
       const submit = form.querySelector("button[type=submit]");
       message.textContent = "";
-      if (!files.length) {
-        message.textContent = "Choose at least one image.";
-        return;
-      }
-      if (files.length > MAX_FILES) {
-        message.textContent = `Choose no more than ${MAX_FILES} images at a time.`;
+      if (!files.length) { message.textContent = "Choose at least one image."; return; }
+      if (files.length > MAX_FILES || currentImages.length + files.length > MAX_FILES) {
+        message.textContent = `This product can have at most ${MAX_FILES} photos in total. Remove existing photos or select fewer files.`;
         return;
       }
       submit.disabled = true;
+      const failed = [];
+      const problems = [];
       try {
         for (let index = 0; index < files.length; index += 1) {
           progress.textContent = `Uploading image ${index + 1} of ${files.length}…`;
-          await uploadFile(listingId, files[index], form.elements.alt_text.value);
+          try { await uploadFile(listingId, files[index], form.elements.alt_text.value); }
+          catch (error) { failed.push(files[index]); problems.push(`${files[index].name}: ${error.message}`); }
         }
-        progress.textContent = "All images uploaded successfully.";
-        toast("Product images uploaded.");
-        setTimeout(() => {
-          backdrop.classList.remove("open");
-          document.body.classList.remove("modal-open");
-          refreshRetailerProducts();
-        }, 500);
+        pendingUploads = failed;
+        await reloadGallery();
+        refreshRetailerProducts();
+        if (failed.length) {
+          progress.textContent = `${files.length - failed.length} uploaded. ${failed.length} photo(s) need retry.`;
+          submit.textContent = "Retry failed photos";
+          message.textContent = problems.join("; ");
+        } else {
+          progress.textContent = "All selected images uploaded successfully."; 
+          toast("Product gallery updated.");
+          input.value = "";
+          preview.replaceChildren();
+          submit.textContent = "Upload more photos";
+        }
       } catch (error) {
         message.textContent = error.message;
-        progress.textContent = "";
       } finally {
         submit.disabled = false;
       }
