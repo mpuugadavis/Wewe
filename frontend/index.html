@@ -1159,6 +1159,39 @@ button{font-weight:650}
 @media(max-width:480px){#modalContent:has(.auth-form),#modalContent:has(#cartContents),#modalContent:has(#checkoutContents){padding:19px 15px}#cartContents .cart-line{padding:13px}#modalContent .checkout-steps{gap:5px}#modalContent .checkout-steps span{font-size:10px;padding:10px 5px}.checkout-confidence{gap:6px}.checkout-confidence span{font-size:10px}}
 @media(prefers-reduced-motion:reduce){#modalContent .auth-submit{transition:none}}
 
+
+/* Catalog detail: responsive, keyboard-friendly product gallery */
+.product-card[data-action="product-details"]{cursor:pointer}
+.product-card[data-action="product-details"]:focus-visible{outline:3px solid #7952d6;outline-offset:4px}
+.product-detail-modal{width:min(1000px,100%);max-width:1000px}
+.product-gallery{min-width:0;background:#f7f4fc;padding:18px}
+.product-main-image{position:relative;min-width:0;min-height:360px;height:420px;overflow:hidden;display:grid;place-items:center;border-radius:17px;background:#fff}
+.product-modal .product-main-image img{width:100%;height:100%;min-height:0;object-fit:contain}
+.product-gallery-arrow{position:absolute;top:50%;transform:translateY(-50%);border:1px solid #ddd2f1;background:rgba(255,255,255,.96);border-radius:50%;width:40px;height:40px;font-size:26px;line-height:1;color:#51358a;cursor:pointer;box-shadow:0 4px 14px rgba(35,17,63,.12)}
+.product-gallery-arrow.previous{left:9px}.product-gallery-arrow.next{right:9px}
+.product-gallery-arrow:disabled{opacity:.3;cursor:not-allowed}
+.product-gallery-arrow:not(:disabled):hover{background:#f0eaff}
+.product-gallery-footer{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#665779;font-size:11px;font-weight:800}
+.product-gallery-thumbnails{display:flex;gap:9px;overflow-x:auto;max-width:100%;padding:2px 2px 7px}
+.product-gallery-thumb{padding:0;flex:0 0 70px;height:70px;border:2px solid transparent;border-radius:11px;background:#fff;overflow:hidden;cursor:pointer}
+.product-gallery-thumb.active,.product-gallery-thumb:focus-visible{border-color:#6c3df4;outline:0;box-shadow:0 0 0 2px rgba(108,61,244,.13)}
+.product-modal .product-gallery-thumb img{display:block;width:100%;height:100%;min-height:0;object-fit:cover}
+.product-modal-copy{min-width:0;overflow-wrap:anywhere}
+.product-modal-copy h2{overflow-wrap:break-word}
+.retailer-product-actions{flex-wrap:wrap}
+.retailer-product-actions button{min-height:38px}
+.rider-photo-warning{padding:11px 13px;border-radius:10px;background:#fff5e8;border:1px solid #e7c593;color:#6b4620;font-size:12px;font-weight:700}
+.admin-rider-identity{display:flex;gap:12px;align-items:center}
+.admin-rider-identity img{width:66px;height:66px;flex:none;object-fit:cover;border-radius:12px;border:1px solid #e3d9ed}
+.admin-rider-identity .missing-photo{display:grid;place-items:center;width:66px;height:66px;flex:none;border:1px dashed #cdaaa2;border-radius:12px;background:#fff3ef;color:#9c4640;font-size:10px;text-align:center}
+@media(max-width:780px){
+  .product-detail-modal{grid-template-columns:minmax(0,1fr);width:100%}
+  .product-gallery{padding:10px}
+  .product-main-image{height:clamp(240px,57vw,370px);min-height:0}
+  .product-gallery-thumb{flex-basis:62px;height:62px}
+  .product-modal-copy{padding:19px}
+  .product-gallery-arrow{width:36px;height:36px}
+}
 </style>
   <link rel="stylesheet" href="brand.css">
 </head>
