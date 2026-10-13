@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_BASE = document.querySelector('meta[name="wewe-api-base"]')?.content || "http://localhost:8000/api/v1";
+  const API_BASE = String(window.WEWE_API_BASE || document.querySelector('meta[name="wewe-api-base"]')?.content || "").trim() || (["localhost", "127.0.0.1"].includes(location.hostname) ? "http://localhost:8000/api/v1" : "/api/v1");
   const ACCESS_KEY = "wewe_access_token";
   const MAX_FILES = 12;
   const MAX_BYTES = 5 * 1024 * 1024;
@@ -15,6 +15,14 @@
       '"': "&quot;",
       "'": "&#39;"
     }[c]));
+  }
+
+  function mediaUrl(value) {
+    try {
+      const url = new URL(String(value || ""), new URL(API_BASE, location.href));
+      const local = url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname);
+      return (url.protocol === "https:" || local) && !url.username && !url.password ? url.href : "";
+    } catch { return ""; }
   }
 
   function toast(message) {
@@ -41,6 +49,16 @@
       .wewe-media-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:9px}
       .wewe-media-preview img{width:100%;height:90px;object-fit:cover;border-radius:10px;background:#eeeaf5}
       .wewe-media-progress{font-size:11px;color:#5b3db2;min-height:18px}
+      .wewe-media-existing{border:1px solid #e7dff0;padding:13px;border-radius:13px;background:#fff}
+      .wewe-media-existing h3{font-size:14px;margin:0 0 10px;color:#38274a}
+      .wewe-media-current{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+      .wewe-media-tile{border:1px solid #e3daef;border-radius:11px;padding:6px;display:grid;gap:7px}
+      .wewe-media-tile img{height:96px;width:100%;object-fit:cover;border-radius:7px;background:#f3edf9}
+      .wewe-media-tile strong{font-size:10px;color:#5b3db2}
+      .wewe-media-tile-actions{display:flex;flex-wrap:wrap;gap:4px}
+      .wewe-media-tile-actions button{border:1px solid #ddd6e6;border-radius:6px;padding:5px 7px;background:#fff;color:#564073;font-size:10px;cursor:pointer}
+      .wewe-media-tile-actions button:disabled{opacity:.35;cursor:not-allowed}
+      .wewe-media-note{font-size:11px;color:#81798b;margin:0}
     `;
     document.head.appendChild(style);
   }
@@ -78,6 +96,10 @@
         <button class="close-modal" data-action="close-modal" aria-label="Close">×</button>
       </div>
       <div class="wewe-media-modal">
+        <section class="wewe-media-existing" aria-label="Existing product images">
+          <h3>Product gallery</h3>
+          <div id="wewe-media-current" class="wewe-media-current" aria-live="polite"><p class="wewe-media-note">Loading photos…</p></div>
+        </section>
         <form id="wewe-media-form" class="api-form">
           <label class="field">Alt text <input name="alt_text" maxlength="250" placeholder="Describe the product image"></label>
           <div class="wewe-media-drop">
