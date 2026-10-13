@@ -35,6 +35,8 @@
     refreshPromise: null,
     riderLocationWatchId: null,
     riderOfferRefreshTimer: null,
+    riderLocationHeartbeat: null,
+    riderDispatchRefreshing: false,
     unreadNotifications: [],
     orderTrackingTimer: null,
     incomeRefreshTimer: null
@@ -1339,6 +1341,7 @@
       role === "DELIVERY_AGENT" ? await agentDashboard() : await adminDashboard();
     $("#dashboardContent").innerHTML = view;
     syncIncomePolling();
+    syncRiderOfferPolling();
   }
 
   function syncIncomePolling() {
@@ -1647,6 +1650,8 @@
   function stopIncomePolling() { if (state.incomeRefreshTimer) clearInterval(state.incomeRefreshTimer); state.incomeRefreshTimer = null; }
 
   function stopRiderLocationTracking() {
+    if (state.riderLocationHeartbeat) clearInterval(state.riderLocationHeartbeat);
+    state.riderLocationHeartbeat = null;
     if (state.riderLocationWatchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(state.riderLocationWatchId);
     state.riderLocationWatchId = null;
   }
@@ -1675,16 +1680,53 @@
       () => showToast("WEWE could not refresh your location. Keep location permission enabled while online."),
       options
     );
+    // Stationary riders may receive no watchPosition events; obtain a fresh fix.
+    state.riderLocationHeartbeat = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        position => publishRiderLocation(position).catch(() => showToast("Location update failed. Check your connection.")),
+        () => showToast("Location permission is needed to receive nearby offers."),
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+      );
+    }, 25000);
+  }
+
+  async function refreshRiderDispatch() {
+    if (state.riderDispatchRefreshing || state.user?.role !== "DELIVERY_AGENT" || $("#dashboard").classList.contains("hidden")) return;
+    const inbox = $("#riderLiveInbox");
+    if (!inbox) return;
+    state.riderDispatchRefreshing = true;
+    try {
+      const [profile, jobs] = await Promise.all([apiFetch("/deliveries/me/profile"), apiFetch("/deliveries/me")]);
+      if (!inbox.isConnected) return;
+      const active = jobs.find(job => ["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(job.status));
+      document.querySelectorAll('[data-action="agent-availability"]').forEach(button => {
+        button.disabled = Boolean(active) || profile.availability_status === "BUSY";
+        button.textContent = button.disabled ? "Busy · complete current delivery" : profile.availability_status === "AVAILABLE" ? "Go offline" : "Go online";
+        button.dataset.status = profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE";
+      });
+      if (active || profile.availability_status === "BUSY") {
+        inbox.innerHTML = `<div class="rider-info-card" role="status"><b>You are busy${active ? ' · ' + escapeHtml(active.order_number) : ''}</b><span>Complete your current delivery before receiving another order.</span><button class="button-outline" data-action="dashboard-section" data-section="active">View active delivery</button></div>`;
+        return;
+      }
+      if (profile.availability_status !== "AVAILABLE") { inbox.innerHTML = ""; return; }
+      await startRiderLocationTracking({requireInitialFix: true});
+      const offers = await apiFetch("/deliveries/me/offers");
+      if (!inbox.isConnected) return;
+      inbox.innerHTML = offers.map(riderOfferCard).join("") || '<p class="api-state" role="status">Online · waiting for a nearby delivery offer.</p>';
+    } catch (error) {
+      if (inbox.isConnected) inbox.innerHTML = `<p class="api-error" role="alert">Offers could not refresh: ${escapeHtml(error.message || "Check location permission and your connection.")} Retrying automatically.</p>`;
+    } finally { state.riderDispatchRefreshing = false; }
   }
 
   function syncRiderOfferPolling() {
-    if (state.riderOfferRefreshTimer) { clearInterval(state.riderOfferRefreshTimer); state.riderOfferRefreshTimer = null; }
-    if (state.user?.role === "DELIVERY_AGENT" && state.dashboardSection === "available") {
-      state.riderOfferRefreshTimer = setInterval(() => {
-        if (state.dashboardSection !== "available" || state.user?.role !== "DELIVERY_AGENT") return syncRiderOfferPolling();
-        renderDashboard().catch(() => {});
-      }, 5000);
+    if (state.user?.role !== "DELIVERY_AGENT") {
+      if (state.riderOfferRefreshTimer) clearInterval(state.riderOfferRefreshTimer);
+      state.riderOfferRefreshTimer = null;
+      return;
     }
+    if (!$("#riderLiveInbox")) $("#dashboardContent").insertAdjacentHTML("afterbegin", '<section id="riderLiveInbox" aria-label="Live delivery dispatch"></section>');
+    refreshRiderDispatch();
+    if (!state.riderOfferRefreshTimer) state.riderOfferRefreshTimer = setInterval(refreshRiderDispatch, 5000);
   }
 
   function riderOfferCard(offer) {
@@ -1707,7 +1749,7 @@
       const available = profile.availability_status === "AVAILABLE";
       return dashboardPage("Rider profile","Keep your contact and transport details ready for delivery work.",`<div class="rider-profile-grid"><div class="rider-profile-card"><div class="rider-avatar-large" style="overflow:hidden">${safeImage(profile.profile_image_url) ? '<img src="' + escapeHtml(safeImage(profile.profile_image_url)) + '" alt="Rider profile picture" style="width:100%;height:100%;object-fit:cover">' : escapeHtml((state.user.name || "?").slice(0,1).toUpperCase())}</div><div><h3>${escapeHtml(state.user.name)}</h3><span>${escapeHtml(profile.verification_status || "PENDING")} verification</span></div><label class="button-outline" style="display:inline-flex;cursor:pointer">Choose picture<input data-profile-image type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div>
       <form data-form="agent-profile" class="api-form dashboard-form rider-form"><label class="field">Phone<input name="phone" value="${escapeHtml(profile.phone || "")}" autocomplete="tel"></label><label class="field">Transport mode<input name="transport_mode" value="${escapeHtml(profile.transport_mode || "")}" placeholder="Bicycle, motorcycle, car…" maxlength="40"></label><button class="rider-primary-action">Save rider profile</button></form>
-      <div class="rider-status-panel"><div><small>WORK STATUS</small><strong>${available ? "You are online" : "You are offline"}</strong><span>${available ? "New delivery offers can reach you." : "Go online when you are ready to receive work."}</span></div><button class="${available ? "rider-offline-button" : "rider-online-button"}" data-action="agent-availability" data-status="${available ? "OFFLINE" : "AVAILABLE"}">${available ? "Go offline" : "Go online"}</button></div></div>`);
+      <div class="rider-status-panel"><div><small>WORK STATUS</small><strong>${profile.availability_status === "BUSY" ? "You are busy" : available ? "You are online" : "You are offline"}</strong><span>${available ? "New delivery offers can reach you." : "Go online when you are ready to receive work."}</span></div><button class="${available ? "rider-offline-button" : "rider-online-button"}" data-action="agent-availability" data-status="${available ? "OFFLINE" : "AVAILABLE"}">${available ? "Go offline" : "Go online"}</button></div></div>`);
     }
     const [profile, earnings, active] = await Promise.all([profilePromise, apiFetch("/deliveries/me/earnings"), apiFetch("/deliveries/me")]);
     const activeJob = (active || []).find(row => row.status !== "DELIVERED" && row.status !== "CANCELLED");
@@ -1715,12 +1757,7 @@
       return dashboardPage("Earnings","Live view of what WEWE owes you from completed deliveries and what has already been paid.",`<div class="rider-earnings-grid"><div class="rider-earnings-card"><span>WEWE owes you</span><strong>${money(earnings.owed_by_wewe_ugx ?? earnings.pending_ugx)}</strong><small>Unpaid delivery earnings</small></div><div class="rider-earnings-card"><span>Paid</span><strong>${money(earnings.paid_ugx)}</strong><small>Recorded paid earnings</small></div></div><div class="rider-info-card"><b>${earnings.payout_status === "AWAITING_SCHEDULED_PAYOUT" ? "Awaiting scheduled payout" : "Up to date"}</b><span>Your earnings are tied to completed delivery records and payout records.</span></div>`);
     }
     if (section === "available") {
-      if (profile.availability_status === "AVAILABLE") {
-        try { await startRiderLocationTracking({requireInitialFix: true}); } catch {}
-      }
-      const offers = profile.availability_status === "AVAILABLE" ? await apiFetch("/deliveries/me/offers") : [];
-      syncRiderOfferPolling();
-      return dashboardPage("Delivery offers", profile.availability_status === "AVAILABLE" ? "Fresh dispatch offers appear here while you are online." : "Go online to receive delivery offers.", `<div class="rider-offer-toolbar"><div><span class="rider-live-dot"></span><b>${profile.availability_status === "AVAILABLE" ? "Online and location sharing" : "Offline"}</b></div><button class="button-outline" data-action="agent-availability" data-status="${profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE"}">${profile.availability_status === "AVAILABLE" ? "Go offline" : "Go online"}</button></div>${profile.availability_status !== "AVAILABLE" ? '<div class="rider-empty"><h3>You are offline</h3><p>Switch to online to become eligible for new delivery offers.</p></div>' : ((offers || []).map(riderOfferCard).join("") || '<div class="rider-empty"><h3>Waiting for dispatch</h3><p>Keep location sharing enabled. WEWE will offer eligible ready deliveries to you.</p></div>')}`);
+      return dashboardPage("Delivery offers", "Offers refresh automatically. Accept one delivery at a time.", '<section id="riderLiveInbox" aria-label="Live delivery dispatch"><p class="api-state">Checking your dispatch status…</p></section>');
     }
     if (section === "active") {
       return dashboardPage("Active delivery","One delivery at a time, with the next action made obvious.",activeJob ? riderJobCard(activeJob) : '<div class="rider-empty"><h3>No active delivery</h3><p>When you accept a delivery, the pickup and drop-off steps will appear here.</p><button class="rider-primary-action" data-action="dashboard-section" data-section="available">View delivery offers</button></div>');
@@ -1730,7 +1767,7 @@
       return dashboardPage("Delivery history","Review completed deliveries and their recorded status.",(rows || []).map(row => riderJobCard(row, true)).join("") || '<div class="rider-empty"><h3>No completed deliveries yet</h3><p>Your completed delivery history will appear here.</p></div>');
     }
     const current = activeJob ? riderJobCard(activeJob) : '<div class="rider-empty"><div class="rider-empty-icon">✓</div><h3>Ready when you are</h3><p>Go online to receive eligible delivery offers from WEWE.</p><button class="rider-primary-action" data-action="agent-availability" data-status="AVAILABLE">Go online</button></div>';
-    const availableLabel = profile.availability_status === "AVAILABLE" ? "Online" : "Offline";
+    const availableLabel = profile.availability_status === "BUSY" ? "Busy" : profile.availability_status === "AVAILABLE" ? "Online" : "Offline";
     return `<div class="rider-hero workspace-rider-hero"><div><span class="eyebrow">WEWE delivery desk</span><h2>Welcome, ${escapeHtml(state.user.name.split(" ")[0] || state.user.name)}.</h2><p>Stay available, accept a job, follow the pickup-to-drop-off flow and keep customers updated.</p></div><div class="rider-online-control ${profile.availability_status === "AVAILABLE" ? "online" : ""}"><span class="rider-live-dot"></span><b>${availableLabel}</b><button data-action="agent-availability" data-status="${profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE"}">${profile.availability_status === "AVAILABLE" ? "Go offline" : "Go online"}</button></div></div>
       <div class="rider-stats workspace-rider-metrics"><div><span>Current status</span><strong>${escapeHtml(profile.availability_status)}</strong><small>Work availability</small></div><div><span>Paid earnings</span><strong>${money(earnings.paid_ugx)}</strong><small>Recorded paid amount</small></div><div><span>Pending earnings</span><strong>${money(earnings.pending_ugx)}</strong><small>Awaiting payout</small></div><div><span>Active job</span><strong>${activeJob ? "1" : "0"}</strong><small>Assigned deliveries</small></div></div>
       <div class="rider-layout workspace-rider-layout"><section><div class="rider-section-head"><div><h3>${activeJob ? "Your active delivery" : "Your next job"}</h3><p>${activeJob ? "Complete the current step before taking another job." : "Your delivery workspace is ready."}</p></div><button class="text-link" data-action="dashboard-section" data-section="available">View offers →</button></div>${current}</section><aside class="rider-side-card"><h3>Rider shortcuts</h3><button data-action="dashboard-section" data-section="available">🚚 Delivery offers</button><button data-action="dashboard-section" data-section="history">🧾 Delivery history</button><button data-action="dashboard-section" data-section="earnings">UGX Earnings</button><button data-action="dashboard-section" data-section="profile">⚙ Rider profile</button></aside></div>`;
@@ -2254,7 +2291,8 @@
     }
     if (action === "accept-delivery-offer") {
       await apiFetch(`/deliveries/offers/${encodeURIComponent(button.dataset.id)}/accept`, { method: "POST", body: JSON.stringify({}) });
-      showToast("Delivery accepted.");
+      showToast("Delivery accepted. You are now busy.");
+      state.dashboardSection = "active";
       return renderDashboard();
     }
     if (action === "reject-delivery-offer") {
@@ -2264,7 +2302,8 @@
     }
     if (action === "accept-delivery") {
       await apiFetch(`/deliveries/${encodeURIComponent(button.dataset.id)}/accept`, { method: "POST", body: JSON.stringify({}) });
-      showToast("Delivery accepted.");
+      showToast("Delivery accepted. You are now busy.");
+      state.dashboardSection = "active";
       return renderDashboard();
     }
     if (action === "delivery-status") return updateDelivery(button.dataset.id, button.dataset.status);

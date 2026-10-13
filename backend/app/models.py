@@ -490,6 +490,9 @@ class DeliveryAssignment(TimestampMixin, Base):
     __tablename__ = "delivery_assignments"
     __table_args__ = (
         UniqueConstraint("fulfillment_id", name="uq_delivery_fulfillment"),
+        Index("uq_rider_active_delivery", "agent_id", unique=True,
+              postgresql_where=text("agent_id IS NOT NULL AND status IN ('ACCEPTED','PICKED_UP','OUT_FOR_DELIVERY')"),
+              sqlite_where=text("agent_id IS NOT NULL AND status IN ('ACCEPTED','PICKED_UP','OUT_FOR_DELIVERY')")),
         CheckConstraint(
             "status IN ('UNASSIGNED','ACCEPTED','PICKED_UP','OUT_FOR_DELIVERY','DELIVERED','CANCELLED')",
             name="ck_delivery_assignment_status",

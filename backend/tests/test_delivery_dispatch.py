@@ -297,3 +297,82 @@ def test_admin_rider_list_exposes_eligibility_and_transport(database):
     entry = next(row for row in entries if row["user_id"] == rider.id)
     assert entry["user_status"] == "SUSPENDED"
     assert entry["transport_mode"] == "Bicycle"
+
+
+def test_poll_dispatches_after_first_fresh_location(database):
+    from app.dependencies import Principal
+    from app.routers.operations import my_delivery_offers
+    assignment, rider, other = _dispatch_fixture(database)
+    database.get(DeliveryAgent, other.id).availability_status = "OFFLINE"
+    location = database.get(DeliveryAgentLocation, rider.id)
+    location.updated_at = utcnow() - timedelta(minutes=5)
+    database.commit()
+    assert advance_dispatch(database, assignment.id) is None
+    location.updated_at = utcnow()
+    database.commit()
+    offers = my_delivery_offers(limit=20, principal=Principal(rider, uuid4()), db=database)
+    assert len(offers) == 1
+    assert offers[0]["assignment_id"] == assignment.id
+
+
+def test_busy_rider_cannot_switch_available(database):
+    import pytest
+    from fastapi import HTTPException
+    from app.dependencies import Principal
+    from app.routers.operations import set_availability
+    from app.schemas import AvailabilityUpdate
+    assignment, rider, _ = _dispatch_fixture(database)
+    offer = advance_dispatch(database, assignment.id)
+    accept_offer(database, rider.id, offer.id)
+    database.commit()
+    with pytest.raises(HTTPException) as error:
+        set_availability(AvailabilityUpdate(availability_status="AVAILABLE"), principal=Principal(rider, uuid4()), db=database)
+    assert error.value.status_code == 409
+    assert database.get(DeliveryAgent, rider.id).availability_status == "BUSY"
+
+
+def test_only_one_outstanding_offer_per_rider(database):
+    first, rider, other = _dispatch_fixture(database)
+    second, _, _ = _dispatch_fixture(database)
+    advance_dispatch(database, first.id)
+    offer = advance_dispatch(database, second.id)
+    assert offer is not None
+    assert offer.agent_id != rider.id
+
+
+def test_database_rejects_second_active_assignment(database):
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+    first, rider, _ = _dispatch_fixture(database)
+    second, _, _ = _dispatch_fixture(database)
+    first.agent_id = rider.id
+    first.status = "ACCEPTED"
+    database.commit()
+    second.agent_id = rider.id
+    second.status = "ACCEPTED"
+    with pytest.raises(IntegrityError):
+        database.commit()
+    database.rollback()
+
+
+def test_busy_rider_has_no_actionable_offers(database):
+    from app.dependencies import Principal
+    from app.routers.operations import my_delivery_offers
+    assignment, rider, _ = _dispatch_fixture(database)
+    offer = advance_dispatch(database, assignment.id)
+    accept_offer(database, rider.id, offer.id)
+    database.commit()
+    assert my_delivery_offers(limit=20, principal=Principal(rider, uuid4()), db=database) == []
+
+
+def test_missed_expired_offer_can_be_offered_again_after_cooldown(database):
+    assignment, rider, other = _dispatch_fixture(database)
+    database.get(DeliveryAgent, other.id).availability_status = "OFFLINE"
+    first = advance_dispatch(database, assignment.id)
+    first.status = "EXPIRED"
+    first.offered_at = utcnow() - timedelta(minutes=3)
+    first.expires_at = utcnow() - timedelta(minutes=2)
+    database.commit()
+    retry = advance_dispatch(database, assignment.id)
+    assert retry is not None and retry.agent_id == rider.id
+    assert retry.id != first.id
