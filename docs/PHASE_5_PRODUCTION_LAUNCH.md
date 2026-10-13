@@ -14,11 +14,23 @@ WEWE production is deliberately split into managed/external infrastructure and s
 - **Media:** production S3-compatible object storage.
 - **Workers:** notification outbox worker and media cleanup worker.
 - **Routing:** OpenRouteService server-side road routing.
-- **Payments:** Flutterwave Uganda mobile money; online-payment-only.
-- **Webhook:** public HTTPS endpoint at `/api/v1/payments/webhooks/flutterwave`.
+- **Payments:** PawaPay Uganda mobile money (MTN and Airtel); online-payment-only.
+- **Callbacks:** HTTPS PawaPay checkout, deposit, payout and refund endpoints under `/api/v1/payments/pawapay/`.
 - **Observability:** application request IDs, structured logs, health endpoints and durable worker-health state.
 
 The production compose file intentionally does **not** run local PostgreSQL, Redis or MinIO. Those local services remain development infrastructure; production must use managed/external services.
+
+## Online beta / staging release before real-money launch
+
+WEWE can be publicly accessible for testing before real payments are enabled. Create a **separate staging environment** with its own database, storage objects, secrets and login accounts. Use:
+
+- Static frontend over HTTPS (for example, Cloudflare Pages), configured with the staging API URL.
+- FastAPI as a persistent service with PostgreSQL, Redis-compatible rate limiting and S3-compatible Cloudflare R2 storage.
+- The notification and media cleanup workers as long-lived services. Sleeping/free web instances do not safely replace continuously running workers.
+- `APP_ENV=staging`, `PAYMENT_PROVIDER=PAWAPAY`, `PAWAPAY_ENVIRONMENT=SANDBOX`, `PAYMENT_MODE=EXTERNAL` for sandbox orders, or `PAYMENT_MODE=DISABLED` for read-only public previews. Do not enable production payment credentials in staging.
+- Valid staging HTTPS callback URLs, correct `CORS_ORIGINS`, `TRUSTED_HOSTS`, and a staging `DATABASE_URL`; NEVER copy production user records or tokens into a public beta.
+
+Release pipeline: implement features on branches, review and test on staging, then promote a known-good commit to the production deployment branch. Keep real orders and production PostgreSQL/R2 resources isolated so experiments, migrations and fixtures cannot alter customer records. Back up the production database and use backward-compatible migrations and rehearsed rollbacks. A website being online does **not** mean it is certified safe to accept real payments.
 
 ## 2. Production gates
 
@@ -36,9 +48,9 @@ A production deployment is not considered launch-ready until all of these are tr
 - Production API docs/OpenAPI remain disabled by the application production guardrail.
 
 ### Payments
-- Flutterwave is switched from sandbox to LIVE only after sandbox E2E is accepted.
-- Client ID and Client Secret are production credentials.
-- Flutterwave webhook secret hash is configured.
+- PawaPay is switched from `SANDBOX` to `LIVE` only after sandbox end-to-end testing is accepted.
+- PawaPay API token and base URL must be the correct LIVE credentials and endpoint.
+- `PAWAPAY_VERIFY_CALLBACKS=true` and production HTTPS callback URLs are configured.
 - WEWE payment webhook secret is configured.
 - Callback/redirect URLs are HTTPS.
 - Provider transaction verification remains authoritative.
@@ -76,7 +88,7 @@ A production deployment is not considered launch-ready until all of these are tr
 7. Deploy the frontend with the production API base URL.
 8. Run sandbox payment E2E through the public HTTPS endpoint.
 9. Confirm webhook delivery and transaction verification.
-10. Switch Flutterwave credentials/environment to LIVE.
+10. Switch PawaPay credentials/environment to LIVE only after a successful staged rollout.
 11. Repeat a controlled real-payment smoke test with a small amount.
 12. Verify order → payment → fulfilment → rider → delivery → settlement flow.
 13. Enable routine backups and monitoring.
@@ -158,7 +170,7 @@ Any new configuration must be written to `platform_settings`, versioned, auditab
 
 ### 5D — Production switch
 - public frontend/API
-- Flutterwave LIVE
+- PawaPay LIVE
 - production routing
 - production storage
 - final smoke test
