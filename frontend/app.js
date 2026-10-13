@@ -63,7 +63,7 @@
     try {
       const raw = String(value || "").trim();
       if (!raw) return "";
-      if (raw.startsWith("/api/v1/")) return new URL(raw, API_BASE + "/").href;
+      if (raw.startsWith("/api/v1/")) return new URL(raw, new URL(API_BASE, location.href)).href;
       const url = new URL(raw, location.href);
       const isHttps = url.protocol === "https:";
       const isLocalMinio = url.protocol === "http:" &&
