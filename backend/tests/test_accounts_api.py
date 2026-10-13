@@ -63,3 +63,63 @@ def test_public_retailer_product_counts_use_one_aggregate_query(client, database
     assert len(matching_retailers) == 2
     assert all(retailer["product_count"] == 1 for retailer in matching_retailers)
     assert len(aggregate_queries) == 1
+
+
+def test_admin_cannot_verify_rider_without_identification_photo(database) -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    import pytest
+    from fastapi import HTTPException
+
+    from app.models import DeliveryAgent
+    from app.routers.admin import verify_delivery_agent
+    from app.schemas import RetailerVerificationUpdate
+
+    admin = User(
+        id=uuid4(),
+        name="Admin",
+        email=f"admin-{uuid4()}@example.test",
+        password_hash="test-hash",
+        role="ADMIN",
+        status="ACTIVE",
+    )
+    rider = User(
+        id=uuid4(),
+        name="Photo Applicant",
+        email=f"applicant-{uuid4()}@example.test",
+        password_hash="test-hash",
+        role="DELIVERY_AGENT",
+        status="ACTIVE",
+    )
+    database.add_all([admin, rider])
+    database.flush()
+    agent = DeliveryAgent(
+        user_id=rider.id,
+        phone="+256700000098",
+        verification_status="PENDING",
+        availability_status="OFFLINE",
+        transport_mode="Bicycle",
+    )
+    database.add(agent)
+    database.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        verify_delivery_agent(
+            rider.id,
+            RetailerVerificationUpdate(status="VERIFIED"),
+            principal=SimpleNamespace(user=admin),
+            db=database,
+        )
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "rider_photo_required"
+    assert agent.verification_status == "PENDING"
+
+    rider.profile_image_storage_key = f"profiles/{rider.id}/{'b' * 64}.webp"
+    response = verify_delivery_agent(
+        rider.id,
+        RetailerVerificationUpdate(status="VERIFIED"),
+        principal=SimpleNamespace(user=admin),
+        db=database,
+    )
+    assert response["verification_status"] == "VERIFIED"
