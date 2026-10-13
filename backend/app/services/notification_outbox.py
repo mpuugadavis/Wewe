@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.models import NotificationOutbox, utcnow
 from app.services.mailer import send_email
+from app.config import get_settings
 
 
 class NotificationHandler(Protocol):
@@ -74,6 +75,8 @@ def _email_handler(notification: NotificationOutbox) -> None:
         raise NotificationDispatchError("EMAIL notification requires a non-empty 'subject'")
     if not isinstance(body, str):
         raise NotificationDispatchError("EMAIL notification requires a string 'body'")
+    if not get_settings().smtp_host:
+        raise NotificationChannelUnavailable("SMTP is not configured; email has not been sent")
     send_email(to_address.strip(), subject.strip(), body)
 
 

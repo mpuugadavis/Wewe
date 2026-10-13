@@ -1,3 +1,4 @@
+from app.services.delivery_confirmation import issue_delivery_confirmation
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -340,7 +341,7 @@ def list_delivery_agents(
     query = select(DeliveryAgent, User).join(User, User.id == DeliveryAgent.user_id)
     if verification_status:
         query = query.where(DeliveryAgent.verification_status == verification_status)
-    return [{"user_id": agent.user_id, "name": user.name, "phone": agent.phone, "verification_status": agent.verification_status, "availability_status": agent.availability_status} for agent, user in db.execute(query.order_by(User.created_at.desc())).all()]
+    return [{"user_id": agent.user_id, "name": user.name, "phone": agent.phone, "transport_mode": agent.transport_mode, "user_status": user.status, "verification_status": agent.verification_status, "availability_status": agent.availability_status} for agent, user in db.execute(query.order_by(User.created_at.desc())).all()]
 
 
 @router.patch("/delivery-agents/{user_id}/verification")
@@ -551,7 +552,7 @@ def assign_delivery(assignment_id: UUID, payload: AdminDeliveryAssignment, princ
     db.add(DeliveryEvent(assignment_id=assignment.id, actor_user_id=principal.user.id, previous_status=previous, new_status="ACCEPTED", note="Assigned by administrator"))
     _audit(db, principal.user.id, "DELIVERY_ASSIGNED", "delivery", assignment.id, {"agent_user_id": str(agent.user_id)})
     if order:
-        db.add(NotificationOutbox(user_id=order.customer_id, event_type="DELIVERY_ASSIGNED", payload={"order_id": str(order.id), "order_number": order.order_number}))
+        issue_delivery_confirmation(db, assignment, order)
     db.commit()
     return {"id": assignment.id, "agent_user_id": agent.user_id, "status": assignment.status}
 

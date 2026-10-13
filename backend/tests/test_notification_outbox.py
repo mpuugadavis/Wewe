@@ -86,6 +86,8 @@ def test_email_notification_uses_mailer(database, monkeypatch):
     def fake_send_email(to_address, subject, body):
         sent.append((to_address, subject, body))
 
+    from types import SimpleNamespace
+    monkeypatch.setattr("app.services.notification_outbox.get_settings", lambda: SimpleNamespace(smtp_host="smtp.example.test"))
     monkeypatch.setattr("app.services.notification_outbox.send_email", fake_send_email)
     session_factory = sessionmaker(bind=database.get_bind(), autoflush=False, expire_on_commit=False)
 
