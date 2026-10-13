@@ -119,6 +119,56 @@
     const form = modal.querySelector("#wewe-media-form");
     const input = form.elements.files;
     const preview = modal.querySelector("#wewe-media-preview");
+    const gallery = modal.querySelector("#wewe-media-current");
+    const request = window.weweApiFetch;
+    let currentImages = [];
+    const reloadGallery = async () => {
+      if (typeof request !== "function") throw new Error("The WEWE API is not ready.");
+      currentImages = await request(`/retailers/me/products/${encodeURIComponent(listingId)}/images`);
+      if (!gallery.isConnected) return;
+      gallery.innerHTML = currentImages.length ? currentImages.map((item, index) => {
+        const src = mediaUrl(item.url);
+        return `<div class="wewe-media-tile">
+          ${src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.alt_text || `Product photo ${index + 1}`)}" loading="lazy">` : `<div class="wewe-media-note">Photo unavailable</div>`}
+          <strong>${index === 0 ? "Cover photo" : `Photo ${index + 1}`}</strong>
+          <div class="wewe-media-tile-actions">
+            <button type="button" data-media-action="left" data-index="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move photo left">←</button>
+            <button type="button" data-media-action="right" data-index="${index}" ${index === currentImages.length - 1 ? "disabled" : ""} aria-label="Move photo right">→</button>
+            <button type="button" data-media-action="delete" data-index="${index}" aria-label="Remove photo">Remove</button>
+          </div>
+        </div>`;
+      }).join("") : `<p class="wewe-media-note">No product photos yet. Add up to ${MAX_FILES} images below.</p>`;
+    };
+    gallery.addEventListener("click", async event => {
+      const control = event.target.closest("[data-media-action]");
+      if (!control) return;
+      event.preventDefault();
+      const index = Number(control.dataset.index);
+      const image = currentImages[index];
+      if (!image) return;
+      const action = control.dataset.mediaAction;
+      if (action === "delete" && !confirm("Remove this product photo?")) return;
+      gallery.querySelectorAll("button").forEach(button => { button.disabled = true; });
+      try {
+        if (action === "delete") {
+          await request(`/retailers/me/products/${encodeURIComponent(listingId)}/images/${encodeURIComponent(image.id)}`, { method: "DELETE" });
+          toast("Product photo removed.");
+        } else {
+          const target = index + (action === "left" ? -1 : 1);
+          if (target < 0 || target >= currentImages.length) return;
+          const ids = currentImages.map(item => item.id);
+          [ids[index], ids[target]] = [ids[target], ids[index]];
+          await request(`/retailers/me/products/${encodeURIComponent(listingId)}/images/order`, { method: "PATCH", body: JSON.stringify({ image_ids: ids }) });
+          toast("Product gallery order updated.");
+        }
+        await reloadGallery();
+        refreshRetailerProducts();
+      } catch (error) {
+        modal.querySelector(".form-message").textContent = error.message;
+        await reloadGallery().catch(() => {});
+      }
+    });
+    reloadGallery().catch(error => { gallery.innerHTML = `<p class="wewe-media-note">${escapeHtml(error.message)}</p>`; });
     input.addEventListener("change", () => {
       preview.replaceChildren();
       [...input.files].slice(0, MAX_FILES).forEach(file => {
