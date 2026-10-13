@@ -1,3 +1,5 @@
+import pytest
+
 from datetime import timedelta
 from uuid import uuid4
 
@@ -17,6 +19,7 @@ from app.models import (
 )
 from app.services.delivery_dispatch import (
     OFFER_TTL_SECONDS,
+    OfferUnavailableError,
     accept_offer,
     advance_dispatch,
     haversine_distance_m,
@@ -41,6 +44,8 @@ def _dispatch_fixture(database):
     retailer_user = _user("RETAILER", "Retailer")
     rider_a = _user("DELIVERY_AGENT", "Rider A")
     rider_b = _user("DELIVERY_AGENT", "Rider B")
+    for rider in (rider_a, rider_b):
+        rider.profile_image_storage_key = f"profiles/{rider.id}/{'a' * 64}.webp"
     database.add_all([customer, retailer_user, rider_a, rider_b])
     database.flush()
 
@@ -269,3 +274,35 @@ def test_accept_offer_marks_rider_busy_and_competing_offer_cancelled(database):
     assert agent is not None
     assert agent.availability_status == "BUSY"
     assert second.status == "CANCELLED"
+
+
+def test_rider_without_identification_photo_is_excluded_from_dispatch(database):
+    assignment, rider_a, rider_b = _dispatch_fixture(database)
+    rider_a.profile_image_storage_key = None
+    database.flush()
+
+    offer = advance_dispatch(database, assignment.id)
+
+    assert offer is not None
+    assert offer.agent_id == rider_b.id
+
+
+def test_dispatch_returns_no_offer_if_all_riders_lack_photos(database):
+    assignment, rider_a, rider_b = _dispatch_fixture(database)
+    rider_a.profile_image_storage_key = None
+    rider_b.profile_image_storage_key = None
+    database.flush()
+
+    assert advance_dispatch(database, assignment.id) is None
+
+
+def test_photo_removed_after_offer_prevents_acceptance(database):
+    assignment, rider_a, _rider_b = _dispatch_fixture(database)
+    offer = advance_dispatch(database, assignment.id)
+    assert offer is not None
+
+    rider_a.profile_image_storage_key = None
+    database.flush()
+
+    with pytest.raises(OfferUnavailableError, match="identification photo"):
+        accept_offer(database, rider_a.id, offer.id)
