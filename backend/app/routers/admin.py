@@ -340,7 +340,7 @@ def list_delivery_agents(
     query = select(DeliveryAgent, User).join(User, User.id == DeliveryAgent.user_id)
     if verification_status:
         query = query.where(DeliveryAgent.verification_status == verification_status)
-    return [{"user_id": agent.user_id, "name": user.name, "phone": agent.phone, "verification_status": agent.verification_status, "availability_status": agent.availability_status} for agent, user in db.execute(query.order_by(User.created_at.desc())).all()]
+    return [{"user_id": agent.user_id, "name": user.name, "phone": agent.phone, "transport_mode": agent.transport_mode, "profile_image_url": user.profile_image_url, "verification_status": agent.verification_status, "availability_status": agent.availability_status} for agent, user in db.execute(query.order_by(User.created_at.desc())).all()]
 
 
 @router.patch("/delivery-agents/{user_id}/verification")
