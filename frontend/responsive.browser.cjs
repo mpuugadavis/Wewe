@@ -23,7 +23,7 @@ const categories = ["Food & drinks","Fashion","Electronics","Stationery","Beauty
 const products = categories.map((category, i) => ({
   id: "p" + i, category_id: category.id,
   name: i === 0 ? "Fresh lunch with a very long product name for wrapping checks" : category.name + " campus favourite",
-  description: "Everyday essentials from a local campus shop", images: [],
+  description: "Everyday essentials from a local campus shop", images: i === 0 ? ["https://images.unsplash.com/photo-1504674900247-0877df9cc836?test=1", "https://images.unsplash.com/photo-1542838132-92c53300491e?test=2"] : [],
   listings: [{ retailer_product_id: "l" + i, retailer_name: "Makerere community shop with a long business name", price_ugx: 12500 + i * 1000, original_price_ugx: 18000, discount_percent: 15, stock_available: 12 }]
 }));
 const point = { id: "d1", name: "Makerere main campus delivery destination with long directions", latitude: 0.335, longitude: 32.57, is_private: false, directions: "Meet at the entrance" };
@@ -105,6 +105,17 @@ async function runCase(browser, engine, width, height = 900) {
     const logo = await page.locator("#topbar .brand-logo").boundingBox();
     assert.ok(Math.abs(logo.width / logo.height - 337 / 80) < 0.02, "Logo aspect ratio is preserved");
     if (process.env.WEWE_TEST_PHOTOS === "live" && engine === "chromium") await screenshot(page, engine + "-" + width + "-homepage");
+    // Product cards open a detail modal with an interactive two-photo gallery.
+    await page.locator("#productGrid .product-card").first().locator(".product-image").click({ position: { x: 25, y: 25 } });
+    await page.locator("#productGalleryMain").waitFor();
+    assert.equal(await page.locator(".product-gallery-thumb").count(), 2, "Product detail shows every stored photo");
+    const firstPhoto = await page.locator("#productGalleryMain").getAttribute("src");
+    await page.locator('[data-action="product-gallery-select"][data-index="1"]').click();
+    assert.notEqual(await page.locator("#productGalleryMain").getAttribute("src"), firstPhoto, "Clicking a thumbnail changes the active image");
+    await page.locator('[data-action="product-gallery-prev"]').click();
+    assert.equal(await page.locator("#productGalleryMain").getAttribute("src"), firstPhoto, "Gallery arrows navigate photos");
+    await noOverflow(page, "Product gallery " + width, "#modalContent");
+    await page.keyboard.press("Escape");
     await page.locator("#searchInput").fill("no-such-product");
     await page.locator("#productGrid .empty-state").waitFor();
     await noOverflow(page, "Empty catalog " + width);
