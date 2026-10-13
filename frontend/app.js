@@ -646,11 +646,31 @@
     if (!$("#dashboard").classList.contains("hidden") && state.dashboardSection === "wishlist") await renderDashboard();
   }
 
+  let productGalleryImages = [];
+
+  function selectProductGalleryImage(index) {
+    const image = $("#productGalleryMain");
+    if (!image || !productGalleryImages.length) return;
+    const next = (Number(index) + productGalleryImages.length) % productGalleryImages.length;
+    const current = Number.isFinite(next) ? next : 0;
+    image.src = productGalleryImages[current];
+    const counter = $("#productGalleryStatus");
+    if (counter) counter.textContent = `${current + 1} of ${productGalleryImages.length}`;
+    document.querySelectorAll("[data-action=product-gallery-select]").forEach(button => {
+      const selected = Number(button.dataset.index) === current;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+  }
+
   async function showProduct(productId) {
     const product = state.products.find(item => item.id === productId);
     if (!product) return;
     rememberRecentlyViewed(productId);
-    setModal(`<div class="product-modal"><div class="product-modal-image"><img src="${escapeHtml(safeImage(product.images?.[0]) || catalogFallbackImage(product))}" alt="${escapeHtml(product.name)}" loading="eager"></div><div class="product-modal-copy"><button class="close-modal" data-action="close-modal" aria-label="Close">×</button><div class="section-kicker">Campus marketplace</div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.description || "Details are provided by the retailer.")}</p><h3>Available listings</h3><label class="field detail-quantity-field">Quantity<input id="detailQuantity" type="number" min="1" max="100" value="1"></label><div id="productListings"><p class="api-state">Loading listings…</p></div><h3>Customer reviews</h3><div id="productReviews"><p class="api-state">Loading reviews…</p></div><div id="reviewFormSlot"></div></div></div>`, true);
+    productGalleryImages = [...new Set((product.images || []).map(safeImage).filter(Boolean))];
+    if (!productGalleryImages.length) productGalleryImages = [catalogFallbackImage(product)];
+    const galleryThumbnails = productGalleryImages.map((url, index) => `<button type="button" class="product-gallery-thumb ${index === 0 ? "active" : ""}" data-action="product-gallery-select" data-index="${index}" aria-pressed="${index === 0}" aria-label="View image ${index + 1}"><img src="${escapeHtml(url)}" alt="" loading="lazy"></button>`).join("");
+    setModal(`<div class="product-modal"><div class="product-gallery"><div class="product-main-image"><img id="productGalleryMain" src="${escapeHtml(productGalleryImages[0])}" alt="${escapeHtml(product.name)}" loading="eager"><button type="button" class="product-gallery-arrow previous" data-action="product-gallery-prev" aria-label="Previous product photo" ${productGalleryImages.length < 2 ? "disabled" : ""}>‹</button><button type="button" class="product-gallery-arrow next" data-action="product-gallery-next" aria-label="Next product photo" ${productGalleryImages.length < 2 ? "disabled" : ""}>›</button></div><div class="product-gallery-footer"><span id="productGalleryStatus">1 of ${productGalleryImages.length}</span><span>Product photos</span></div><div class="product-gallery-thumbnails" aria-label="Product photo gallery">${galleryThumbnails}</div></div><div class="product-modal-copy"><button class="close-modal" data-action="close-modal" aria-label="Close">×</button><div class="section-kicker">Campus marketplace</div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.description || "Details are provided by the retailer.")}</p><h3>Available listings</h3><label class="field detail-quantity-field">Quantity<input id="detailQuantity" type="number" min="1" max="100" value="1"></label><div id="productListings"><p class="api-state">Loading listings…</p></div><h3>Customer reviews</h3><div id="productReviews"><p class="api-state">Loading reviews…</p></div><div id="reviewFormSlot"></div></div></div>`, true);
     const listings = productListings(product);
     $("#productListings").innerHTML = listings.length ? listings.map(listing => `<div class="listing-row"><span><b>${escapeHtml(listing.retailer_name)}</b><small>${Number(listing.stock_available) > 0 ? `${Number(listing.stock_available)} available` : "Out of stock"}</small></span><span class="listing-price">${priceMarkup(listing)}</span><button class="add-button" data-action="add-cart" data-listing-id="${escapeHtml(listing.retailer_product_id)}" ${Number(listing.stock_available) < 1 ? "disabled" : ""}>Add</button></div>`).join("") : '<p>No active listings.</p>';
     try {
@@ -2102,6 +2122,9 @@
       return renderCatalog();
     }
     if (action === "product-details") return showProduct(button.dataset.productId);
+    if (action === "product-gallery-select") return selectProductGalleryImage(Number(button.dataset.index));
+    if (action === "product-gallery-prev") return selectProductGalleryImage((Number($("#productGalleryStatus")?.textContent?.split(" ")[0]) || 1) - 2);
+    if (action === "product-gallery-next") return selectProductGalleryImage(Number($("#productGalleryStatus")?.textContent?.split(" ")[0]) || 1);
     if (action === "add-cart") {
       const detailQuantity = $("#detailQuantity")?.value;
       await addToCart(button.dataset.listingId, detailQuantity || button.dataset.quantity || 1);
