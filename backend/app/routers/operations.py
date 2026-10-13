@@ -94,6 +94,8 @@ def set_availability(
     db: Session = Depends(get_db),
 ) -> dict:
     agent = _agent_profile(db, principal.user.id)
+    if payload.availability_status == "AVAILABLE" and not principal.user.profile_image_storage_key:
+        raise HTTPException(status_code=409, detail={"code": "rider_photo_required", "message": "Upload an identification photo and obtain approval before going online."})
     active = db.scalar(
         select(DeliveryAssignment.id).where(
             DeliveryAssignment.agent_id == principal.user.id,
@@ -189,6 +191,7 @@ def customer_order_tracking(
                 rider = {
                     "name": rider_user.name,
                     "transport_mode": agent.transport_mode,
+                    "profile_image_url": rider_user.profile_image_url,
                 }
                 rider_location = db.get(DeliveryAgentLocation, assignment.agent_id)
                 if rider_location is not None:
@@ -337,8 +340,12 @@ def accept_delivery(
     agent = db.scalar(select(DeliveryAgent).where(DeliveryAgent.user_id == principal.user.id).with_for_update())
     if agent is None or agent.verification_status != "VERIFIED":
         raise HTTPException(status_code=403, detail={"code": "agent_not_verified", "message": "A verified delivery profile is required."})
+    if not principal.user.profile_image_storage_key:
+        raise HTTPException(status_code=409, detail={"code": "rider_photo_required", "message": "An approved rider identification photo is required to accept deliveries."})
     if agent.availability_status != "AVAILABLE":
         raise HTTPException(status_code=409, detail={"code": "agent_offline", "message": "Set your delivery availability to available first."})
+    if not principal.user.profile_image_storage_key:
+        raise HTTPException(status_code=409, detail={"code": "rider_photo_required", "message": "An approved rider identification photo is required for delivery work."})
     active = db.scalar(
         select(DeliveryAssignment.id).where(
             DeliveryAssignment.agent_id == principal.user.id,
