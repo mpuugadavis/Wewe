@@ -1905,6 +1905,20 @@
         '<div class="stat-card"><span>Rider pending earnings</span><b class="stat-value">'+money(r.riders?.pending_earnings_ugx||0)+'</b><small>Awaiting payout</small></div>'+
         '<div class="stat-card"><span>Tracked obligations</span><b class="stat-value">'+money(r.controls?.third_party_obligations_tracked||0)+'</b><small>Accounting control total</small></div></div>');
     }
+    if (section === "agents") {
+      const agents = await apiFetch("/admin/delivery-agents");
+      return dashboardPage("Rider identity verification", "Review the face photo and contact details before approving delivery agents.",
+        `<div class="dashboard-toolbar"><strong>${agents.length} rider account(s)</strong></div>` +
+        (agents.map(agent => {
+          const src = safeImage(agent.profile_image_url);
+          return `<article class="dashboard-list-item admin-rider-identity"><div class="admin-rider-identity">` +
+            (src ? `<img src="${escapeHtml(src)}" alt="Identification photo for ${escapeHtml(agent.name)}">` : `<span class="missing-photo">No photo</span>`) +
+            `<div><b>${escapeHtml(agent.name)}</b><small>${escapeHtml(agent.phone || "No phone")} · ${escapeHtml(agent.transport_mode || "Rider")}</small><small>${escapeHtml(agent.availability_status || "OFFLINE")}</small></div></div>` +
+            `<div>${statusBadge(agent.verification_status)} ${agent.verification_status !== "VERIFIED" && src ? `<button class="button-primary" data-action="verify-agent" data-id="${escapeHtml(agent.user_id)}">Verify photo & rider</button>` : ""}` +
+            `${!src ? `<small class="rider-photo-warning">Photo required before approval</small>` : ""}</div></article>`;
+        }).join("") || dashboardEmpty("No riders yet.", "New delivery-agent applications will appear here.")));
+    }
+
     const paths={users:"/admin/users",retailers:"/admin/retailers",products:"/admin/products",orders:"/admin/orders",agents:"/admin/delivery-agents",reviews:"/admin/reviews",settings:"/admin/settings",audit:"/admin/audit-logs"};const data=await apiFetch(paths[section]);const rows=Array.isArray(data)?data:data.items||[];if(!rows.length)return dashboardPage(sectionLabel(section),`Manage ${sectionLabel(section).toLowerCase()} from one place.`,dashboardEmpty("Nothing here yet.","There are no records requiring action."));
     return dashboardPage(sectionLabel(section),`Manage ${sectionLabel(section).toLowerCase()} from one place.`,dashboardTable(["Item","Status","Details"],rows.map(raw=>({raw,cells:[`<b>${escapeHtml(raw.name||raw.business_name||raw.order_number||raw.action||raw.key||raw.id)}</b>`,escapeHtml(raw.verification_status||raw.status||""),escapeHtml(raw.email||raw.payment_status||raw.category_name||raw.resource_type||raw.availability_status||raw.value||"")]})),raw=>{
       const id=raw.id;
