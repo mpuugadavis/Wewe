@@ -1543,7 +1543,8 @@
           '<div class="retailer-product-price">' + money(price) + (original > price ? '<del>' + money(original) + '</del>' : '') + '</div>' +
           '<span class="retailer-stock ' + (stock <= 0 ? 'danger' : stock <= 5 ? 'warning' : 'good') + '">' + escapeHtml(stockLabel) + '</span>' +
           '<div class="retailer-product-actions"><button data-action="edit-retailer-product" data-listing-id="' + escapeHtml(listingId) +
-          '" data-name="' + escapeHtml(product.name || "") + '" data-price="' + price + '" data-original-price="' + original + '">Edit price</button>' +
+          '" data-name="' + escapeHtml(product.name || "") + '" data-description="' + escapeHtml(product.description || "") + '" data-price="' + price + '" data-original-price="' + original + '">Edit details</button>' +
+          '<button class="button-outline" data-wewe-upload-listing="' + escapeHtml(listingId) + '" data-wewe-upload-name="' + escapeHtml(product.name || "") + '">Manage photos</button>' +
           '<button class="button-outline" data-action="deactivate-retailer-product" data-listing-id="' + escapeHtml(listingId) + '">Deactivate</button></div></div></article>';
       }).filter(Boolean).join("");
       const content = '<div class="dashboard-toolbar retailer-product-toolbar"><div><strong>' + products.length + ' listings</strong><span class="muted"> · Keep prices and stock current</span></div><button class="button-primary" data-action="new-product">＋ Add product</button></div>' +
@@ -2043,7 +2044,7 @@
     await loadCatalog();
   }
   async function editRetailerProduct(button) {
-    setModal(`<div class="modal-head"><h2>Update listing</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="edit-retailer-product" data-listing-id="${escapeHtml(button.dataset.listingId)}" class="api-form"><p>${escapeHtml(button.dataset.name)}</p><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" value="${Number(button.dataset.price)}" required></label><label class="field">Old price (UGX) <small class="muted">Optional — must be higher than the current price</small><input name="original_price_ugx" type="number" min="1" step="1" value="${button.dataset.originalPrice ? Number(button.dataset.originalPrice) : ""}"></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Save pricing</button></form>`);
+    setModal(`<div class="modal-head"><h2>Update product details</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="edit-retailer-product" data-listing-id="${escapeHtml(button.dataset.listingId)}" class="api-form"><label class="field">Name<input name="name" maxlength="220" minlength="2" required value="${escapeHtml(button.dataset.name || "")}"></label><label class="field">Description<textarea name="description" maxlength="5000" rows="5" placeholder="Describe the product and its features">${escapeHtml(button.dataset.description || "")}</textarea></label><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" value="${Number(button.dataset.price)}" required></label><label class="field">Old price (UGX) <small class="muted">Optional — must be higher than current price</small><input name="original_price_ugx" type="number" min="1" step="1" value="${button.dataset.originalPrice ? Number(button.dataset.originalPrice) : ""}"></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Save product details</button></form>`);
   }
 
   async function updateRetailerProduct(form) {
@@ -2051,12 +2052,15 @@
     const price = Number(values.price_ugx);
     const original = values.original_price_ugx ? Number(values.original_price_ugx) : null;
     if (original !== null && original <= price) throw new Error("Old price must be higher than the current price.");
-    await apiFetch(`/retailers/me/products/${encodeURIComponent(form.dataset.listingId)}`, { method: "PATCH", body: JSON.stringify({ price_ugx: price, original_price_ugx: original }) });
-    showToast("Product pricing updated.");
+    await apiFetch(`/retailers/me/products/${encodeURIComponent(form.dataset.listingId)}`, { method: "PATCH", body: JSON.stringify({
+      name: values.name.trim(), description: values.description.trim() || null,
+      price_ugx: price, original_price_ugx: original
+    }) });
+    showToast("Product details updated.");
     closeModal();
     await renderDashboard();
+    await loadCatalog();
   }
-
   async function submitForm(form) {
     const message = $(".form-message", form);
     const submit = $('button[type="submit"], button:not([type])', form);
