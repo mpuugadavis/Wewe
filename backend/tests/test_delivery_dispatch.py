@@ -269,3 +269,31 @@ def test_accept_offer_marks_rider_busy_and_competing_offer_cancelled(database):
     assert agent is not None
     assert agent.availability_status == "BUSY"
     assert second.status == "CANCELLED"
+
+
+def test_retailer_mark_ready_dispatches_offer(database):
+    from app.dependencies import Principal
+    from app.routers.commerce import update_fulfillment
+    from sqlalchemy import select
+    assignment, rider, _ = _dispatch_fixture(database)
+    fulfillment = database.get(RetailerFulfillment, assignment.fulfillment_id)
+    retailer = database.get(Retailer, fulfillment.retailer_id)
+    fulfillment.status = "PREPARING"
+    fulfillment.ready_at = None
+    database.commit()
+    result = update_fulfillment(fulfillment.id, "ready", principal=Principal(database.get(User, retailer.user_id), uuid4()), db=database)
+    assert result["status"] == "READY"
+    offer = database.scalar(select(DeliveryOffer).where(DeliveryOffer.assignment_id == assignment.id))
+    assert offer.agent_id == rider.id
+    assert offer.created_at is not None and offer.updated_at is not None
+
+
+def test_admin_rider_list_exposes_eligibility_and_transport(database):
+    from app.routers.admin import list_delivery_agents
+    _, rider, _ = _dispatch_fixture(database)
+    rider.status = "SUSPENDED"
+    database.commit()
+    entries = list_delivery_agents(verification_status="VERIFIED", db=database)
+    entry = next(row for row in entries if row["user_id"] == rider.id)
+    assert entry["user_status"] == "SUSPENDED"
+    assert entry["transport_mode"] == "Bicycle"

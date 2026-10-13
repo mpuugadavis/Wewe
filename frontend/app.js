@@ -1754,9 +1754,21 @@
   }
 
   async function showAdminDeliveryAssignment(assignmentId) {
-    const agents = await apiFetch("/admin/delivery-agents?verification_status=VERIFIED");
-    const available = (agents || []).filter(agent => agent.availability_status === "AVAILABLE");
-    setModal(`<div class="modal-head"><div><div class="section-kicker">Dispatch</div><h2>Assign delivery</h2></div><button class="close-modal" data-action="close-modal">×</button></div>${available.length ? available.map(agent => `<button class="dashboard-list-item admin-assign-agent" data-action="admin-assign-delivery" data-assignment-id="${escapeHtml(assignmentId)}" data-agent-id="${escapeHtml(agent.user_id)}"><span><b>${escapeHtml(agent.name)}</b><small>${escapeHtml(agent.transport_mode || "Delivery agent")} · ${escapeHtml(agent.phone || "")}</small></span><b>Assign</b></button>`).join("") : '<div class="dashboard-empty"><h3>No verified rider is available</h3><p>Only verified, active and available riders can be assigned.</p></div>'}`);
+    const heading = `<div class="modal-head"><div><div class="section-kicker">WEWE DISPATCH</div><h2>Choose a rider</h2></div><button class="close-modal" data-action="close-modal" aria-label="Close rider selection">×</button></div>`;
+    setModal(heading + '<p class="api-state" role="status">Finding available riders…</p>');
+    const loading = $("#modalContent").lastElementChild;
+    try {
+      const agents = await apiFetch("/admin/delivery-agents?verification_status=VERIFIED");
+      if (!loading.isConnected) return;
+      const available = (agents || []).filter(agent => agent.availability_status === "AVAILABLE" && agent.user_status === "ACTIVE");
+      const cards = available.map(agent => {
+        const initials = String(agent.name || "Rider").trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("");
+        return `<button type="button" class="dispatch-rider" data-rider-search="${escapeHtml([agent.name, agent.phone, agent.transport_mode].join(" ").toLowerCase())}" data-action="admin-assign-delivery" data-assignment-id="${escapeHtml(assignmentId)}" data-agent-id="${escapeHtml(agent.user_id)}" aria-label="Assign ${escapeHtml(agent.name)}"><span class="dispatch-avatar" aria-hidden="true">${escapeHtml(initials)}</span><span class="dispatch-rider-info"><strong>${escapeHtml(agent.name)}</strong><span>${escapeHtml(agent.transport_mode || "Delivery rider")} · ${escapeHtml(agent.phone || "No phone listed")}</span><span class="dispatch-verified">✓ Verified · Available</span></span><span class="dispatch-select">Assign ↗</span></button>`;
+      }).join("");
+      setModal(heading + `<div class="dispatch-summary"><div><strong>A smooth handoff starts here.</strong><p>Choose an available rider to collect this delivery.</p></div><b>${available.length}<small>available</small></b></div>${available.length ? `<label class="dispatch-search">Find a rider<input id="dispatchRiderSearch" type="search" placeholder="Search name, phone or transport" autocomplete="off"></label><p class="dispatch-caption">VERIFIED RIDERS</p><div class="dispatch-rider-list">${cards}</div><p id="dispatchNoMatches" class="api-state" hidden>No riders match your search.</p>` : '<div class="dispatch-empty"><h3>No riders available right now</h3><p>Riders appear here when their account is active, verified and available.</p></div>'}<p id="dispatchFeedback" class="form-message" role="status" aria-live="polite"></p><div class="dispatch-footer"><span>Availability is checked again when you assign.</span><button class="button-outline" data-action="admin-show-delivery-assignment" data-assignment-id="${escapeHtml(assignmentId)}">Refresh riders</button></div>`);
+    } catch (error) {
+      if (loading.isConnected) setModal(heading + `<p class="api-error" role="alert">${escapeHtml(error.message)}</p><button class="button-primary" data-action="admin-show-delivery-assignment" data-assignment-id="${escapeHtml(assignmentId)}">Try again</button>`);
+    }
   }
 
   async function adminOrderAction(orderId, status) {
@@ -2124,7 +2136,17 @@
     if (action === "admin-order-fail") return adminOrderAction(button.dataset.id, "FAILED");
     if (action === "admin-show-delivery-assignment") return showAdminDeliveryAssignment(button.dataset.assignmentId);
     if (action === "admin-assign-delivery") {
-      await apiFetch(`/admin/deliveries/${encodeURIComponent(button.dataset.assignmentId)}/assign`, { method: "POST", body: JSON.stringify({ agent_user_id: button.dataset.agentId }) });
+      const choices = Array.from(document.querySelectorAll(".dispatch-rider, .dispatch-footer button"));
+      choices.forEach(choice => { choice.disabled = true; });
+      const feedback = $("#dispatchFeedback");
+      if (feedback) feedback.textContent = "Assigning rider…";
+      try {
+        await apiFetch(`/admin/deliveries/${encodeURIComponent(button.dataset.assignmentId)}/assign`, { method: "POST", body: JSON.stringify({ agent_user_id: button.dataset.agentId }) });
+      } catch (error) {
+        choices.forEach(choice => { choice.disabled = false; });
+        if (feedback) { feedback.className = "form-message api-error"; feedback.textContent = error.message; }
+        return;
+      }
       showToast("Delivery assigned.");
       closeModal();
       return renderDashboard();
@@ -2446,6 +2468,13 @@
       if (event.key === "Escape" && $("#modalBackdrop")?.classList.contains("open")) closeModal();
     });
 
+    on("#modalContent", "input", event => {
+      if (event.target.id !== "dispatchRiderSearch") return;
+      const query = event.target.value.trim().toLowerCase();
+      const cards = Array.from(document.querySelectorAll(".dispatch-rider"));
+      cards.forEach(card => { card.hidden = !card.dataset.riderSearch.includes(query); });
+      $("#dispatchNoMatches").hidden = cards.some(card => !card.hidden);
+    });
     on("#modalContent", "change", event => {
       if (event.target.closest('form[data-form="checkout"]')) {
         if (event.target.name === "delivery_point_id") selectCheckoutPoint(event.target.value);
