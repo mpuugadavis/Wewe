@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_BASE = document.querySelector('meta[name="wewe-api-base"]')?.content || "http://localhost:8000/api/v1";
+  const API_BASE = String(window.WEWE_API_BASE || document.querySelector('meta[name="wewe-api-base"]')?.content || "").trim() || (["localhost", "127.0.0.1"].includes(location.hostname) ? "http://localhost:8000/api/v1" : "/api/v1");
   const ACCESS_KEY = "wewe_access_token";
   const MAX_FILES = 12;
   const MAX_BYTES = 5 * 1024 * 1024;
@@ -15,6 +15,14 @@
       '"': "&quot;",
       "'": "&#39;"
     }[c]));
+  }
+
+  function mediaUrl(value) {
+    try {
+      const url = new URL(String(value || ""), new URL(API_BASE, location.href));
+      const local = url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname);
+      return (url.protocol === "https:" || local) && !url.username && !url.password ? url.href : "";
+    } catch { return ""; }
   }
 
   function toast(message) {
@@ -41,6 +49,16 @@
       .wewe-media-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:9px}
       .wewe-media-preview img{width:100%;height:90px;object-fit:cover;border-radius:10px;background:#eeeaf5}
       .wewe-media-progress{font-size:11px;color:#5b3db2;min-height:18px}
+      .wewe-media-existing{border:1px solid #e7dff0;padding:13px;border-radius:13px;background:#fff}
+      .wewe-media-existing h3{font-size:14px;margin:0 0 10px;color:#38274a}
+      .wewe-media-current{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+      .wewe-media-tile{border:1px solid #e3daef;border-radius:11px;padding:6px;display:grid;gap:7px}
+      .wewe-media-tile img{height:96px;width:100%;object-fit:cover;border-radius:7px;background:#f3edf9}
+      .wewe-media-tile strong{font-size:10px;color:#5b3db2}
+      .wewe-media-tile-actions{display:flex;flex-wrap:wrap;gap:4px}
+      .wewe-media-tile-actions button{border:1px solid #ddd6e6;border-radius:6px;padding:5px 7px;background:#fff;color:#564073;font-size:10px;cursor:pointer}
+      .wewe-media-tile-actions button:disabled{opacity:.35;cursor:not-allowed}
+      .wewe-media-note{font-size:11px;color:#81798b;margin:0}
     `;
     document.head.appendChild(style);
   }
@@ -78,6 +96,10 @@
         <button class="close-modal" data-action="close-modal" aria-label="Close">×</button>
       </div>
       <div class="wewe-media-modal">
+        <section class="wewe-media-existing" aria-label="Existing product images">
+          <h3>Product gallery</h3>
+          <div id="wewe-media-current" class="wewe-media-current" aria-live="polite"><p class="wewe-media-note">Loading photos…</p></div>
+        </section>
         <form id="wewe-media-form" class="api-form">
           <label class="field">Alt text <input name="alt_text" maxlength="250" placeholder="Describe the product image"></label>
           <div class="wewe-media-drop">
@@ -97,7 +119,60 @@
     const form = modal.querySelector("#wewe-media-form");
     const input = form.elements.files;
     const preview = modal.querySelector("#wewe-media-preview");
+    const gallery = modal.querySelector("#wewe-media-current");
+    const request = window.weweApiFetch;
+    let currentImages = [];
+    const reloadGallery = async () => {
+      if (typeof request !== "function") throw new Error("The WEWE API is not ready.");
+      currentImages = await request(`/retailers/me/products/${encodeURIComponent(listingId)}/images`);
+      if (!gallery.isConnected) return;
+      gallery.innerHTML = currentImages.length ? currentImages.map((item, index) => {
+        const src = mediaUrl(item.url);
+        return `<div class="wewe-media-tile">
+          ${src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.alt_text || `Product photo ${index + 1}`)}" loading="lazy">` : `<div class="wewe-media-note">Photo unavailable</div>`}
+          <strong>${index === 0 ? "Cover photo" : `Photo ${index + 1}`}</strong>
+          <div class="wewe-media-tile-actions">
+            <button type="button" data-media-action="left" data-index="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move photo left">←</button>
+            <button type="button" data-media-action="right" data-index="${index}" ${index === currentImages.length - 1 ? "disabled" : ""} aria-label="Move photo right">→</button>
+            <button type="button" data-media-action="delete" data-index="${index}" aria-label="Remove photo">Remove</button>
+          </div>
+        </div>`;
+      }).join("") : `<p class="wewe-media-note">No product photos yet. Add up to ${MAX_FILES} images below.</p>`;
+    };
+    gallery.addEventListener("click", async event => {
+      const control = event.target.closest("[data-media-action]");
+      if (!control) return;
+      event.preventDefault();
+      const index = Number(control.dataset.index);
+      const image = currentImages[index];
+      if (!image) return;
+      const action = control.dataset.mediaAction;
+      if (action === "delete" && !confirm("Remove this product photo?")) return;
+      gallery.querySelectorAll("button").forEach(button => { button.disabled = true; });
+      try {
+        if (action === "delete") {
+          await request(`/retailers/me/products/${encodeURIComponent(listingId)}/images/${encodeURIComponent(image.id)}`, { method: "DELETE" });
+          toast("Product photo removed.");
+        } else {
+          const target = index + (action === "left" ? -1 : 1);
+          if (target < 0 || target >= currentImages.length) return;
+          const ids = currentImages.map(item => item.id);
+          [ids[index], ids[target]] = [ids[target], ids[index]];
+          await request(`/retailers/me/products/${encodeURIComponent(listingId)}/images/order`, { method: "PATCH", body: JSON.stringify({ image_ids: ids }) });
+          toast("Product gallery order updated.");
+        }
+        await reloadGallery();
+        refreshRetailerProducts();
+      } catch (error) {
+        modal.querySelector(".form-message").textContent = error.message;
+        await reloadGallery().catch(() => {});
+      }
+    });
+    reloadGallery().catch(error => { gallery.innerHTML = `<p class="wewe-media-note">${escapeHtml(error.message)}</p>`; });
+    let pendingUploads = [];
     input.addEventListener("change", () => {
+      pendingUploads = [];
+      form.querySelector("button[type=submit]").textContent = "Upload images";
       preview.replaceChildren();
       [...input.files].slice(0, MAX_FILES).forEach(file => {
         const img = document.createElement("img");
@@ -110,35 +185,41 @@
 
     form.addEventListener("submit", async event => {
       event.preventDefault();
-      const files = [...input.files];
+      const files = pendingUploads.length ? pendingUploads : [...input.files];
       const message = modal.querySelector(".form-message");
       const progress = modal.querySelector("#wewe-media-progress");
       const submit = form.querySelector("button[type=submit]");
       message.textContent = "";
-      if (!files.length) {
-        message.textContent = "Choose at least one image.";
-        return;
-      }
-      if (files.length > MAX_FILES) {
-        message.textContent = `Choose no more than ${MAX_FILES} images at a time.`;
+      if (!files.length) { message.textContent = "Choose at least one image."; return; }
+      if (files.length > MAX_FILES || currentImages.length + files.length > MAX_FILES) {
+        message.textContent = `This product can have at most ${MAX_FILES} photos in total. Remove existing photos or select fewer files.`;
         return;
       }
       submit.disabled = true;
+      const failed = [];
+      const problems = [];
       try {
         for (let index = 0; index < files.length; index += 1) {
           progress.textContent = `Uploading image ${index + 1} of ${files.length}…`;
-          await uploadFile(listingId, files[index], form.elements.alt_text.value);
+          try { await uploadFile(listingId, files[index], form.elements.alt_text.value); }
+          catch (error) { failed.push(files[index]); problems.push(`${files[index].name}: ${error.message}`); }
         }
-        progress.textContent = "All images uploaded successfully.";
-        toast("Product images uploaded.");
-        setTimeout(() => {
-          backdrop.classList.remove("open");
-          document.body.classList.remove("modal-open");
-          refreshRetailerProducts();
-        }, 500);
+        pendingUploads = failed;
+        await reloadGallery();
+        refreshRetailerProducts();
+        if (failed.length) {
+          progress.textContent = `${files.length - failed.length} uploaded. ${failed.length} photo(s) need retry.`;
+          submit.textContent = "Retry failed photos";
+          message.textContent = problems.join("; ");
+        } else {
+          progress.textContent = "All selected images uploaded successfully."; 
+          toast("Product gallery updated.");
+          input.value = "";
+          preview.replaceChildren();
+          submit.textContent = "Upload more photos";
+        }
       } catch (error) {
         message.textContent = error.message;
-        progress.textContent = "";
       } finally {
         submit.disabled = false;
       }

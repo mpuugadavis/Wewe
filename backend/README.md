@@ -49,6 +49,27 @@ The seed command refuses to run unless `APP_ENV` is `development` or `test`. It 
 
 Readiness and liveness checks: `GET /health/ready` and `GET /health/live`.
 
+## Cloudflare R2 Product And Rider Photo Storage
+
+WEWE uses its existing S3-compatible storage driver for Cloudflare R2; no AWS S3 bucket, public bucket policy, or second media provider is necessary. Configure the backend deployment secrets (not the repository) with:
+
+```dotenv
+STORAGE_PROVIDER=S3
+STORAGE_BUCKET=YOUR_R2_BUCKET_NAME
+STORAGE_ENDPOINT=https://YOUR_CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com
+STORAGE_ACCESS_KEY=YOUR_R2_API_TOKEN_ACCESS_KEY_ID
+STORAGE_SECRET_KEY=YOUR_R2_API_TOKEN_SECRET_ACCESS_KEY
+# Optional: keep empty when the R2 bucket is private; the WEWE API serves images.
+STORAGE_PUBLIC_BASE_URL=
+MEDIA_MAX_UPLOAD_BYTES=5242880
+```
+
+Create an R2 API token scoped to the WEWE bucket with the permissions required for reading, uploading, listing and deleting media objects. Keep credentials only in local `.env` or a production secret store. Do not publish the bucket or expose API keys to the frontend.
+
+Product images are stored under `products/<product-id>/<content-hash>.<ext>`, limited to 12 validated JPEG, PNG, or WebP photos per product. Public catalog image URLs use `/api/v1/products/images/<image-id>?v=<content-hash>` and the API streams the object from R2. Rider and retailer photos are stored under `profiles/<user-id>/<content-hash>.<ext>` and served through `/api/v1/profile-images/<user-id>`. Changing a verified rider's ID photo sends the account back for admin review and sets it offline.
+
+Before public launch, confirm R2 bucket access with `GET /health/ready` and the admin System Health page, then execute the end-to-end journey: retailer creates a product with several images, reorders/removes an image, confirms customer visibility, rider uploads an identification photo, admin approves it, rider goes online, and customer sees the rider photo on assigned-order tracking. Verify the images still load in a browser after restarting the API container. Run `pytest`, `node frontend/smoke.js`, and the Playwright browser suite against the proposed revision.
+
 ## Tests
 
 ```powershell

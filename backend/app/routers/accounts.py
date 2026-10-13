@@ -65,6 +65,16 @@ def _replace_profile_image(user: User, file: UploadFile, db: Session) -> None:
         file.file.close()
 
     old_key = user.profile_image_storage_key
+    rider = db.get(DeliveryAgent, user.id) if user.role == "DELIVERY_AGENT" else None
+    if rider is not None and old_key != key:
+        active = db.scalar(
+            select(DeliveryAssignment.id).where(
+                DeliveryAssignment.agent_id == user.id,
+                DeliveryAssignment.status.in_(["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"]),
+            )
+        )
+        if active is not None:
+            raise HTTPException(status_code=409, detail={"code": "active_delivery", "message": "Complete your active delivery before changing your identification photo."})
     try:
         storage.put(key=key, content=io.BytesIO(sanitized), content_type=content_type, size_bytes=len(sanitized))
         user.profile_image_storage_key = key
@@ -72,6 +82,10 @@ def _replace_profile_image(user: User, file: UploadFile, db: Session) -> None:
         user.profile_image_size_bytes = len(sanitized)
         user.profile_image_width = width
         user.profile_image_height = height
+        if rider is not None and old_key != key and rider.verification_status == "VERIFIED":
+            # An admin must review a changed rider identification photo.
+            rider.verification_status = "PENDING"
+            rider.availability_status = "OFFLINE"
         db.commit()
     except MediaStorageError as exc:
         db.rollback()

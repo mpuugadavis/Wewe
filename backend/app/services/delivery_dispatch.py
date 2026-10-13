@@ -25,6 +25,7 @@ from app.models import (
     Order,
     Retailer,
     RetailerFulfillment,
+    User,
     utcnow,
 )
 
@@ -67,7 +68,10 @@ def _candidate_rows(db: Session, assignment: DeliveryAssignment) -> list[tuple[D
     rows = db.execute(
         select(DeliveryAgent, DeliveryAgentLocation)
         .join(DeliveryAgentLocation, DeliveryAgentLocation.agent_id == DeliveryAgent.user_id)
+        .join(User, User.id == DeliveryAgent.user_id)
         .where(
+            User.status == "ACTIVE",
+            User.profile_image_storage_key.is_not(None),
             DeliveryAgent.verification_status == "VERIFIED",
             DeliveryAgent.availability_status == "AVAILABLE",
             DeliveryAgentLocation.updated_at >= utcnow() - timedelta(seconds=RIDER_LOCATION_MAX_AGE_SECONDS),
@@ -318,6 +322,9 @@ def accept_offer(db: Session, agent_id: UUID, offer_id: UUID) -> DeliveryAssignm
         raise OfferUnavailableError("This delivery has already been assigned.")
     if agent.verification_status != "VERIFIED" or agent.availability_status != "AVAILABLE":
         raise OfferUnavailableError("You must be verified and available to accept this delivery.")
+    rider_user = db.get(User, agent_id)
+    if rider_user is None or rider_user.status != "ACTIVE" or not rider_user.profile_image_storage_key:
+        raise OfferUnavailableError("An approved rider identification photo is required before accepting deliveries.")
     if _active_assignment_exists(db, agent_id):
         raise OfferUnavailableError("Complete your active delivery before accepting another.")
 

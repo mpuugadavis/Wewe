@@ -63,7 +63,7 @@
     try {
       const raw = String(value || "").trim();
       if (!raw) return "";
-      if (raw.startsWith("/api/v1/")) return new URL(raw, API_BASE + "/").href;
+      if (raw.startsWith("/api/v1/")) return new URL(raw, new URL(API_BASE, location.href)).href;
       const url = new URL(raw, location.href);
       const isHttps = url.protocol === "https:";
       const isLocalMinio = url.protocol === "http:" &&
@@ -347,7 +347,7 @@
       const stock = Number(listing.stock_available || 0);
       const stockLabel = stock < 1 ? "Out of stock" : stock <= 5 ? stock + " left" : "In stock";
       const stockClass = stock < 1 ? "out" : stock <= 5 ? "low" : "";
-      return `<article class="product-card" data-product-id="${productId}" data-listing-id="${listingId}">
+      return `<article class="product-card" data-action="product-details" data-product-id="${productId}" data-listing-id="${listingId}" tabindex="0" role="group" aria-label="View ${escapeHtml(product.name)} details">
         <div class="product-image"><img class="catalog-image-fallback" src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_CATALOG_IMAGE}'">
           <button class="wish-button ${wished ? "is-wished" : ""}" aria-label="${wished ? "Remove from" : "Add to"} wishlist" data-action="toggle-wishlist" data-product-id="${productId}">${wished ? "♥" : "♡"}</button>
           <button class="quick-add" data-action="add-cart" data-listing-id="${listingId}" ${stock < 1 ? "disabled" : ""}>${stock < 1 ? "Unavailable" : "Quick add"}</button>
@@ -388,7 +388,7 @@
     target.innerHTML = rows.length ? rows.map(({ product, listing }) => {
       const image = safeImage(product.images?.[0]) || catalogFallbackImage(product);
       const stock = Number(listing.stock_available || 0);
-      return `<article class="product-card compact-product-card">
+      return `<article class="product-card compact-product-card" data-action="product-details" data-product-id="${escapeHtml(product.id)}" tabindex="0" role="group" aria-label="View ${escapeHtml(product.name)} details">
         <div class="product-image"><img class="catalog-image-fallback" src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_CATALOG_IMAGE}'">
           ${Number(listing.discount_percent || 0) > 0 ? `<span class="rail-discount">-${Number(listing.discount_percent)}%</span>` : ""}
         </div>
@@ -646,11 +646,34 @@
     if (!$("#dashboard").classList.contains("hidden") && state.dashboardSection === "wishlist") await renderDashboard();
   }
 
+  let productGalleryImages = [];
+  let productGalleryIndex = 0;
+
+  function selectProductGalleryImage(index) {
+    const image = $("#productGalleryMain");
+    if (!image || !productGalleryImages.length) return;
+    const next = (Number(index) + productGalleryImages.length) % productGalleryImages.length;
+    const current = Number.isFinite(next) ? next : 0;
+    productGalleryIndex = current;
+    image.src = productGalleryImages[current];
+    const counter = $("#productGalleryStatus");
+    if (counter) counter.textContent = `${current + 1} of ${productGalleryImages.length}`;
+    document.querySelectorAll("[data-action=product-gallery-select]").forEach(button => {
+      const selected = Number(button.dataset.index) === current;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+  }
+
   async function showProduct(productId) {
     const product = state.products.find(item => item.id === productId);
     if (!product) return;
     rememberRecentlyViewed(productId);
-    setModal(`<div class="product-modal"><div class="product-modal-image"><img src="${escapeHtml(safeImage(product.images?.[0]) || catalogFallbackImage(product))}" alt="${escapeHtml(product.name)}" loading="eager"></div><div class="product-modal-copy"><button class="close-modal" data-action="close-modal" aria-label="Close">×</button><div class="section-kicker">Campus marketplace</div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.description || "Details are provided by the retailer.")}</p><h3>Available listings</h3><label class="field detail-quantity-field">Quantity<input id="detailQuantity" type="number" min="1" max="100" value="1"></label><div id="productListings"><p class="api-state">Loading listings…</p></div><h3>Customer reviews</h3><div id="productReviews"><p class="api-state">Loading reviews…</p></div><div id="reviewFormSlot"></div></div></div>`, true);
+    productGalleryIndex = 0;
+    productGalleryImages = [...new Set((product.images || []).map(safeImage).filter(Boolean))];
+    if (!productGalleryImages.length) productGalleryImages = [catalogFallbackImage(product)];
+    const galleryThumbnails = productGalleryImages.map((url, index) => `<button type="button" class="product-gallery-thumb ${index === 0 ? "active" : ""}" data-action="product-gallery-select" data-index="${index}" aria-pressed="${index === 0}" aria-label="View image ${index + 1}"><img src="${escapeHtml(url)}" alt="" loading="lazy"></button>`).join("");
+    setModal(`<div class="product-modal product-detail-modal"><div class="product-gallery"><div class="product-main-image"><img id="productGalleryMain" src="${escapeHtml(productGalleryImages[0])}" alt="${escapeHtml(product.name)}" loading="eager"><button type="button" class="product-gallery-arrow previous" data-action="product-gallery-prev" aria-label="Previous product photo" ${productGalleryImages.length < 2 ? "disabled" : ""}>‹</button><button type="button" class="product-gallery-arrow next" data-action="product-gallery-next" aria-label="Next product photo" ${productGalleryImages.length < 2 ? "disabled" : ""}>›</button></div><div class="product-gallery-footer"><span id="productGalleryStatus">1 of ${productGalleryImages.length}</span><span>Product photos</span></div><div class="product-gallery-thumbnails" aria-label="Product photo gallery">${galleryThumbnails}</div></div><div class="product-modal-copy"><button class="close-modal" data-action="close-modal" aria-label="Close">×</button><div class="section-kicker">Campus marketplace</div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.description || "Details are provided by the retailer.")}</p><h3>Available listings</h3><label class="field detail-quantity-field">Quantity<input id="detailQuantity" type="number" min="1" max="100" value="1"></label><div id="productListings"><p class="api-state">Loading listings…</p></div><h3>Customer reviews</h3><div id="productReviews"><p class="api-state">Loading reviews…</p></div><div id="reviewFormSlot"></div></div></div>`, true);
     const listings = productListings(product);
     $("#productListings").innerHTML = listings.length ? listings.map(listing => `<div class="listing-row"><span><b>${escapeHtml(listing.retailer_name)}</b><small>${Number(listing.stock_available) > 0 ? `${Number(listing.stock_available)} available` : "Out of stock"}</small></span><span class="listing-price">${priceMarkup(listing)}</span><button class="add-button" data-action="add-cart" data-listing-id="${escapeHtml(listing.retailer_product_id)}" ${Number(listing.stock_available) < 1 ? "disabled" : ""}>Add</button></div>`).join("") : '<p>No active listings.</p>';
     try {
@@ -1509,7 +1532,7 @@
         const price = Number(listing.price_ugx || 0);
         const original = Number(listing.original_price_ugx || 0);
         const stock = Number(listing.stock_available || 0);
-        const images = Array.isArray(listing.image_urls) ? listing.image_urls : (Array.isArray(product.image_urls) ? product.image_urls : []);
+        const images = Array.isArray(product.images) ? product.images : [];
         const image = images.find(url => safeImage(url)) || "";
         const discount = original > price && price > 0 ? Math.round((1 - price / original) * 100) : 0;
         const stockLabel = stock <= 0 ? "Out of stock" : stock <= 5 ? "Low stock · " + stock : stock + " in stock";
@@ -1520,7 +1543,8 @@
           '<div class="retailer-product-price">' + money(price) + (original > price ? '<del>' + money(original) + '</del>' : '') + '</div>' +
           '<span class="retailer-stock ' + (stock <= 0 ? 'danger' : stock <= 5 ? 'warning' : 'good') + '">' + escapeHtml(stockLabel) + '</span>' +
           '<div class="retailer-product-actions"><button data-action="edit-retailer-product" data-listing-id="' + escapeHtml(listingId) +
-          '" data-name="' + escapeHtml(product.name || "") + '" data-price="' + price + '" data-original-price="' + original + '">Edit price</button>' +
+          '" data-name="' + escapeHtml(product.name || "") + '" data-description="' + escapeHtml(product.description || "") + '" data-price="' + price + '" data-original-price="' + original + '">Edit details</button>' +
+          '<button class="button-outline" data-wewe-upload-listing="' + escapeHtml(listingId) + '" data-wewe-upload-name="' + escapeHtml(product.name || "") + '">Manage photos</button>' +
           '<button class="button-outline" data-action="deactivate-retailer-product" data-listing-id="' + escapeHtml(listingId) + '">Deactivate</button></div></div></article>';
       }).filter(Boolean).join("");
       const content = '<div class="dashboard-toolbar retailer-product-toolbar"><div><strong>' + products.length + ' listings</strong><span class="muted"> · Keep prices and stock current</span></div><button class="button-primary" data-action="new-product">＋ Add product</button></div>' +
@@ -1705,7 +1729,7 @@
     if (section === "profile") {
       const profile = await profilePromise;
       const available = profile.availability_status === "AVAILABLE";
-      return dashboardPage("Rider profile","Keep your contact and transport details ready for delivery work.",`<div class="rider-profile-grid"><div class="rider-profile-card"><div class="rider-avatar-large" style="overflow:hidden">${safeImage(profile.profile_image_url) ? '<img src="' + escapeHtml(safeImage(profile.profile_image_url)) + '" alt="Rider profile picture" style="width:100%;height:100%;object-fit:cover">' : escapeHtml((state.user.name || "?").slice(0,1).toUpperCase())}</div><div><h3>${escapeHtml(state.user.name)}</h3><span>${escapeHtml(profile.verification_status || "PENDING")} verification</span></div><label class="button-outline" style="display:inline-flex;cursor:pointer">Choose picture<input data-profile-image type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div>
+      return dashboardPage("Rider profile","Keep your contact and transport details ready for delivery work.",`<div class="rider-profile-grid"><div class="rider-profile-card"><div class="rider-avatar-large" style="overflow:hidden">${safeImage(profile.profile_image_url) ? '<img src="' + escapeHtml(safeImage(profile.profile_image_url)) + '" alt="Rider profile picture" style="width:100%;height:100%;object-fit:cover">' : escapeHtml((state.user.name || "?").slice(0,1).toUpperCase())}</div><div><h3>${escapeHtml(state.user.name)}</h3><span>${escapeHtml(profile.verification_status || "PENDING")} verification</span></div>${!safeImage(profile.profile_image_url) ? '<p class="rider-photo-warning">An identification photo is required before WEWE can approve you for deliveries. Upload a clear picture showing your face.</p>' : ""}<label class="button-outline" style="display:inline-flex;cursor:pointer">Upload identification photo<input data-profile-image type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div>
       <form data-form="agent-profile" class="api-form dashboard-form rider-form"><label class="field">Phone<input name="phone" value="${escapeHtml(profile.phone || "")}" autocomplete="tel"></label><label class="field">Transport mode<input name="transport_mode" value="${escapeHtml(profile.transport_mode || "")}" placeholder="Bicycle, motorcycle, car…" maxlength="40"></label><button class="rider-primary-action">Save rider profile</button></form>
       <div class="rider-status-panel"><div><small>WORK STATUS</small><strong>${available ? "You are online" : "You are offline"}</strong><span>${available ? "New delivery offers can reach you." : "Go online when you are ready to receive work."}</span></div><button class="${available ? "rider-offline-button" : "rider-online-button"}" data-action="agent-availability" data-status="${available ? "OFFLINE" : "AVAILABLE"}">${available ? "Go offline" : "Go online"}</button></div></div>`);
     }
@@ -1881,6 +1905,20 @@
         '<div class="stat-card"><span>Rider pending earnings</span><b class="stat-value">'+money(r.riders?.pending_earnings_ugx||0)+'</b><small>Awaiting payout</small></div>'+
         '<div class="stat-card"><span>Tracked obligations</span><b class="stat-value">'+money(r.controls?.third_party_obligations_tracked||0)+'</b><small>Accounting control total</small></div></div>');
     }
+    if (section === "agents") {
+      const agents = await apiFetch("/admin/delivery-agents");
+      return dashboardPage("Rider identity verification", "Review the face photo and contact details before approving delivery agents.",
+        `<div class="dashboard-toolbar"><strong>${agents.length} rider account(s)</strong></div>` +
+        (agents.map(agent => {
+          const src = safeImage(agent.profile_image_url);
+          return `<article class="dashboard-list-item admin-rider-identity"><div class="admin-rider-identity">` +
+            (src ? `<img src="${escapeHtml(src)}" alt="Identification photo for ${escapeHtml(agent.name)}">` : `<span class="missing-photo">No photo</span>`) +
+            `<div><b>${escapeHtml(agent.name)}</b><small>${escapeHtml(agent.phone || "No phone")} · ${escapeHtml(agent.transport_mode || "Rider")}</small><small>${escapeHtml(agent.availability_status || "OFFLINE")}</small></div></div>` +
+            `<div>${statusBadge(agent.verification_status)} ${agent.verification_status !== "VERIFIED" && src ? `<button class="button-primary" data-action="verify-agent" data-id="${escapeHtml(agent.user_id)}">Verify photo & rider</button>` : ""}` +
+            `${!src ? `<small class="rider-photo-warning">Photo required before approval</small>` : ""}</div></article>`;
+        }).join("") || dashboardEmpty("No riders yet.", "New delivery-agent applications will appear here.")));
+    }
+
     const paths={users:"/admin/users",retailers:"/admin/retailers",products:"/admin/products",orders:"/admin/orders",agents:"/admin/delivery-agents",reviews:"/admin/reviews",settings:"/admin/settings",audit:"/admin/audit-logs"};const data=await apiFetch(paths[section]);const rows=Array.isArray(data)?data:data.items||[];if(!rows.length)return dashboardPage(sectionLabel(section),`Manage ${sectionLabel(section).toLowerCase()} from one place.`,dashboardEmpty("Nothing here yet.","There are no records requiring action."));
     return dashboardPage(sectionLabel(section),`Manage ${sectionLabel(section).toLowerCase()} from one place.`,dashboardTable(["Item","Status","Details"],rows.map(raw=>({raw,cells:[`<b>${escapeHtml(raw.name||raw.business_name||raw.order_number||raw.action||raw.key||raw.id)}</b>`,escapeHtml(raw.verification_status||raw.status||""),escapeHtml(raw.email||raw.payment_status||raw.category_name||raw.resource_type||raw.availability_status||raw.value||"")]})),raw=>{
       const id=raw.id;
@@ -1927,7 +1965,7 @@
       else if (rider) locationHtml = '<div class="tracking-location-muted"><b>Waiting for rider location</b><small>The rider is assigned, but a fresh GPS position is not available yet.</small></div>';
       else locationHtml = '<div class="tracking-location-muted"><b>Finding your rider</b><small>WEWE is dispatching this delivery to an eligible nearby rider.</small></div>';
       return '<article class="tracking-live-card"><div class="tracking-card-head"><div><span class="section-kicker">Delivery</span><h3>' + escapeHtml(delivery.retailer_name || "Campus retailer") + '</h3></div>' + statusBadge(delivery.status) + '</div>' +
-        (rider ? '<div class="tracking-rider"><div><b>' + escapeHtml(rider.name) + '</b><small>' + escapeHtml(rider.transport_mode || "Delivery agent") + '</small></div></div>' : '') +
+        (rider ? '<div class="tracking-rider">' + (safeImage(rider.profile_image_url) ? '<img class="tracking-rider-photo" src="' + escapeHtml(safeImage(rider.profile_image_url)) + '" alt="Photo of assigned rider">' : '') + '<div><b>' + escapeHtml(rider.name) + '</b><small>' + escapeHtml(rider.transport_mode || "Delivery agent") + '</small></div></div>' : '') +
         locationHtml + '<div class="tracking-route"><div><span>Pickup</span><b>' + escapeHtml(delivery.pickup?.name || "Retailer pickup") + '</b></div><span class="tracking-arrow">→</span><div><span>Drop-off</span><b>' + escapeHtml(delivery.dropoff?.name || "Your delivery point") + '</b></div></div></article>';
     }).join("");
   }
@@ -1961,47 +1999,66 @@
 
   async function newProduct() {
     const categories = state.categories.length ? state.categories : await apiFetch("/categories");
-    setModal(`<div class="modal-head"><h2>Add a product</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-product" class="api-form"><label class="field">Product name<input name="name" required minlength="2" maxlength="220"></label><label class="field">Description<textarea name="description"></textarea></label><label class="field">Category<select name="category_id" required>${categories.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" required></label><label class="field">Old price (UGX) <small class="muted">Optional — used to show a discount</small><input name="original_price_ugx" type="number" min="1" step="1" placeholder="e.g. 50000"></label><label class="field">Stock quantity<input name="stock_quantity" type="number" min="0" step="1" required></label><label class="field">Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple><small class="muted">JPEG, PNG or WebP · up to 12 photos · max 5 MiB each.</small></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Create product</button></form>`);
+    setModal(`<div class="modal-head"><h2>Add a product</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-product" class="api-form"><label class="field">Product name<input name="name" required minlength="2" maxlength="220"></label><label class="field">Description<textarea name="description" rows="4" maxlength="5000" placeholder="Describe the quality, sizes, colours, features and what is included."></textarea></label><label class="field">Category<select name="category_id" required>${categories.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" required></label><label class="field">Old price (UGX) <small class="muted">Optional — used to show a discount</small><input name="original_price_ugx" type="number" min="1" step="1" placeholder="e.g. 50000"></label><label class="field">Stock quantity<input name="stock_quantity" type="number" min="0" step="1" required></label><label class="field">Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple required><small class="muted">JPEG, PNG or WebP · up to 12 photos · max 5 MiB each.</small></label><p data-product-upload-progress class="muted" aria-live="polite"></p><p class="form-message" aria-live="polite"></p><button class="button-primary">Create product</button></form>`);
   }
 
   async function createProduct(form) {
     const values = Object.fromEntries(new FormData(form));
-    const files = [...(form.elements.images?.files || [])];
+    const files = form._wewePendingUploads || [...(form.elements.images?.files || [])];
+    if (!files.length) throw new Error("Choose at least one product photo before creating a listing.");
     if (files.length > 12) throw new Error("Choose no more than 12 product photos.");
     for (const file of files) {
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Only JPEG, PNG and WebP product photos are supported.");
-      if (file.size > 5 * 1024 * 1024) throw new Error("Each product photo must be 5 MiB or smaller.");
+      if (!file.size || file.size > 5 * 1024 * 1024) throw new Error("Each product photo must be between 1 byte and 5 MiB.");
     }
-    const product = await apiFetch("/retailers/me/products", { method: "POST", body: JSON.stringify({
-      name: values.name,
-      description: values.description || null,
-      category_id: values.category_id,
-      price_ugx: Number(values.price_ugx),
-      original_price_ugx: values.original_price_ugx ? Number(values.original_price_ugx) : null,
-      stock_quantity: Number(values.stock_quantity),
-      image_urls: []
-    }) });
-    const listingId = product?.listings?.[0]?.retailer_product_id;
-    let uploadFailures = 0;
-    if (listingId) {
-      for (const file of files) {
-        try {
-          const formData = new FormData();
-          formData.append("file", file, file.name);
-          formData.append("alt_text", values.name);
-          await apiFetch(`/retailers/me/products/${encodeURIComponent(listingId)}/images`, { method: "POST", body: formData });
-        } catch {
-          uploadFailures += 1;
-        }
+    let listingId = form.dataset.createdListingId;
+    if (!listingId) {
+      const product = await apiFetch("/retailers/me/products", { method: "POST", body: JSON.stringify({
+        name: values.name.trim(),
+        description: values.description?.trim() || null,
+        category_id: values.category_id,
+        price_ugx: Number(values.price_ugx),
+        original_price_ugx: values.original_price_ugx ? Number(values.original_price_ugx) : null,
+        stock_quantity: Number(values.stock_quantity),
+        image_urls: []
+      }) });
+      listingId = product?.listings?.[0]?.retailer_product_id;
+      if (!listingId) throw new Error("Product was created but the server did not return a listing ID. Refresh your products before retrying.");
+      form.dataset.createdListingId = listingId;
+      form._wewePendingUploads = files;
+    }
+    const progress = form.querySelector("[data-product-upload-progress]");
+    const remaining = [];
+    const problems = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      if (progress) progress.textContent = `Uploading photo ${index + 1} of ${files.length}…`;
+      try {
+        const formData = new FormData();
+        formData.append("file", file, file.name);
+        formData.append("alt_text", values.name.trim());
+        await apiFetch(`/retailers/me/products/${encodeURIComponent(listingId)}/images`, { method: "POST", body: formData });
+      } catch (error) {
+        remaining.push(file);
+        problems.push(`${file.name}: ${error.message}`);
       }
     }
-    showToast(uploadFailures ? "Product created, but one or more photos failed to upload." : "Product created successfully.");
+    form._wewePendingUploads = remaining;
+    if (remaining.length) {
+      if (progress) progress.textContent = `${files.length - remaining.length} photo(s) uploaded. ${remaining.length} remaining.`;
+      const button = form.querySelector("button.button-primary");
+      if (button) button.textContent = "Retry remaining photo uploads";
+      form.querySelectorAll("input:not([name=images]),textarea,select").forEach(control => { control.disabled = true; });
+      throw new Error(`Product saved, but ${remaining.length} photo(s) could not upload. Retry below. ${problems.join("; ")}`);
+    }
+    if (progress) progress.textContent = "All product photos uploaded."; 
+    showToast("Product and photos saved successfully.");
     closeModal();
     await renderDashboard();
+    await loadCatalog();
   }
-
   async function editRetailerProduct(button) {
-    setModal(`<div class="modal-head"><h2>Update listing</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="edit-retailer-product" data-listing-id="${escapeHtml(button.dataset.listingId)}" class="api-form"><p>${escapeHtml(button.dataset.name)}</p><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" value="${Number(button.dataset.price)}" required></label><label class="field">Old price (UGX) <small class="muted">Optional — must be higher than the current price</small><input name="original_price_ugx" type="number" min="1" step="1" value="${button.dataset.originalPrice ? Number(button.dataset.originalPrice) : ""}"></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Save pricing</button></form>`);
+    setModal(`<div class="modal-head"><h2>Update product details</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="edit-retailer-product" data-listing-id="${escapeHtml(button.dataset.listingId)}" class="api-form"><label class="field">Name<input name="name" maxlength="220" minlength="2" required value="${escapeHtml(button.dataset.name || "")}"></label><label class="field">Description<textarea name="description" maxlength="5000" rows="5" placeholder="Describe the product and its features">${escapeHtml(button.dataset.description || "")}</textarea></label><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" value="${Number(button.dataset.price)}" required></label><label class="field">Old price (UGX) <small class="muted">Optional — must be higher than current price</small><input name="original_price_ugx" type="number" min="1" step="1" value="${button.dataset.originalPrice ? Number(button.dataset.originalPrice) : ""}"></label><p class="form-message" aria-live="polite"></p><button class="button-primary">Save product details</button></form>`);
   }
 
   async function updateRetailerProduct(form) {
@@ -2009,12 +2066,15 @@
     const price = Number(values.price_ugx);
     const original = values.original_price_ugx ? Number(values.original_price_ugx) : null;
     if (original !== null && original <= price) throw new Error("Old price must be higher than the current price.");
-    await apiFetch(`/retailers/me/products/${encodeURIComponent(form.dataset.listingId)}`, { method: "PATCH", body: JSON.stringify({ price_ugx: price, original_price_ugx: original }) });
-    showToast("Product pricing updated.");
+    await apiFetch(`/retailers/me/products/${encodeURIComponent(form.dataset.listingId)}`, { method: "PATCH", body: JSON.stringify({
+      name: values.name.trim(), description: values.description.trim() || null,
+      price_ugx: price, original_price_ugx: original
+    }) });
+    showToast("Product details updated.");
     closeModal();
     await renderDashboard();
+    await loadCatalog();
   }
-
   async function submitForm(form) {
     const message = $(".form-message", form);
     const submit = $('button[type="submit"], button:not([type])', form);
@@ -2102,6 +2162,9 @@
       return renderCatalog();
     }
     if (action === "product-details") return showProduct(button.dataset.productId);
+    if (action === "product-gallery-select") return selectProductGalleryImage(Number(button.dataset.index));
+    if (action === "product-gallery-prev") return selectProductGalleryImage(productGalleryIndex - 1);
+    if (action === "product-gallery-next") return selectProductGalleryImage(productGalleryIndex + 1);
     if (action === "add-cart") {
       const detailQuantity = $("#detailQuantity")?.value;
       await addToCart(button.dataset.listingId, detailQuantity || button.dataset.quantity || 1);
@@ -2203,6 +2266,9 @@
     if (action === "agent-availability") {
       const nextStatus = button.dataset.status;
       if (nextStatus === "AVAILABLE") {
+        const riderProfile = await apiFetch("/deliveries/me/profile");
+        if (!safeImage(riderProfile.profile_image_url)) throw new Error("Upload a clear rider identification photo in your profile before going online.");
+        if (riderProfile.verification_status !== "VERIFIED") throw new Error("Your rider identification photo must be approved before you can go online.");
         if (!navigator.geolocation) throw new Error("Location sharing is required for delivery work.");
         let initialPosition;
         try {
@@ -2389,6 +2455,14 @@
       }
 
       if (target === $("#modalBackdrop")) closeModal();
+    });
+
+    document.addEventListener("keydown", event => {
+      if ((event.key === "Enter" || event.key === " ") && event.target instanceof Element &&
+          event.target.matches(".product-card[data-action=product-details]")) {
+        event.preventDefault();
+        showProduct(event.target.dataset.productId).catch(error => showToast(error.message));
+      }
     });
 
     document.addEventListener("change", async event => {

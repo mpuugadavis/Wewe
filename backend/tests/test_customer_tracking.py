@@ -59,6 +59,7 @@ def _tracking_fixture(database, client: TestClient):
         role="DELIVERY_AGENT",
         status="ACTIVE",
     )
+    rider_user.profile_image_storage_key = f"profiles/{rider_user.id}/{'f' * 64}.webp"
     database.add_all([retailer_user, rider_user])
     database.flush()
 
@@ -189,6 +190,7 @@ def test_customer_can_track_assigned_rider_location(client: TestClient, database
     assert body["deliveries"][0]["status"] == "OUT_FOR_DELIVERY"
     assert body["deliveries"][0]["rider"]["name"] == "Tracking Rider"
     assert body["deliveries"][0]["rider"]["transport_mode"] == "Bicycle"
+    assert body["deliveries"][0]["rider"]["profile_image_url"] == rider.profile_image_url
     assert body["deliveries"][0]["location_status"] == "LIVE"
     assert body["deliveries"][0]["location"]["latitude"] == 0.3485
     assert body["deliveries"][0]["location"]["longitude"] == 32.5815
