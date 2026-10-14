@@ -695,6 +695,7 @@
   async function signOut() {
     stopNotificationPolling();
     stopRiderLocationTracking();
+    state.riderOnline = false;
     syncRiderOfferPolling();
     const refreshToken = localStorage.getItem(REFRESH_KEY);
     try {
@@ -1871,7 +1872,7 @@
 
   function startNotificationPolling() {
     if (notificationRefreshTimer) clearInterval(notificationRefreshTimer);
-    notificationRefreshTimer = setInterval(refreshInAppNotifications, 5000);
+    notificationRefreshTimer = setInterval(() => { if (!document.hidden && state.user) refreshInAppNotifications(); }, 5000);
   }
 
   function stopNotificationPolling() {
@@ -1927,15 +1928,24 @@
     }, 25000);
   }
 
+  let riderOfferRefreshInFlight = false;
   function syncRiderOfferPolling() {
     if (state.riderOfferRefreshTimer) { clearInterval(state.riderOfferRefreshTimer); state.riderOfferRefreshTimer = null; }
-    if (state.user?.role === "DELIVERY_AGENT" && state.dashboardSection === "available") {
-      state.riderOfferRefreshTimer = setInterval(() => {
-        if (state.dashboardSection !== "available" || state.user?.role !== "DELIVERY_AGENT") return syncRiderOfferPolling();
-        renderDashboard().catch(() => {});
+    if (state.user?.role === "DELIVERY_AGENT" && state.dashboardSection === "available" && state.riderOnline) {
+      state.riderOfferRefreshTimer = setInterval(async () => {
+        if (state.dashboardSection !== "available" || state.user?.role !== "DELIVERY_AGENT" || !state.riderOnline) return syncRiderOfferPolling();
+        if (document.hidden || riderOfferRefreshInFlight) return;
+        riderOfferRefreshInFlight = true;
+        try { await renderDashboard(); } catch {} finally { riderOfferRefreshInFlight = false; }
       }, 5000);
     }
   }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && state.user?.role === "DELIVERY_AGENT" && state.dashboardSection === "available" && state.riderOnline && !riderOfferRefreshInFlight) {
+      riderOfferRefreshInFlight = true;
+      renderDashboard().catch(() => {}).finally(() => { riderOfferRefreshInFlight = false; });
+    }
+  });
 
   function riderOfferCard(offer) {
     const expiresIn = Math.max(0, Math.ceil((Date.parse(offer.expires_at) - Date.now()) / 1000));
@@ -1969,6 +1979,7 @@
         try { await startRiderLocationTracking({requireInitialFix: true}); } catch {}
       }
       const offers = profile.availability_status === "AVAILABLE" ? await apiFetch("/deliveries/me/offers") : [];
+      state.riderOnline = profile.availability_status === "AVAILABLE";
       syncRiderOfferPolling();
       return dashboardPage("Delivery offers", profile.availability_status === "AVAILABLE" ? "Fresh dispatch offers appear here while you are online." : "Go online to receive delivery offers.", `<div class="rider-offer-toolbar"><div><span class="rider-live-dot"></span><b>${profile.availability_status === "AVAILABLE" ? "Online and location sharing" : "Offline"}</b></div><button class="button-outline" data-action="agent-availability" data-status="${profile.availability_status === "AVAILABLE" ? "OFFLINE" : "AVAILABLE"}">${profile.availability_status === "AVAILABLE" ? "Go offline" : "Go online"}</button></div>${profile.availability_status !== "AVAILABLE" ? '<div class="rider-empty"><h3>You are offline</h3><p>Switch to online to become eligible for new delivery offers.</p></div>' : ((offers || []).map(riderOfferCard).join("") || '<div class="rider-empty"><h3>Waiting for dispatch</h3><p>Keep location sharing enabled. WEWE will offer eligible ready deliveries to you.</p></div>')}`);
     }
