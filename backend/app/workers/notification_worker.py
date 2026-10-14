@@ -14,6 +14,7 @@ import time
 from app.config import get_settings
 from app.db import SessionLocal
 from app.services.notification_outbox import process_outbox_batch
+from app.services.delivery_dispatch import dispatch_ready_queue
 from app.services.worker_health import mark_failure, mark_started, mark_success
 
 logger = logging.getLogger("wewe.notification_worker")
@@ -38,6 +39,13 @@ def run() -> None:
     with SessionLocal() as db:
         mark_started(db, "notification_outbox")
     while not _shutdown:
+        # Dispatch continues without an admin or rider repeatedly refreshing a page.
+        # A dispatch failure must not prevent already queued emails from being sent.
+        try:
+            with SessionLocal.begin() as db:
+                dispatch_ready_queue(db)
+        except Exception:
+            logger.exception("Automatic rider dispatch failed; will retry")
         started = time.monotonic()
         try:
             processed = process_outbox_batch(

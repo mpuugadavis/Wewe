@@ -68,6 +68,7 @@ from app.schemas import (
 )
 from app.services.orders import order_payload
 from app.services.delivery_dispatch import dispatch_ready_queue
+from app.services.verification_notifications import notify_verification
 from app.services.rider_payout_batches import (
     RiderPayoutBatchError,
     RiderPayoutNotFoundError,
@@ -328,7 +329,7 @@ def verify_retailer(
     retailer.verification_status = payload.status
     retailer.status = "ACTIVE" if payload.status == "VERIFIED" else retailer.status
     _audit(db, principal.user.id, "RETAILER_VERIFICATION_CHANGED", "retailer", retailer.id, {"from": previous, "to": payload.status, "reason": payload.reason})
-    db.add(NotificationOutbox(user_id=retailer.user_id, event_type=f"RETAILER_{payload.status}", payload={"retailer_id": str(retailer.id)}))
+    notify_verification(db, retailer.user_id, "RETAILER", previous, payload.status)
     db.commit()
     return {"id": retailer.id, "verification_status": retailer.verification_status, "status": retailer.status}
 
@@ -358,7 +359,9 @@ def verify_delivery_agent(
         rider_user = db.get(User, user_id)
         if rider_user is None or not rider_user.profile_image_storage_key:
             raise HTTPException(status_code=409, detail={"code": "rider_photo_required", "message": "Upload a rider identification photo before approval."})
+    previous = agent.verification_status
     agent.verification_status = payload.status
+    notify_verification(db, user_id, "RIDER", previous, payload.status)
     _audit(db, principal.user.id, "AGENT_VERIFICATION_CHANGED", "delivery_agent", user_id, {"to": payload.status, "reason": payload.reason})
     db.commit()
     return {"user_id": user_id, "verification_status": agent.verification_status}

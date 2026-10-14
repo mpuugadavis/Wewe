@@ -57,3 +57,11 @@ The public preview requires the hosting/domain and secret configuration above. T
 ## Demo image refresh
 
 Run `python -m app.seed_catalog --refresh-demo-images` in the configured non-production backend to replace seed-owned category photos with 28 distinct listing images and remove duplicate-size gallery entries. Retailer-uploaded photos are preserved. Shops without uploaded photos display personalised branded monograms; riders without identification photos display labelled placeholders and still require real approved face photos. No stock portrait is accepted as identification.
+
+## Verification and automatic dispatch
+
+Verification status changes now create both an in-app notice and an email job for retailers and riders with email addresses. Repeating the same status does not send duplicate notices. All three dashboard roles have a live notifications view, and unread messages appear in the dashboard header, including customer delivery codes.
+
+The notification worker also advances ready delivery offers every polling cycle, including when no dashboard is open. The nearest verified, available rider with an identification photo and a fresh GPS position receives the offer first. Acceptance makes that rider busy and issues the customer-only handover code through both notification channels. Rejection or expiry advances the offer to another eligible rider. A rider must be online and sharing location; the system does not invent a location or assign a busy rider.
+
+Seven existing demo retailer passwords were reset locally at the owner's request; credentials are not committed. Their example.invalid email addresses cannot receive email. Use real recipient addresses to test inbox delivery. Brevo SMTP authentication and a real demo login passed after the update; no unsolicited test email was sent. Focused backend tests: 32 passed. Browser regression checks, including the retailer notification view: passed at 360 and 1440 pixels.

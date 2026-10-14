@@ -1347,8 +1347,8 @@
   function dashboardMenu(role) {
     const common = [["overview","Overview"]];
     if(role==="CUSTOMER") return [...common,["orders","Orders"],["wishlist","Saved items"],["addresses","Delivery points"],["notifications","Notifications"],["profile","Profile"]];
-    if(role==="RETAILER") return [...common,["earnings","Earnings"],["products","Products"],["fulfillments","Fulfilments"],["profile","Store profile"]];
-    if(role==="DELIVERY_AGENT") return [...common,["available","Delivery offers"],["active","Active delivery"],["history","Delivery history"],["earnings","Earnings"],["profile","Rider profile"]];
+    if(role==="RETAILER") return [...common,["earnings","Earnings"],["products","Products"],["fulfillments","Fulfilments"],["notifications","Notifications"],["profile","Store profile"]];
+    if(role==="DELIVERY_AGENT") return [...common,["available","Delivery offers"],["active","Active delivery"],["history","Delivery history"],["earnings","Earnings"],["notifications","Notifications"],["profile","Rider profile"]];
     return [...common,["analytics","Analytics"],["users","Users"],["retailers","Retailers"],["products","Products"],["categories","Categories"],["orders","Orders"],["agents","Delivery agents"],["reviews","Reviews"],["settlements","Settlements"],["rider-payouts","Rider payouts"],["reconciliation","Reconciliation"],["settings","Settings"],["audit","Audit log"]];
   }
   async function renderDashboard() {
@@ -1368,12 +1368,14 @@
     $("#dashAccountRole").textContent = `${role.replaceAll("_", " ")} account`;
     $("#dashNav").innerHTML = `${nav.map(([key, label]) => `<button class="${key === state.dashboardSection ? "active" : ""}" data-action="dashboard-section" data-section="${key}">${label}</button>`).join("")}<button data-action="sign-out">Sign out</button><button data-action="storefront">Back to shop</button>`;
     $("#dashTitle").textContent = nav.find(([key]) => key === state.dashboardSection)?.[1] || "Overview";
+    $("#dashboardNotificationPreview")?.remove();
     $("#dashSubtitle").textContent = "Live information from your WEWE account.";
     $("#dashboardContent").innerHTML = '<p class="api-state">Loading your workspace…</p>';
-    const view = role === "CUSTOMER" ? await customerDashboard() :
+    const view = state.dashboardSection === "notifications" ? await notificationsDashboard() : role === "CUSTOMER" ? await customerDashboard() :
       role === "RETAILER" ? await retailerDashboard() :
       role === "DELIVERY_AGENT" ? await agentDashboard() : await adminDashboard();
     $("#dashboardContent").innerHTML = view;
+    refreshInAppNotifications();
     syncIncomePolling();
   }
 
@@ -1670,12 +1672,41 @@
 
 
 
+  function notificationRows(rows) {
+    return rows.map(x => `<div class="notification-row"><div><b>${escapeHtml((x.event_type || "WEWE update").replaceAll("_", " "))}</b><p>${escapeHtml(x.payload?.message || x.payload?.title || "You have a new WEWE update.")}</p></div>${x.read_at ? "" : `<button class="button-outline" data-action="read-notification" data-id="${escapeHtml(x.id)}">Mark read</button>`}</div>`).join("") || dashboardEmpty("You are all caught up.", "New notifications will appear here.");
+  }
+
+  async function notificationsDashboard() {
+    const rows = await apiFetch("/notifications?limit=50");
+    return dashboardPage("Notifications", "Verification, delivery and account updates.", `<div id="liveNotificationList">${notificationRows(rows)}</div>`);
+  }
+
   async function refreshInAppNotifications() {
     if (!state.user) return;
+    const notificationUser = state.user;
     try {
       const rows = await apiFetch("/notifications?unread_only=true&limit=20");
+      if (state.user !== notificationUser) return;
       state.unreadNotifications = rows || [];
       renderNotificationBadge();
+      if ($("#dashboard")?.classList.contains("hidden")) return;
+      const list = $("#liveNotificationList");
+      if (list) {
+        const all = await apiFetch("/notifications?limit=50");
+        if (state.user !== notificationUser) return;
+        if (list.isConnected) list.innerHTML = notificationRows(all);
+      }
+      let preview = $("#dashboardNotificationPreview");
+      if (!preview && $("#dashSubtitle")) {
+        preview = document.createElement("div");
+        preview.id = "dashboardNotificationPreview";
+        $("#dashSubtitle").insertAdjacentElement("afterend", preview);
+      }
+      if (preview) {
+        const messages = rows.filter(row => row.payload?.message).slice(0, 2);
+        preview.hidden = state.dashboardSection === "notifications" || !messages.length;
+        preview.innerHTML = messages.map(row => `<div class="notification-row"><p>${escapeHtml(row.payload.message)}</p><button class="button-outline" data-action="dashboard-section" data-section="notifications">View notifications</button></div>`).join("");
+      }
     } catch {}
   }
 

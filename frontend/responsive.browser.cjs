@@ -69,6 +69,7 @@ async function runCase(browser, engine, width, height = 900) {
         else response = products;
       } else if (endpoint === "/categories") response = categories;
       else if (endpoint === "/retailers") response = [{ id: "r1", slug: "campus-shop", business_name: "Campus community shop", product_count: 7 }];
+      else if (endpoint.startsWith("/notifications")) response = [{id:"notice1",event_type:"RETAILER_VERIFIED",payload:{message:"Your WEWE retailer account has been verified."},read_at:null}];
       else if (endpoint === "/auth/me") response = { id: "u1", name: "Campus shopper", role: accountRole, email: "shopper@example.com" };
       else if (endpoint === "/retailers/me/categories") response = { id: "new-category", name: body.name };
       else if (endpoint === "/retailers/me/products" && request.method() === "POST") response = { id: "new-product", listings: [{ retailer_product_id: "new-listing" }] };
@@ -239,6 +240,9 @@ async function runCase(browser, engine, width, height = 900) {
     await page.reload();
     await page.getByRole("button", { name: "My account", exact: true }).waitFor();
     await page.locator("#accountButton").click();
+    await page.locator('#dashNav [data-section="notifications"]').click();
+    await page.locator('#liveNotificationList').getByText("Your WEWE retailer account has been verified.", {exact:true}).waitFor();
+    await noOverflow(page, "Retailer notifications " + width);
     await page.locator('#dashNav [data-section="products"]').click();
     await page.locator('[data-action="new-product"]').first().click();
     const form = page.locator('form[data-form="new-product"]');
