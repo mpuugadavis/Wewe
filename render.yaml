@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+# Free sandbox only: worker execution pauses when Render spins this service down.
+services:
+  - type: web
+    name: wewe-sandbox
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./deploy/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/ready
+    autoDeployTrigger: "off"
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: PORT
+        value: "10000"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: RATE_LIMIT_STORAGE_URI
+        value: memory://
+      - key: NOTIFICATION_WORKER_POLL_SECONDS
+        value: "10"
+      - key: MAX_REQUEST_BODY_BYTES
+        value: "6291456"
+      - key: PAYMENT_MODE
+        value: EXTERNAL
+      - key: PAYMENT_PROVIDER
+        value: PAWAPAY
+      - key: PAWAPAY_ENVIRONMENT
+        value: SANDBOX
+      - key: PAWAPAY_API_BASE_URL
+        value: https://api.sandbox.pawapay.io
+      - key: PAWAPAY_API_TOKEN
+        sync: false
+      - key: OPENROUTESERVICE_API_KEY
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: S3
+      - key: STORAGE_BUCKET
+        sync: false
+      - key: STORAGE_ENDPOINT
+        sync: false
+      - key: STORAGE_ACCESS_KEY
+        sync: false
+      - key: STORAGE_SECRET_KEY
+        sync: false
+      - key: MEDIA_CLEANUP_DRY_RUN
+        value: "true"
+      - key: EMAIL_TRANSPORT
+        value: BREVO_API
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

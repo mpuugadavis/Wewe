@@ -4,12 +4,16 @@ on:
   pull_request:
     paths:
       - "backend/**"
+      - "deploy/**"
+      - "render.yaml"
       - ".github/workflows/phase-5-backend.yml"
   push:
     branches:
       - main
     paths:
       - "backend/**"
+      - "deploy/**"
+      - "render.yaml"
       - ".github/workflows/phase-5-backend.yml"
   workflow_dispatch:
 
@@ -32,10 +36,16 @@ jobs:
           python-version: "3.12"
 
       - name: Install backend and test dependencies
-        run: pip install ".[test]"
+        run: |
+          pip install -r requirements.lock
+          pip install ".[test]" -c requirements.lock
 
       - name: Run backend test suite
         run: pytest
 
       - name: Verify Alembic migration graph
+        env:
+          APP_ENV: test
+          SECRET_KEY: ci-test-secret-key-with-more-than-32-characters
+          DATABASE_URL: sqlite://
         run: alembic heads

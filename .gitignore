@@ -14,3 +14,12 @@ artifacts/
 **/.venv/
 **/*.egg-info/
 **/*.log
+
+**/node_modules/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+**/dist/
+**/build/
+**/*.db
+**/*.sqlite*

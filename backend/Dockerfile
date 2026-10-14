@@ -6,12 +6,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DEFAULT_TIMEOUT=120 \
     PIP_RETRIES=10
 WORKDIR /app/backend
+COPY requirements.lock ./
+RUN python -m pip install --no-cache-dir -r requirements.lock
 COPY pyproject.toml ./
 COPY app ./app
 COPY migrations ./migrations
 COPY alembic.ini ./
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel --retries 10 --timeout 120 \
-    && python -m pip install --no-cache-dir --no-build-isolation . --retries 10 --timeout 120
+RUN python -m pip install --no-cache-dir --no-deps --no-build-isolation .
 RUN useradd --create-home --uid 10001 wewe && chown -R wewe:wewe /app
 USER wewe
 EXPOSE 8000

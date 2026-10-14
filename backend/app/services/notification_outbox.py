@@ -75,7 +75,8 @@ def _email_handler(notification: NotificationOutbox) -> None:
         raise NotificationDispatchError("EMAIL notification requires a non-empty 'subject'")
     if not isinstance(body, str):
         raise NotificationDispatchError("EMAIL notification requires a string 'body'")
-    if not get_settings().smtp_host:
+    settings = get_settings()
+    if getattr(settings, "email_transport", "SMTP") == "SMTP" and not settings.smtp_host:
         raise NotificationChannelUnavailable("SMTP is not configured; email has not been sent")
     send_email(to_address.strip(), subject.strip(), body)
 

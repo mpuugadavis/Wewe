@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     flutterwave_environment: Literal["SANDBOX", "LIVE"] = "SANDBOX"
     rate_limit_storage_uri: str = "memory://"
     email_from: str = "no-reply@example.invalid"
+    email_transport: Literal["SMTP", "BREVO_API"] = "SMTP"
+    brevo_api_key: SecretStr | None = None
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
@@ -216,7 +218,9 @@ class Settings(BaseSettings):
             raise ValueError("Wildcard CORS origins are forbidden in production")
         if self.app_env == "production" and not self.trusted_host_list:
             raise ValueError("TRUSTED_HOSTS must contain at least one host in production")
-        if self.app_env == "production" and not self.smtp_host:
+        if self.email_transport == "BREVO_API" and not self.brevo_api_key:
+            raise ValueError("BREVO_API_KEY is required for EMAIL_TRANSPORT=BREVO_API")
+        if self.app_env == "production" and self.email_transport == "SMTP" and not self.smtp_host:
             raise ValueError("SMTP_HOST must be configured in production for account recovery")
         if self.app_env == "production" and not self.database_url.lower().startswith(("postgresql://", "postgresql+psycopg://")):
             raise ValueError("DATABASE_URL must use PostgreSQL in production")

@@ -165,7 +165,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         "Request validation failed request_id=%s path=%s errors=%s",
         request_id,
         request.url.path,
-        exc.errors(),
+        [{"loc": error.get("loc"), "type": error.get("type")} for error in exc.errors()],
         extra={"request_id": request_id, "environment": settings.app_env},
     )
     details = [

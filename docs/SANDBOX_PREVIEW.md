@@ -1,5 +1,7 @@
 # WEWE sandbox preview
 
+For a free public preview without buying a domain, use [the free deployment guide](FREE_DEPLOYMENT.md) and root `render.yaml`. The multi-service Docker instructions below remain the self-hosted alternative.
+
 ## What is included
 
 - Responsive header departments menu with accessible keyboard controls and category filtering, replacing the broken/repeated category photos.

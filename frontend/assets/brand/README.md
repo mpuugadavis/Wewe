@@ -19,4 +19,4 @@ Keep the viewBox and scale proportionally. Use at least 108 CSS pixels for the f
 
 For apparel/embroidery and single-ink packaging, use the symbol or monochrome logo. Recommended starting minimum print widths: full logo 35 mm, symbol 12 mm. Confirm stitch thickness and minimum gaps with the embroiderer before production. White artwork is intentionally transparent and needs a dark substrate. The assets remain editable in vector design tools and can be exported to EPS/PDF by a print supplier.
 
-Legacy `../wewe-logo.webp` and `../../index.backup.html` remain historical assets; the active frontend uses this SVG family.
+The active frontend uses this SVG family. Legacy raster branding and the old homepage backup are recoverable from Git history.
