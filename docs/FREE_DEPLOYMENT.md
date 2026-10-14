@@ -1,5 +1,20 @@
 # Free WEWE sandbox without a domain
 
+## Current public sandbox
+
+Live from 14 October 2026: https://wewe-sandbox.onrender.com
+
+- Render Free service: `srv-db7pa3ad0e5s73emac4g`, Frankfurt, confirmed workspace `tea-db6ukegm7kps73bedfeg`.
+- Source branch: `feature/catalog-navigation-launch-readiness`; deployed application commit `58e7655`.
+- Neon project `odd-mode-92589149`, branch `production`, migration head `0028_one_active_rider_delivery`.
+- 28 labelled demo products, seven categories and seven sample shops. Local customer/order data was not copied.
+- Brevo HTTPS API, existing Cloudflare R2 and OpenRouteService settings are configured privately in Render. PawaPay remains SANDBOX.
+- Readiness, R2 storage, catalogue and private administrator login passed over public HTTPS. Chrome checks passed at 390 and 1440 pixels with no page errors. Brevo API authentication passed; inbox delivery was not tested by sending an unsolicited message.
+- Initial administrator credentials are in the local, Git-ignored `.env.public-admin`. The Render API key stays local and is not injected into the application.
+- Automatic deployments are off. Push reviewed code, then trigger a deploy deliberately. No additional paid services were created. Free sleep/quota limits below still apply.
+
+The image removes Caddy's unneeded file capabilities so it can run under Render's restrictions; the fix was reproduced and verified locally with all capabilities dropped.
+
 This setup prepares a public testing site. It does not create cloud resources, sign up for accounts, move the local database, or enable real-money payments automatically. No paid resources are declared in `render.yaml`.
 
 ## Services and limits
