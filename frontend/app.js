@@ -543,8 +543,32 @@
         ${register ? '<label class="field">Phone<input name="phone" type="tel" autocomplete="tel"></label><label class="field hidden" data-register-business>Business name<input name="business_name" maxlength="180"></label><label class="field hidden" data-register-transport>Transport mode<input name="transport_mode" maxlength="40"></label>' : ""}
         ${passwordField("password", register ? "Create password" : "Password", register ? "new-password" : "current-password", register ? "12" : "1")}
         <p class="form-message" aria-live="polite"></p><button class="button-primary auth-submit" type="submit">${register ? "Create your account ↗" : "Sign in to WEWE ↗"}</button>
-      </form><button class="text-link" data-action="${register ? "show-login" : "show-register"}">${register ? "Already registered? Sign in" : "New to WEWE? Create an account"}</button>`, false);
+      </form>${register ? "" : '<button class="text-link" data-action="forgot-password">Forgot password?</button>'}<button class="text-link" data-action="${register ? "show-login" : "show-register"}">${register ? "Already registered? Sign in" : "New to WEWE? Create an account"}</button>`, false);
     if (register) updateRegistrationFields();
+  }
+
+  function showPasswordReset(confirm = false, requested = false) {
+    setModal(`<div class="modal-head"><div><div class="section-kicker">SECURE ACCOUNT RECOVERY</div><h2>${confirm ? "Set a new password" : "Forgot your password?"}</h2><p class="auth-subtitle">${confirm ? (requested ? "If an account uses that email, a reset code will arrive shortly. Check your spam folder too." : "Paste the reset code from your WEWE email. The code expires after 30 minutes.") : "Enter your account email and we’ll send a one-time reset code."}</p></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div>
+      <form data-form="${confirm ? "password-reset-confirm" : "password-reset-request"}" class="api-form auth-form">
+        ${confirm ? `<label class="field">Reset code<input name="token" required minlength="32" maxlength="256" autocomplete="one-time-code" autocapitalize="none" spellcheck="false"></label>${passwordField("new_password", "New password", "new-password", "12")}${passwordField("confirm_password", "Confirm new password", "new-password", "12")}<small>Use at least 12 characters and a password you haven’t used elsewhere.</small>` : '<label class="field">Account email<input name="identifier" type="email" required autocomplete="email" maxlength="320"></label>'}
+        <p class="form-message" aria-live="polite"></p><button class="button-primary auth-submit" type="submit">${confirm ? "Save new password" : "Send reset code"}</button>
+      </form>${confirm ? '<button class="text-link" data-action="forgot-password">Request another code</button>' : '<button class="text-link" data-action="enter-reset-code">I already have a reset code</button>'}<button class="text-link" data-action="show-login">Back to sign in</button>`, false);
+  }
+
+  async function submitPasswordReset(form, confirm) {
+    const body = Object.fromEntries(new FormData(form));
+    if (confirm) {
+      if (body.new_password !== body.confirm_password) throw new Error("The passwords do not match.");
+      delete body.confirm_password;
+      body.token = body.token.trim();
+      await apiFetch("/auth/password-reset/confirm", { method: "POST", body: JSON.stringify(body) }, false);
+      showAuth();
+      showToast("Password updated. Sign in with your new password.");
+    } else {
+      body.identifier = body.identifier.trim();
+      await apiFetch("/auth/password-reset/request", { method: "POST", body: JSON.stringify(body) }, false);
+      showPasswordReset(true, true);
+    }
   }
 
   function showRiderApplication() {
@@ -2189,6 +2213,8 @@
       const action = form.dataset.form;
       if (action === "login") await login(form);
       else if (action === "register") await register(form);
+      else if (action === "password-reset-request") await submitPasswordReset(form, false);
+      else if (action === "password-reset-confirm") await submitPasswordReset(form, true);
       else if (action === "rider-application") await submitRiderApplication(form);
       else if (action === "checkout") await placeOrder(form);
       else if (action === "address") await saveAddress(form);
@@ -2254,6 +2280,8 @@
     if (action === "show-register") return showAuth(true);
     if (action === "become-rider") return showRiderApplication();
     if (action === "show-login") return showAuth(false);
+    if (action === "forgot-password") return showPasswordReset();
+    if (action === "enter-reset-code") return showPasswordReset(true);
     if (action === "retry-catalog") return loadCatalog();
     if (action === "clear-search") { state.search = ""; state.activeCategory = "all"; state.availability = "all"; $("#searchInput").value = ""; $("#availabilityFilter").value = "all"; renderCategories(); return renderCatalog(); }
     if (action === "storefront") return showDashboard(false);

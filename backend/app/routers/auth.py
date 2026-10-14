@@ -14,6 +14,7 @@ from app.models import (
     CustomerProfile,
     DeliveryAgent,
     PasswordResetToken,
+    NotificationOutbox,
     RefreshToken,
     RefreshTokenFamily,
     Retailer,
@@ -215,16 +216,17 @@ def request_password_reset(
                 expires_at=utcnow() + timedelta(minutes=get_settings().password_reset_minutes),
             )
         )
-        db.commit()
-        if user.email and get_settings().smtp_host:
-            background_tasks.add_task(
-                send_email,
-                user.email,
-                "Reset your WEWE password",
-                f"Use this one-time token in the WEWE password reset form:\n\n{token_value}\n\nIt expires soon. If you did not request this, ignore this email.",
-            )
-        elif get_settings().app_env in {"development", "test"}:
+        settings = get_settings()
+        email_configured = bool(settings.smtp_host) or (
+            settings.email_transport == "BREVO_API" and bool(settings.brevo_api_key)
+        )
+        if user.email and email_configured:
+            db.add(NotificationOutbox(user_id=user.id, channel="EMAIL", event_type="PASSWORD_RESET",
+                payload={"to": user.email, "subject": "Reset your WEWE password",
+                         "body": f"Open WEWE, choose Sign in, then Forgot password? and I already have a reset code. Paste this one-time code:\n\n{token_value}\n\nThe code expires in {settings.password_reset_minutes} minutes. Share it with nobody. If you did not request a reset, ignore this email."}))
+        elif settings.app_env in {"development", "test"}:
             response["development_token"] = token_value
+        db.commit()
     return response
 
 

@@ -70,6 +70,8 @@ async function runCase(browser, engine, width, height = 900) {
       } else if (endpoint === "/categories") response = categories;
       else if (endpoint === "/retailers") response = [{ id: "r1", slug: "campus-shop", business_name: "Campus community shop", product_count: 7 }];
       else if (endpoint.startsWith("/notifications")) response = [{id:"notice1",event_type:"RETAILER_VERIFIED",payload:{message:"Your WEWE retailer account has been verified."},read_at:null}];
+      else if (endpoint === "/auth/password-reset/request") { response = {message:"If the account exists, instructions will be sent."}; status = 202; }
+      else if (endpoint === "/auth/password-reset/confirm") { response = null; status = 204; }
       else if (endpoint === "/auth/me") response = { id: "u1", name: "Campus shopper", role: accountRole, email: "shopper@example.com" };
       else if (endpoint === "/retailers/me/categories") response = { id: "new-category", name: body.name };
       else if (endpoint === "/retailers/me/products" && request.method() === "POST") response = { id: "new-product", listings: [{ retailer_product_id: "new-listing" }] };
@@ -161,6 +163,23 @@ async function runCase(browser, engine, width, height = 900) {
     await page.keyboard.press("Tab");
     assert.ok(await page.locator(".close-modal").evaluate(element => element === document.activeElement), "Dialog traps Tab");
     if (engine === "chromium" && [320, 768, 1440].includes(width)) await screenshot(page, engine + "-" + width + "-auth");
+    await page.locator('[data-action="forgot-password"]').click();
+    const resetRequest = page.locator('form[data-form="password-reset-request"]');
+    await resetRequest.locator('[name="identifier"]').fill("owner@example.com");
+    await resetRequest.locator('button[type="submit"]').click();
+    const resetConfirm = page.locator('form[data-form="password-reset-confirm"]');
+    await resetConfirm.waitFor();
+    await resetConfirm.locator('[name="token"]').fill("x".repeat(43));
+    await resetConfirm.locator('[name="new_password"]').fill("a-new-private-password");
+    await resetConfirm.locator('[name="confirm_password"]').fill("a-different-password");
+    await resetConfirm.locator('button[type="submit"]').click();
+    await resetConfirm.getByText("The passwords do not match.", {exact:true}).waitFor();
+    assert.equal(calls.filter(call => call.endpoint === "/auth/password-reset/confirm").length, 0);
+    await resetConfirm.locator('[name="confirm_password"]').fill("a-new-private-password");
+    await noOverflow(page, "Password reset " + width, "#modalContent");
+    await resetConfirm.locator('button[type="submit"]').click();
+    await page.locator('form[data-form="login"]').waitFor();
+    assert.ok(calls.some(call => call.endpoint === "/auth/password-reset/confirm" && call.body.new_password === "a-new-private-password" && !("confirm_password" in call.body)));
     await page.keyboard.press("Escape");
     assert.ok(await page.locator("#accountButton").evaluate(element => element === document.activeElement), "Dialog restores focus");
     await page.evaluate(() => { localStorage.setItem("wewe_access_token", "fixture-token"); });
