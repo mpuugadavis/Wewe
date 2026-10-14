@@ -9,6 +9,9 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   // Initialize notification polling state before startup can invoke the polling function.
   let notificationRefreshTimer = null;
+  let pendingWishlistProduct = null;
+  const wishlistRequests = new Set();
+  let maintenance = { maintenance: false, message: "" };
 
   const state = {
     user: null,
@@ -236,8 +239,35 @@
     }
     if (response.status === 204) return null;
     const payload = await response.json().catch(() => null);
+    if (response.status === 503 && payload?.error?.code === "maintenance") {
+      maintenance = { maintenance: true, message: payload.error.message };
+      renderMaintenance();
+    }
     if (!response.ok) throw new ApiError(messageFrom(payload, response.status), response.status, payload);
     return payload;
+  }
+
+  function renderMaintenance() {
+    let screen = $("#maintenanceScreen");
+    if (!screen) {
+      screen = document.createElement("section");
+      screen.id = "maintenanceScreen";
+      screen.className = "maintenance-screen hidden";
+      document.body.appendChild(screen);
+    }
+    const visible = maintenance.maintenance && state.user?.role !== "ADMIN" && !$("#modalBackdrop").classList.contains("open");
+    screen.classList.toggle("hidden", !visible);
+    if (visible) screen.innerHTML = `<div class="maintenance-card"><span class="section-kicker">WEWE · A LITTLE BIT OF EVERYTHING</span><div class="maintenance-symbol" aria-hidden="true">⚙</div><h1>We’ll be back shortly.</h1><p>${escapeHtml(maintenance.message)}</p><button class="button-primary" data-action="maintenance-refresh">Check again</button><button class="text-link" data-action="maintenance-admin">Admin sign in</button></div>`;
+  }
+
+  async function refreshMaintenance() {
+    const wasEnabled = maintenance.maintenance;
+    maintenance = await apiFetch("/system/status");
+    renderMaintenance();
+    if (wasEnabled && !maintenance.maintenance) {
+      await loadCatalog();
+      if (state.user?.role === "CUSTOMER") await loadCurrentUser();
+    }
   }
 
   window.weweApiFetch = apiFetch;
@@ -264,6 +294,7 @@
     stopOrderTracking();
     $("#modalBackdrop").classList.remove("open");
     document.body.classList.remove("modal-open");
+    renderMaintenance();
   }
 
   function statusBadge(status) {
@@ -349,7 +380,7 @@
       const stockClass = stock < 1 ? "out" : stock <= 5 ? "low" : "";
       return `<article class="product-card" data-action="product-details" data-product-id="${productId}" data-listing-id="${listingId}" tabindex="0" role="group" aria-label="View ${escapeHtml(product.name)} details">
         <div class="product-image"><img class="catalog-image-fallback" src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_CATALOG_IMAGE}'">
-          <button class="wish-button ${wished ? "is-wished" : ""}" aria-label="${wished ? "Remove from" : "Add to"} wishlist" data-action="toggle-wishlist" data-product-id="${productId}">${wished ? "♥" : "♡"}</button>
+          <button class="wish-button ${wished ? "is-wished" : ""}" aria-pressed="${wished}" aria-label="${wished ? "Remove from" : "Add to"} wishlist" data-action="toggle-wishlist" data-product-id="${productId}">${wished ? "♥" : "♡"}</button>
           <button class="quick-add" data-action="add-cart" data-listing-id="${listingId}" ${stock < 1 ? "disabled" : ""}>${stock < 1 ? "Unavailable" : "Quick add"}</button>
         </div>
         <div class="product-info">
@@ -601,7 +632,15 @@
     saveTokens(tokens);
     await loadCurrentUser();
     closeModal();
+    renderMaintenance();
+    if (state.user.role === "ADMIN" && maintenance.maintenance) {
+      await loadCatalog();
+      showDashboard(true);
+    }
     showToast(`Signed in as ${state.user.name}.`);
+    const productToSave = pendingWishlistProduct;
+    pendingWishlistProduct = null;
+    if (productToSave && state.user.role === "CUSTOMER" && !state.wishlist.has(productToSave)) await toggleWishlist(productToSave);
   }
 
   async function register(form) {
@@ -631,6 +670,7 @@
   async function loadCurrentUser() {
     state.user = await apiFetch("/auth/me");
     updateAccountButton();
+    if (maintenance.maintenance && state.user.role !== "ADMIN") return;
     if (state.user.role === "CUSTOMER") {
       const [cart, wishlist, profile, points] = await Promise.all([
         apiFetch("/cart"), apiFetch("/wishlist"), apiFetch("/users/me/profile"), apiFetch("/locations/me/delivery-points")
@@ -667,19 +707,30 @@
   }
 
   async function toggleWishlist(productId) {
-    if (!state.user) return showAuth();
+    if (!state.user) { pendingWishlistProduct = productId; return showAuth(); }
     if (state.user.role !== "CUSTOMER") return showToast("Wishlist is available to customer accounts.");
-    if (state.wishlist.has(productId)) {
-      await apiFetch(`/wishlist/${encodeURIComponent(productId)}`, { method: "DELETE" });
-      state.wishlist.delete(productId);
-      showToast("Removed from your wishlist.");
-    } else {
-      await apiFetch("/wishlist", { method: "POST", body: JSON.stringify({ product_id: productId }) });
-      state.wishlist.add(productId);
-      showToast("Saved to your wishlist.");
-    }
-    renderCatalog();
-    if (!$("#dashboard").classList.contains("hidden") && state.dashboardSection === "wishlist") await renderDashboard();
+    if (wishlistRequests.has(productId)) return;
+    wishlistRequests.add(productId);
+    try {
+      if (state.wishlist.has(productId)) {
+        await apiFetch(`/wishlist/${encodeURIComponent(productId)}`, { method: "DELETE" });
+        state.wishlist.delete(productId);
+        showToast("Removed from your wishlist.");
+      } else {
+        await apiFetch("/wishlist", { method: "POST", body: JSON.stringify({ product_id: productId }) });
+        state.wishlist.add(productId);
+        showToast("Saved to your wishlist.");
+      }
+      renderCatalog();
+      document.querySelectorAll('[data-action="toggle-wishlist"][data-product-id]').forEach(button => {
+        if (button.dataset.productId !== productId) return;
+        const saved = state.wishlist.has(productId);
+        button.setAttribute("aria-pressed", String(saved));
+        button.setAttribute("aria-label", saved ? "Remove from wishlist" : "Add to wishlist");
+        button.textContent = button.classList.contains("wish-button") ? (saved ? "♥" : "♡") : (saved ? "Remove from wishlist" : "Add to wishlist");
+      });
+      if (!$("#dashboard").classList.contains("hidden") && state.dashboardSection === "wishlist") await renderDashboard();
+    } finally { wishlistRequests.delete(productId); }
   }
 
   let productGalleryImages = [];
@@ -702,14 +753,13 @@
   }
 
   async function showProduct(productId) {
-    const product = state.products.find(item => item.id === productId);
-    if (!product) return;
+    const product = state.products.find(item => item.id === productId) || await apiFetch(`/products/${encodeURIComponent(productId)}`);
     rememberRecentlyViewed(productId);
     productGalleryIndex = 0;
     productGalleryImages = [...new Set((product.images || []).map(safeImage).filter(Boolean))];
     if (!productGalleryImages.length) productGalleryImages = [catalogFallbackImage(product)];
     const galleryThumbnails = productGalleryImages.map((url, index) => `<button type="button" class="product-gallery-thumb ${index === 0 ? "active" : ""}" data-action="product-gallery-select" data-index="${index}" aria-pressed="${index === 0}" aria-label="View image ${index + 1}"><img src="${escapeHtml(url)}" alt="" loading="lazy"></button>`).join("");
-    setModal(`<div class="product-modal product-detail-modal"><div class="product-gallery"><div class="product-main-image"><img id="productGalleryMain" src="${escapeHtml(productGalleryImages[0])}" alt="${escapeHtml(product.name)}" loading="eager"><button type="button" class="product-gallery-arrow previous" data-action="product-gallery-prev" aria-label="Previous product photo" ${productGalleryImages.length < 2 ? "disabled" : ""}>‹</button><button type="button" class="product-gallery-arrow next" data-action="product-gallery-next" aria-label="Next product photo" ${productGalleryImages.length < 2 ? "disabled" : ""}>›</button></div><div class="product-gallery-footer"><span id="productGalleryStatus">1 of ${productGalleryImages.length}</span><span>Product photos</span></div><div class="product-gallery-thumbnails" aria-label="Product photo gallery">${galleryThumbnails}</div></div><div class="product-modal-copy"><button class="close-modal" data-action="close-modal" aria-label="Close">×</button><div class="section-kicker">Campus marketplace</div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.description || "Details are provided by the retailer.")}</p><h3>Available listings</h3><label class="field detail-quantity-field">Quantity<input id="detailQuantity" type="number" min="1" max="100" value="1"></label><div id="productListings"><p class="api-state">Loading listings…</p></div><h3>Customer reviews</h3><div id="productReviews"><p class="api-state">Loading reviews…</p></div><div id="reviewFormSlot"></div></div></div>`, true);
+    setModal(`<div class="product-modal product-detail-modal"><div class="product-gallery"><div class="product-main-image"><img id="productGalleryMain" src="${escapeHtml(productGalleryImages[0])}" alt="${escapeHtml(product.name)}" loading="eager"><button type="button" class="product-gallery-arrow previous" data-action="product-gallery-prev" aria-label="Previous product photo" ${productGalleryImages.length < 2 ? "disabled" : ""}>‹</button><button type="button" class="product-gallery-arrow next" data-action="product-gallery-next" aria-label="Next product photo" ${productGalleryImages.length < 2 ? "disabled" : ""}>›</button></div><div class="product-gallery-footer"><span id="productGalleryStatus">1 of ${productGalleryImages.length}</span><span>Product photos</span></div><div class="product-gallery-thumbnails" aria-label="Product photo gallery">${galleryThumbnails}</div></div><div class="product-modal-copy"><button class="close-modal" data-action="close-modal" aria-label="Close">×</button><div class="section-kicker">Campus marketplace</div><h2>${escapeHtml(product.name)}</h2><p>${escapeHtml(product.description || "Details are provided by the retailer.")}</p><button type="button" class="button-outline" data-action="toggle-wishlist" data-product-id="${escapeHtml(productId)}" aria-pressed="${state.wishlist.has(productId)}">${state.wishlist.has(productId) ? "Remove from wishlist" : "Add to wishlist"}</button><h3>Available listings</h3><label class="field detail-quantity-field">Quantity<input id="detailQuantity" type="number" min="1" max="100" value="1"></label><div id="productListings"><p class="api-state">Loading listings…</p></div><h3>Customer reviews</h3><div id="productReviews"><p class="api-state">Loading reviews…</p></div><div id="reviewFormSlot"></div></div></div>`, true);
     const listings = productListings(product);
     $("#productListings").innerHTML = listings.length ? listings.map(listing => `<div class="listing-row"><span><b>${escapeHtml(listing.retailer_name)}</b><small>${Number(listing.stock_available) > 0 ? `${Number(listing.stock_available)} available` : "Out of stock"}</small></span><span class="listing-price">${priceMarkup(listing)}</span><button class="add-button" data-action="add-cart" data-listing-id="${escapeHtml(listing.retailer_product_id)}" ${Number(listing.stock_available) < 1 ? "disabled" : ""}>Add</button></div>`).join("") : '<p>No active listings.</p>';
     try {
@@ -1435,9 +1485,17 @@
   }
 
   async function customerDashboard() {
-    const section=state.dashboardSection, orders=await apiFetch("/orders"), notes=await apiFetch("/notifications"), points=await apiFetch("/locations/me/delivery-points");
+    const section = state.dashboardSection;
+    if (section === "wishlist") {
+      const items = await apiFetch("/wishlist");
+      state.wishlist = new Set(items.map(item => item.product_id));
+      return dashboardPage("My wishlist", "Your saved products, ready whenever you are.", items.map(item => {
+        const listing = item.listings?.[0];
+        return `<article class="wishlist-item"><img src="${escapeHtml(safeImage(item.images?.[0]) || catalogFallbackImage(item))}" alt="${escapeHtml(item.name)}" loading="lazy"><div><button class="text-link" data-action="product-details" data-product-id="${escapeHtml(item.product_id)}">${escapeHtml(item.name)}</button><p>${escapeHtml(listing?.retailer_name || "Currently unavailable")}</p>${listing ? `<b>${money(listing.price_ugx)}</b>` : ""}</div><div class="wishlist-actions"><button class="button-outline" data-action="product-details" data-product-id="${escapeHtml(item.product_id)}">View product</button><button class="text-link" data-action="toggle-wishlist" data-product-id="${escapeHtml(item.product_id)}">Remove from wishlist</button></div></article>`;
+      }).join("") || dashboardEmpty("Your wishlist is empty.", "Tap a product’s heart button to save it here."));
+    }
+    const [orders, notes, points] = await Promise.all([apiFetch("/orders"), apiFetch("/notifications"), apiFetch("/locations/me/delivery-points")]);
     if(section==="orders") return dashboardPage("My orders","Open Track order for live delivery progress. Updates every 5 seconds.",renderOrders(orders,true));
-    if(section==="wishlist"){const items=await apiFetch("/wishlist");return dashboardPage("Saved items","Products you want to come back to.",(items||[]).map(x=>`<div class="dashboard-list-item"><div><b>${escapeHtml(x.product_name||x.name)}</b><small>${escapeHtml(x.retailer_name||"Campus retailer")}</small></div><b>${money(x.price_ugx)}</b></div>`).join("")||dashboardEmpty("No saved products yet.","Browse the shop and save items you like."));}
     if(section==="addresses") return dashboardPage("Delivery points","Manage where WEWE should bring your orders.",`<div class="dashboard-toolbar"><button class="button-primary" data-action="new-address">Add delivery point</button></div>${points.map(x=>`<div class="dashboard-list-item"><div><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.directions||"Saved campus destination")}</small></div><button class="button-outline" data-action="delete-address" data-id="${escapeHtml(x.id)}">Remove</button></div>`).join("")||dashboardEmpty("No delivery points.","Add a hall, hostel or approved pickup destination.")}`);
     if(section==="notifications"){const notes=await apiFetch("/notifications?limit=50");return dashboardPage("Notifications","Important updates from your WEWE activity.",notes.map(x=>`<div class="notification-row"><div><b>${escapeHtml(x.event_type||"WEWE update")}</b><small>${escapeHtml(x.created_at||"")}</small><p>${escapeHtml(x.payload?.message||x.payload?.title||"You have a new WEWE update.")}</p></div>${x.read_at?"":`<button class="button-outline" data-action="read-notification" data-id="${escapeHtml(x.id)}">Mark read</button>`}</div>`).join("")||dashboardEmpty("You are all caught up.","New notifications will appear here."));}if(section==="profile"){const profile=await apiFetch("/users/me/profile");return dashboardPage("Profile & preferences","Keep your account and delivery preferences up to date.",`<form data-form="customer-profile" class="api-form dashboard-form"><label class="field">Preferred delivery point<select name="preferred_delivery_point_id"><option value="">None selected</option>${points.map(x=>`<option value="${escapeHtml(x.id)}" ${profile.preferred_delivery_point_id===x.id?"selected":""}>${escapeHtml(x.name)}</option>`).join("")}</select></label><label><input type="checkbox" name="marketing_opt_in" ${profile.marketing_opt_in?"checked":""}> Receive WEWE updates</label><button class="button-primary">Save preferences</button></form>`);}
     const preferred=points.find(x=>x.id===state.user?.preferred_delivery_point_id);
@@ -1988,6 +2046,11 @@
         </section>
       `);
     }
+    if (section === "settings") {
+      const settings = await apiFetch("/admin/settings");
+      const value = settings.maintenance || { enabled: false, message: "" };
+      return dashboardPage("System settings", "Control marketplace availability and delivery settings.", `<section class="workspace-surface"><h3>Maintenance mode</h3><p>${value.enabled ? "The maintenance screen is active for visitors, customers, retailers and riders." : "The marketplace is open."} Admin access and payment callbacks stay available.</p><form class="api-form dashboard-form" data-form="maintenance-settings"><label class="field">Customer message<textarea name="message" maxlength="500" placeholder="We are improving WEWE. Please check back shortly.">${escapeHtml(value.message)}</textarea></label><label><input name="enabled" type="checkbox" ${value.enabled ? "checked" : ""}> Show the maintenance screen</label><button class="button-primary">Save maintenance settings</button><p class="form-message" aria-live="polite"></p></form></section><section class="workspace-surface"><h3>Delivery fee</h3><p>${money(settings.delivery_fee_ugx?.amount || 0)}</p><button class="button-outline" data-action="edit-delivery-fee">Edit delivery fee</button></section>`);
+    }
     if(section==="categories"){const rows=await apiFetch("/categories");return dashboardPage("Categories","Keep the marketplace taxonomy organized.",`<div class="dashboard-toolbar"><button class="button-primary" data-action="new-category">Add category</button></div>${rows.map(x=>`<div class="dashboard-list-item"><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.description||"Marketplace category")}</small></div>`).join("")||dashboardEmpty("No categories.","Create the first marketplace category.")}`);}
     if(section==="settlements"){const data=await apiFetch("/admin/settlements"),rows=Array.isArray(data)?data:data.items||[];return dashboardPage("Retailer settlements","Technical settlement operations only. Commercial eligibility and economics remain frozen until approved.",rows.length?dashboardTable(["Reference","Retailer","Amount","Status"],rows.map(raw=>({raw,cells:[escapeHtml(raw.settlement_reference||raw.id),escapeHtml(raw.retailer_id||""),money(raw.amount_ugx),statusBadge(raw.status)]})),raw=>raw.status==="DRAFT"?`<button data-action="settlement-submit" data-id="${escapeHtml(raw.id)}">Submit</button>`:raw.status==="SUBMITTED"?`<button data-action="settlement-review" data-id="${escapeHtml(raw.id)}">Review</button>`:""):dashboardEmpty("No settlement records.","Settlement records will appear here when created by the authorized workflow."));}
     if(section==="rider-payouts"){
@@ -2213,7 +2276,13 @@
     if (submit) submit.disabled = true;
     try {
       const action = form.dataset.form;
-      if (action === "login") await login(form);
+      if (action === "maintenance-settings") {
+        await apiFetch("/admin/settings/maintenance", { method: "PUT", body: JSON.stringify({ value: { enabled: form.elements.enabled.checked, message: form.elements.message.value.trim() } }) });
+        await refreshMaintenance();
+        showToast("Maintenance settings updated.");
+        await renderDashboard();
+      }
+      else if (action === "login") await login(form);
       else if (action === "register") await register(form);
       else if (action === "password-reset-request") await submitPasswordReset(form, false);
       else if (action === "password-reset-confirm") await submitPasswordReset(form, true);
@@ -2277,6 +2346,8 @@
 
   async function performAction(button) {
     const action = button.dataset.action;
+    if (action === "maintenance-refresh") return refreshMaintenance();
+    if (action === "maintenance-admin") { $("#maintenanceScreen").classList.add("hidden"); return showAuth(); }
     if (action === "close-modal") return closeModal();
     if (action === "toggle-password") return togglePassword(button);
     if (action === "show-register") return showAuth(true);
@@ -2725,7 +2796,7 @@
     installStyles();
     bindEvents();
     updateAccountButton();
-    await loadCatalog();
+    await refreshMaintenance().catch(error => showToast(error.message));
     const accessToken = localStorage.getItem(ACCESS_KEY);
     if (accessToken) {
       try {
@@ -2735,6 +2806,9 @@
         showToast(error.message);
       }
     }
+    renderMaintenance();
+    if (!maintenance.maintenance || state.user?.role === "ADMIN") await loadCatalog();
+    setInterval(() => refreshMaintenance().catch(() => {}), 30000);
   }
 
   initialize();

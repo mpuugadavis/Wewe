@@ -3,7 +3,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.config import get_settings
 from app.db import engine
+from app.dependencies import maintenance_guard
 from app.limiter import limiter
 from app.observability import configure_logging
 from app.services.media_uploads import build_media_storage
@@ -51,6 +52,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="WEWE API",
+    dependencies=[Depends(maintenance_guard)],
     summary="Marketplace, ordering and campus delivery APIs",
     version="0.1.0",
     lifespan=lifespan,

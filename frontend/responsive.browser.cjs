@@ -49,6 +49,8 @@ async function runCase(browser, engine, width, height = 900) {
   const calls = [];
   let accountRole = "CUSTOMER";
   let riderAvailability = "OFFLINE";
+  const savedProducts = new Set();
+  let maintenanceEnabled = false, maintenanceMessage = "";
   let failCatalog = false, trackingStage = 0, failTracking = false, orderPaid = false;
   const trackedOrder = () => ({ id: "order1", order_number: "WEWE-TEST-001", status: trackingStage === 3 ? "DELIVERED" : trackingStage ? "OUT_FOR_DELIVERY" : "PREPARING", payment_status: orderPaid ? "PAID" : "PENDING", subtotal_ugx: 25000, delivery_fee_ugx: 3500, total_ugx: 28500, items: [] });
   page.on("pageerror", error => errors.push(error.message));
@@ -65,7 +67,14 @@ async function runCase(browser, engine, width, height = 900) {
       calls.push({ endpoint, method: request.method(), body, headers: request.headers() });
       let response = [];
       let status = 200;
-      if (endpoint === "/products") {
+      if (endpoint === "/system/status") response = { maintenance: maintenanceEnabled, message: maintenanceMessage };
+      else if (endpoint === "/admin/settings/maintenance") { maintenanceEnabled = body.value.enabled; maintenanceMessage = body.value.message; response = {key: "maintenance", value: body.value}; }
+      else if (endpoint === "/admin/settings") response = { maintenance: { enabled: maintenanceEnabled, message: maintenanceMessage }, delivery_fee_ugx: {amount: 3500} };
+      else if (endpoint === "/wishlist" && request.method() === "POST") { savedProducts.add(body.product_id); response = {product_id: body.product_id, saved: true}; status = 201; }
+      else if (endpoint.startsWith("/wishlist/") && request.method() === "DELETE") { savedProducts.delete(endpoint.split("/").pop()); response = null; status = 204; }
+      else if (endpoint === "/wishlist") response = products.filter(product => savedProducts.has(product.id)).map(product => ({...product, product_id: product.id}));
+      else if (endpoint === "/auth/login") response = {access_token: "fixture-login", refresh_token: "fixture-refresh"};
+      else if (endpoint === "/products") {
         if (failCatalog) { response = { detail: "Catalog temporarily unavailable" }; status = 503; }
         else response = products;
       } else if (endpoint === "/categories") response = categories;
@@ -307,6 +316,57 @@ async function runCase(browser, engine, width, height = 900) {
     await bottomToggle.filter({ hasText: "Go online" }).waitFor();
     assert.deepEqual(calls.filter(call => call.endpoint === "/deliveries/me/availability").map(call => call.body.availability_status), ["AVAILABLE", "OFFLINE", "AVAILABLE", "OFFLINE"]);
     await noOverflow(page, "Rider availability " + width);
+    accountRole = "CUSTOMER";
+    await page.evaluate(() => { localStorage.removeItem("wewe_access_token"); localStorage.removeItem("wewe_refresh_token"); });
+    await page.reload();
+    await page.locator('#productGrid [data-action="toggle-wishlist"]').first().click();
+    const signIn = page.locator('form[data-form="login"]');
+    await signIn.locator('[name="email"]').fill("shopper@example.com");
+    await signIn.locator('[name="password"]').fill("fixture-password");
+    await signIn.locator('button.auth-submit').click();
+    await page.locator('#productGrid [data-action="toggle-wishlist"].is-wished').first().waitFor();
+    assert.ok(savedProducts.has("p0"), "Guest save continues after sign-in");
+    await page.reload();
+    await page.locator('#productGrid [data-action="toggle-wishlist"].is-wished').first().waitFor();
+    await page.locator("#accountButton").click();
+    await page.locator('#dashNav [data-section="wishlist"]').click();
+    await page.locator(".wishlist-item").waitFor();
+    await page.getByRole("heading", {name:"My wishlist",exact:true}).waitFor();
+    assert.ok((await page.locator(".wishlist-item").textContent()).includes("12,500"));
+    await page.locator('.wishlist-item [data-action="product-details"]').first().click();
+    await page.locator('#modalContent [data-action="toggle-wishlist"]').waitFor();
+    await page.keyboard.press("Escape");
+    await noOverflow(page, "Customer wishlist " + width);
+    await page.locator('.wishlist-item [data-action="toggle-wishlist"]').click();
+    await page.getByText("Your wishlist is empty.", {exact:true}).waitFor();
+    assert.equal(savedProducts.size, 0);
+    accountRole = "ADMIN";
+    await page.reload();
+    await page.getByRole("button", {name:"My account",exact:true}).waitFor();
+    await page.locator("#accountButton").click();
+    await page.locator('#dashNav [data-section="settings"]').click();
+    const maintenanceForm = page.locator('form[data-form="maintenance-settings"]');
+    await maintenanceForm.locator('[name="message"]').fill("We are improving WEWE. Please check back shortly.");
+    await maintenanceForm.locator('[name="enabled"]').check();
+    await maintenanceForm.getByRole("button", {name:"Save maintenance settings"}).click();
+    await page.getByText("The maintenance screen is active for visitors, customers, retailers and riders.", {exact:false}).waitFor();
+    assert.equal(maintenanceEnabled, true);
+    assert.equal(await page.locator("#maintenanceScreen").isVisible(), false, "Admin keeps access");
+    await noOverflow(page, "Admin maintenance settings " + width);
+    await page.evaluate(() => localStorage.removeItem("wewe_access_token"));
+    await page.reload();
+    await page.locator("#maintenanceScreen:not(.hidden)").waitFor();
+    await page.getByRole("heading", {name:"We’ll be back shortly.",exact:true}).waitFor();
+    await noOverflow(page, "Maintenance screen " + width, "#maintenanceScreen");
+    await page.getByRole("button", {name:"Admin sign in",exact:true}).click();
+    await page.locator('form[data-form="login"] [name="email"]').fill("admin@example.com");
+    await page.locator('form[data-form="login"] [name="password"]').fill("fixture-password");
+    await page.locator('form[data-form="login"] button.auth-submit').click();
+    await page.locator('#dashNav [data-section="settings"]').click();
+    await maintenanceForm.locator('[name="enabled"]').uncheck();
+    await maintenanceForm.getByRole("button", {name:"Save maintenance settings"}).click();
+    await page.getByText("The marketplace is open.", {exact:false}).waitFor();
+    assert.equal(maintenanceEnabled, false);
     assert.deepEqual(errors, [], "No uncaught browser errors");
     console.log("PASS " + engine + " " + width + "x" + height + ": storefront, SVG, search, auth keyboard, basket, delivery/pickup, payment contract, dashboard, retry");
   } catch (error) {

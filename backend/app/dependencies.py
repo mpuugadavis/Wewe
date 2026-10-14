@@ -3,12 +3,13 @@ from typing import Callable
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
-from app.models import RefreshTokenFamily, User
+from app.models import PlatformSetting, RefreshTokenFamily, User
 from app.security import decode_access_token
 
 bearer = HTTPBearer(auto_error=False)
@@ -65,3 +66,29 @@ def require_roles(*roles: str) -> Callable:
         return principal
 
     return dependency
+
+
+def maintenance_guard(request: Request, db: Session = Depends(get_db)) -> None:
+    """Pause marketplace requests while preserving administrator and provider access."""
+    path = request.url.path
+    prefix = get_settings().api_prefix
+    if not path.startswith(prefix + "/"):
+        return
+    route = path[len(prefix):]
+    if route == "/system/status" or route.startswith("/auth/") or route.startswith("/admin/") or route.startswith("/payments/webhooks/") or route in {
+        "/payments/pawapay/checkout-callback", "/payments/pawapay/deposit-callback",
+        "/payments/pawapay/payout-callback", "/payments/pawapay/refund-callback", "/payments/flutterwave/webhook",
+    }:
+        return
+    setting = db.get(PlatformSetting, "maintenance")
+    if setting is None or setting.value.get("enabled") is not True:
+        return
+    authorization = request.headers.get("authorization", "").split(" ", 1)
+    if len(authorization) == 2 and authorization[0].lower() == "bearer":
+        try:
+            principal = get_principal(HTTPAuthorizationCredentials(scheme="Bearer", credentials=authorization[1]), db)
+            if principal.user.role == "ADMIN":
+                return
+        except HTTPException:
+            pass
+    raise HTTPException(status_code=503, detail={"code": "maintenance", "message": setting.value.get("message") or "WEWE is undergoing maintenance. Please check back shortly."}, headers={"Retry-After": "60", "Cache-Control": "no-store"})

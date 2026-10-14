@@ -103,3 +103,10 @@ A separate private `.env.neon-preview` combines the local integration settings w
 - The plugin configures MCP at `https://mcp.neon.tech/mcp`; MCP tool calls were not available in this chat, so cloud operations were verified through the authenticated CLI.
 
 The Neon validation container is stopped to conserve database compute. To test it locally again, run `docker start wewe-neon-preview`, then open http://localhost:8090. Run `docker stop wewe-neon-preview` when finished. The existing http://localhost:8088 sandbox and its database were preserved. This does not publish the website to Render.
+
+
+### Wishlist and maintenance controls
+
+Customers save products using the heart button or **Add to wishlist** in product details, then open **My account → Saved items** to view or remove them. Saving as a visitor resumes after customer sign-in. Saved products belong to the customer account and survive reloads.
+
+Administrators open **My account → Settings → Maintenance mode**, enter an optional message and save the checkbox setting. The setting defaults to off and needs no deployment or migration. Visitors, customers, retailers and riders see the maintenance screen; already-open pages check for changes every 30 seconds. Marketplace API requests return HTTP 503 with Retry-After during maintenance. Admin sign-in/settings, service health checks and payment provider callbacks remain available so payments can reconcile and administrators can reopen the marketplace. The maintenance screen includes **Admin sign in** and **Check again**. This application switch requires the service to be running; it cannot display a custom screen during an infrastructure outage.

@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.dependencies import Principal, require_roles
 from app.models import (
+    PlatformSetting,
     Category,
     Inventory,
     Product,
@@ -117,6 +118,14 @@ def _serialize_products(db: Session, products: list[Product]) -> list[dict]:
         }
         for product in products
     ]
+
+
+@router.get("/system/status")
+def system_status(response: Response, db: Session = Depends(get_db)) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    setting = db.get(PlatformSetting, "maintenance")
+    value = setting.value if setting else {}
+    return {"maintenance": value.get("enabled") is True, "message": value.get("message") or "WEWE is undergoing maintenance. Please check back shortly."}
 
 
 @router.get("/categories", response_model=list[CategoryOut])

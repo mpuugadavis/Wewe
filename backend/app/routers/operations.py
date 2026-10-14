@@ -616,7 +616,9 @@ def get_wishlist(
         .where(WishlistItem.customer_id == principal.user.id)
         .order_by(WishlistItem.created_at.desc())
     ).all()
-    return [{"product_id": item.product_id, "name": product.name, "category_id": product.category_id, "created_at": item.created_at} for item, product in rows]
+    from app.routers.catalog import _serialize_products
+    products = _serialize_products(db, [product for _, product in rows])
+    return [{**product, "product_id": item.product_id, "created_at": item.created_at} for (item, _), product in zip(rows, products)]
 
 
 @router.post("/wishlist", status_code=status.HTTP_201_CREATED)
