@@ -79,8 +79,8 @@ def _delivery_view(db: Session, assignment: DeliveryAssignment, reveal_destinati
         "fulfillment_id": fulfillment.id if fulfillment else None,
         "retailer_name": retailer.business_name if retailer else None,
         "status": assignment.status,
-        "pickup": {"name": pickup.name, "directions": pickup.directions} if pickup else None,
-        "dropoff": {"name": dropoff.name, "directions": dropoff.directions} if dropoff else None,
+        "pickup": {"name": pickup.name, "directions": pickup.directions, "latitude": float(pickup.latitude) if pickup.latitude is not None else None, "longitude": float(pickup.longitude) if pickup.longitude is not None else None} if pickup else None,
+        "dropoff": {"name": dropoff.name, "directions": dropoff.directions, "latitude": float(dropoff.latitude) if dropoff.latitude is not None else None, "longitude": float(dropoff.longitude) if dropoff.longitude is not None else None} if dropoff else None,
         "assigned_at": assignment.assigned_at,
         "accepted_at": assignment.accepted_at,
         "picked_up_at": assignment.picked_up_at,
@@ -296,6 +296,39 @@ def reject_delivery_offer(
         ) from exc
     db.commit()
     return offer_view(db, offer)
+
+
+@router.get("/deliveries/{assignment_id}/navigation")
+@limiter.limit("20/minute")
+def delivery_navigation(
+    request: Request,
+    assignment_id: UUID,
+    stop: str = Query(pattern="^(pickup|dropoff)$"),
+    latitude: float = Query(ge=-90, le=90, allow_inf_nan=False),
+    longitude: float = Query(ge=-180, le=180, allow_inf_nan=False),
+    principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.services.routing import GeoCoordinate, RoutingProviderError, get_routing_provider
+    assignment = db.get(DeliveryAssignment, assignment_id)
+    if assignment is None or assignment.agent_id != principal.user.id or assignment.status not in {"ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"}:
+        raise HTTPException(status_code=404, detail={"code": "delivery_not_found", "message": "An active delivery assigned to you is required."})
+    point_id = assignment.pickup_point_id if stop == "pickup" else assignment.dropoff_point_id
+    point = db.get(DeliveryPoint, point_id) if point_id else None
+    if point is None or point.latitude is None or point.longitude is None:
+        raise HTTPException(status_code=409, detail={"code": "destination_coordinates_missing", "message": "This stop has no saved map coordinates. Contact the shop or customer for directions."})
+    agent = _agent_profile(db, principal.user.id)
+    mode = (agent.transport_mode or "").strip().lower()
+    profile = "cycling-regular" if mode in {"bicycle", "bike", "cycling"} else "foot-walking" if mode in {"walking", "foot"} else "driving-car"
+    try:
+        provider = get_routing_provider()
+        navigation = getattr(provider, "navigation_route", None)
+        if navigation is None:
+            raise RoutingProviderError("navigation_unavailable", "Embedded road directions are unavailable. Use Open in maps for navigation.")
+        route = navigation(GeoCoordinate.from_values(latitude, longitude), GeoCoordinate.from_values(point.latitude, point.longitude), profile=profile)
+    except RoutingProviderError as exc:
+        raise HTTPException(status_code=503, detail={"code": exc.code, "message": exc.message}) from None
+    return {"stop": stop, "destination": {"name": point.name, "directions": point.directions, "latitude": float(point.latitude), "longitude": float(point.longitude)}, "profile": profile, **route}
 
 
 @router.get("/deliveries/available")

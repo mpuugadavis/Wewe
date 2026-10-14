@@ -10,6 +10,7 @@
   // Initialize notification polling state before startup can invoke the polling function.
   let notificationRefreshTimer = null;
   let pendingWishlistProduct = null;
+  let riderNavigation = null;
   const wishlistRequests = new Set();
   let maintenance = { maintenance: false, message: "" };
 
@@ -291,6 +292,7 @@
   }
 
   function closeModal() {
+    stopRiderNavigation();
     stopOrderTracking();
     $("#modalBackdrop").classList.remove("open");
     document.body.classList.remove("modal-open");
@@ -1704,11 +1706,76 @@
       '<button data-action="dashboard-section" data-section="profile">⚙ Store profile</button></div></div></div>';
   }
 
+  function validMapPoint(point) {
+    return point?.latitude != null && point?.longitude != null && point.latitude !== "" && point.longitude !== "" && Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)) && Math.abs(Number(point.latitude)) <= 90 && Math.abs(Number(point.longitude)) <= 180;
+  }
+
+  function stopRiderNavigation() {
+    const nav = riderNavigation;
+    riderNavigation = null;
+    if (nav?.watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(nav.watchId);
+    if (nav?.map) nav.map.remove();
+  }
+
+  async function showRiderNavigation(assignmentId, stop = "pickup") {
+    stopRiderNavigation();
+    const nav = { assignmentId, stop, map: null, watchId: null };
+    riderNavigation = nav;
+    setModal('<div class="modal-head"><h2>Delivery navigation</h2><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div><p class="api-state">Loading your delivery stops…</p>', true);
+    try {
+      const jobs = await apiFetch("/deliveries/me");
+      if (riderNavigation !== nav) return;
+      const job = jobs.find(row => row.id === assignmentId && ["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(row.status));
+      if (!job) throw new Error("Navigation is available for an active delivery assigned to you.");
+      const destination = stop === "pickup" ? job.pickup : job.dropoff;
+      if (!validMapPoint(destination)) throw new Error("This stop has no saved map pin. Contact the retailer or customer for directions.");
+      const destinationLabel = stop === "pickup" ? "retailer pickup" : "customer delivery point";
+      $("#modalContent").innerHTML = `<div class="modal-head"><div><span class="section-kicker">WEWE RIDER NAVIGATION</span><h2>Route to ${destinationLabel}</h2><p>${escapeHtml(destination.name)}${destination.directions ? " · " + escapeHtml(destination.directions) : ""}</p></div><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div><div class="rider-navigation-switch"><button class="button-outline" data-action="rider-navigate" data-id="${escapeHtml(assignmentId)}" data-stop="pickup" aria-pressed="${stop === "pickup"}">Retailer pickup</button><button class="button-outline" data-action="rider-navigate" data-id="${escapeHtml(assignmentId)}" data-stop="dropoff" aria-pressed="${stop === "dropoff"}">Customer delivery point</button><a class="button-primary" href="${mapsDirectionsUrl(destination)}" target="_blank" rel="noopener noreferrer">Open in maps ↗</a></div><div id="riderNavigationMap" class="rider-navigation-map" aria-label="Delivery road route map"></div><p id="riderMapMessage" class="muted" aria-live="polite"></p><p id="riderRouteSummary" class="api-state" aria-live="polite">Getting your current location…</p><button class="button-outline" data-action="rider-navigate" data-id="${escapeHtml(assignmentId)}" data-stop="${stop}">Refresh route from my location</button><p class="muted">Your map marker follows your location while this screen is open. Refresh the route if you change course. Open in maps for turn-by-turn guidance.</p><ol id="riderRouteSteps" class="rider-route-steps"></ol>`;
+      const loaded = await loadLeafletMap();
+      if (riderNavigation !== nav) return;
+      if (loaded) {
+        nav.map = window.L.map($("#riderNavigationMap"), {scrollWheelZoom: false, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false}).setView([Number(destination.latitude), Number(destination.longitude)], 15);
+        window.L.tileLayer(API_BASE + "/locations/map-tile/{z}/{x}/{y}.png", {attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19}).on("tileerror", () => { if (riderNavigation === nav) $("#riderMapMessage").textContent = "Map tiles are unavailable. Written directions and Open in maps are still available."; }).addTo(nav.map);
+        window.L.circleMarker([Number(destination.latitude), Number(destination.longitude)], {radius: 10, color: "#7139ed", fillOpacity: 1}).addTo(nav.map).bindTooltip(document.createTextNode(destination.name || "Destination"), {permanent: true});
+      } else {
+        $("#riderNavigationMap").classList.add("hidden");
+        $("#riderMapMessage").textContent = "The embedded map could not load. Written directions and Open in maps remain available.";
+      }
+      if (!navigator.geolocation) throw new Error("Location sharing is unavailable. Use Open in maps for navigation.");
+      const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, {enableHighAccuracy: true, maximumAge: 15000, timeout: 15000}));
+      if (riderNavigation !== nav) return;
+      const updateMarker = current => {
+        if (riderNavigation !== nav || !nav.map) return;
+        const latlng = [current.coords.latitude, current.coords.longitude];
+        if (nav.marker) nav.marker.setLatLng(latlng);
+        else nav.marker = window.L.circleMarker(latlng, {radius: 8, color: "#127d63", fillOpacity: 1}).addTo(nav.map).bindTooltip("Your location");
+      };
+      updateMarker(position);
+      nav.watchId = navigator.geolocation.watchPosition(updateMarker, () => { if (riderNavigation === nav) $("#riderMapMessage").textContent = "Live GPS updates paused. Check location permission or use Open in maps."; }, {enableHighAccuracy: true, maximumAge: 15000, timeout: 15000});
+      const query = new URLSearchParams({stop, latitude: position.coords.latitude, longitude: position.coords.longitude});
+      const route = await apiFetch(`/deliveries/${encodeURIComponent(assignmentId)}/navigation?${query}`);
+      if (riderNavigation !== nav) return;
+      $("#riderRouteSummary").textContent = `${(Number(route.distance_m) / 1000).toFixed(1)} km · about ${Math.max(1, Math.round(Number(route.duration_seconds) / 60))} min · ${route.profile === "cycling-regular" ? "Cycling" : route.profile === "foot-walking" ? "Walking" : "Driving"} route`;
+      $("#riderRouteSteps").innerHTML = (route.steps || []).map(step => `<li><span>${escapeHtml(step.instruction)}</span><small>${Math.round(Number(step.distance_m))} m</small></li>`).join("");
+      if (nav.map) {
+        const line = window.L.geoJSON({type: "Feature", properties: {}, geometry: route.geometry}, {style: {color: "#7139ed", weight: 5}}).addTo(nav.map);
+        nav.map.fitBounds(line.getBounds().extend([Number(destination.latitude), Number(destination.longitude)]).extend([position.coords.latitude, position.coords.longitude]), {padding: [28, 28], maxZoom: 17, animate: false});
+        nav.map.invalidateSize();
+      }
+    } catch (error) {
+      if (riderNavigation !== nav) return;
+      const message = error.code === 1 ? "Allow location access to calculate your route. You can also use Open in maps." : error.message || "Location is unavailable. Retry or use Open in maps.";
+      const summary = $("#riderRouteSummary");
+      if (summary) summary.textContent = message;
+      else $("#modalContent").innerHTML = `<div class="modal-head"><h2>Navigation unavailable</h2><button class="close-modal" data-action="close-modal" aria-label="Close">×</button></div><p class="api-state api-error">${escapeHtml(message)}</p>`;
+    }
+  }
+
   function mapsDirectionsUrl(point) {
     const name = point?.name || point?.address || "";
     const lat = Number(point?.latitude), lng = Number(point?.longitude);
-    const destination = Number.isFinite(lat) && Number.isFinite(lng) ? `${lat},${lng}` : name;
-    return destination ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}` : "";
+    const destination = validMapPoint(point) ? `${lat},${lng}` : name;
+    return destination ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving&dir_action=navigate` : "";
   }
 
   function riderStatusProgress(status) {
@@ -1750,6 +1817,7 @@
       <div class="rider-current-step"><span>NEXT STEP</span><b>${escapeHtml(currentStep)}</b></div>
       <div class="rider-route"><div class="rider-stop"><span class="rider-stop-dot pickup"></span><div><small>PICKUP</small><b>${escapeHtml(pickup)}</b></div>${pickupNav ? `<a href="${pickupNav}" target="_blank" rel="noopener noreferrer">Navigate</a>` : ""}</div>
       <div class="rider-route-line"></div><div class="rider-stop"><span class="rider-stop-dot dropoff"></span><div><small>DROP-OFF</small><b>${escapeHtml(dropoff)}</b></div>${dropoffNav ? `<a href="${dropoffNav}" target="_blank" rel="noopener noreferrer">Navigate</a>` : ""}</div></div>
+      ${!compact && !offer && ["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(row.status) ? `<div class="rider-navigation-switch"><button class="button-outline" data-action="rider-navigate" data-id="${escapeHtml(row.id)}" data-stop="pickup" ${validMapPoint(row.pickup) ? "" : "disabled"}>Navigate to retailer</button><button class="button-outline" data-action="rider-navigate" data-id="${escapeHtml(row.id)}" data-stop="dropoff" ${validMapPoint(row.dropoff) ? "" : "disabled"}>Navigate to customer</button></div>${!validMapPoint(row.pickup) || !validMapPoint(row.dropoff) ? '<p class="muted">A stop is missing its map pin. Contact the shop or customer for directions.</p>' : ""}` : ""}
       ${nextAction ? `<div class="rider-job-actions">${nextAction}</div>` : ""}</article>`;
   }
 
@@ -2346,6 +2414,7 @@
 
   async function performAction(button) {
     const action = button.dataset.action;
+    if (action === "rider-navigate") return showRiderNavigation(button.dataset.id, button.dataset.stop);
     if (action === "maintenance-refresh") return refreshMaintenance();
     if (action === "maintenance-admin") { $("#maintenanceScreen").classList.add("hidden"); return showAuth(); }
     if (action === "close-modal") return closeModal();
@@ -2510,6 +2579,7 @@
     if (action === "accept-delivery-offer") {
       await apiFetch(`/deliveries/offers/${encodeURIComponent(button.dataset.id)}/accept`, { method: "POST", body: JSON.stringify({}) });
       showToast("Delivery accepted.");
+      state.dashboardSection = "active";
       return renderDashboard();
     }
     if (action === "reject-delivery-offer") {
@@ -2520,6 +2590,7 @@
     if (action === "accept-delivery") {
       await apiFetch(`/deliveries/${encodeURIComponent(button.dataset.id)}/accept`, { method: "POST", body: JSON.stringify({}) });
       showToast("Delivery accepted.");
+      state.dashboardSection = "active";
       return renderDashboard();
     }
     if (action === "delivery-status") return updateDelivery(button.dataset.id, button.dataset.status);

@@ -30,6 +30,7 @@ Design boundaries (COM-FEE-004 / COM-FEE-009):
 """
 
 import json
+import math
 import logging
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -351,6 +352,48 @@ class OpenRouteServiceRoutingProvider:
             provider=self.name,
             reference=reference,
         )
+
+
+    def navigation_route(self, origin: GeoCoordinate, destination: GeoCoordinate, *, profile: str = "driving-car") -> dict:
+        """Return a road route for rider guidance; pricing continues to use route_distance."""
+        if profile not in {"driving-car", "cycling-regular", "foot-walking"}:
+            raise RoutingProviderError("invalid_navigation_profile", "Unsupported navigation mode.")
+        request = Request(
+            f"{self._base_url}/v2/directions/{profile}/geojson",
+            data=json.dumps({"coordinates": [[float(origin.longitude), float(origin.latitude)], [float(destination.longitude), float(destination.latitude)]], "instructions": True, "instructions_format": "text"}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Accept": "application/geo+json", "Authorization": self._api_key, "User-Agent": self._user_agent},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self._timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            raise RoutingProviderError("routing_provider_error", f"Road directions are temporarily unavailable (HTTP {exc.code}). Use Open in maps.") from None
+        except (URLError, TimeoutError, OSError):
+            raise RoutingProviderError("routing_provider_unreachable", "Road directions could not be loaded. Use Open in maps or retry.") from None
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            raise RoutingProviderError("routing_provider_invalid_response", "The map service returned unreadable directions.") from None
+        try:
+            feature = data["features"][0]
+            geometry = feature["geometry"]
+            coordinates = geometry["coordinates"]
+            if geometry["type"] != "LineString" or len(coordinates) < 2:
+                raise ValueError
+            for coordinate in coordinates:
+                if not all(math.isfinite(float(value)) for value in coordinate[:2]):
+                    raise ValueError
+                GeoCoordinate.from_values(coordinate[1], coordinate[0])
+            summary = feature["properties"]["summary"]
+            distance_m = float(summary["distance"])
+            duration_seconds = float(summary["duration"])
+            if not math.isfinite(distance_m) or not math.isfinite(duration_seconds) or distance_m < 0 or duration_seconds < 0:
+                raise ValueError
+            steps = [{"instruction": str(step.get("instruction", "Continue along the route")), "distance_m": float(step["distance"])} for segment in feature["properties"].get("segments", []) for step in segment.get("steps", [])]
+            if any(not math.isfinite(step["distance_m"]) or step["distance_m"] < 0 for step in steps):
+                raise ValueError
+        except (KeyError, IndexError, TypeError, ValueError, InvalidOperation, RoutingProviderError):
+            raise RoutingProviderError("no_route_found", "No usable road route was returned. Use Open in maps or retry.") from None
+        return {"geometry": {"type": "LineString", "coordinates": [[float(point[0]), float(point[1])] for point in coordinates]}, "distance_m": distance_m, "duration_seconds": duration_seconds, "steps": steps, "provider": self.name}
 
 
 class OsrmRoutingProvider:

@@ -46,14 +46,16 @@ async function runCase(browser, engine, width, height = 900) {
   const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
   const page = await context.newPage();
   const errors = [];
+  const navigationOnly = process.env.WEWE_TEST_FOCUS === "rider-navigation";
   const calls = [];
   let accountRole = "CUSTOMER";
   let riderAvailability = "OFFLINE";
+  let riderJob = null, navigationLibraries = false, navigationFailure = false;
   const savedProducts = new Set();
   let maintenanceEnabled = false, maintenanceMessage = "";
   let failCatalog = false, trackingStage = 0, failTracking = false, orderPaid = false;
   const trackedOrder = () => ({ id: "order1", order_number: "WEWE-TEST-001", status: trackingStage === 3 ? "DELIVERED" : trackingStage ? "OUT_FOR_DELIVERY" : "PREPARING", payment_status: orderPaid ? "PAID" : "PENDING", subtotal_ugx: 25000, delivery_fee_ugx: 3500, total_ugx: 28500, items: [] });
-  page.on("pageerror", error => errors.push(error.message));
+  page.on("pageerror", error => errors.push(error.stack || error.message));
   await page.addInitScript(() => { window.WEWE_API_BASE = "/api/v1"; });
   await page.route("**/*", async route => {
     const request = route.request(), url = new URL(request.url());
@@ -85,6 +87,15 @@ async function runCase(browser, engine, width, height = 900) {
       else if (endpoint === "/auth/me") response = { id: "u1", name: "Campus shopper", role: accountRole, email: "shopper@example.com" };
       else if (endpoint === "/deliveries/me/availability") { riderAvailability = body.availability_status; response = { availability_status: riderAvailability }; }
       else if (endpoint === "/deliveries/me/profile") response = { availability_status: riderAvailability, verification_status: "VERIFIED", profile_image_url: "/api/v1/products/images/fixture-media" };
+      else if (endpoint === "/deliveries/me") response = riderJob ? [riderJob] : [];
+      else if (endpoint === "/deliveries/offers/offer1/accept") { riderAvailability = "BUSY"; riderJob = {id:"job1", status:"ACCEPTED", order_number:"WW-NAV-TEST", pickup:{name:"Retailer pickup",latitude:0.3476,longitude:32.5825,directions:"Meet at the shop entrance"},dropoff:{name:"Chosen customer point",latitude:0.35,longitude:32.585,directions:"Customer-selected hostel gate"}}; response = riderJob; }
+      else if (endpoint === "/deliveries/job1/navigation") {
+        const stop = url.searchParams.get("stop");
+        const destination = stop === "pickup" ? riderJob.pickup : riderJob.dropoff;
+        if (navigationFailure) { status = 503; response = {error:{code:"routing_provider_unreachable",message:"Road directions could not be loaded. Use Open in maps or retry."}}; }
+        else response = {stop, destination, profile:"cycling-regular", geometry:{type:"LineString",coordinates:[[32.57,0.335],[32.578,0.34],[destination.longitude,destination.latitude]]},distance_m:1500,duration_seconds:360,steps:[{instruction:"Continue along the road",distance_m:1200},{instruction:"Arrive at " + destination.name,distance_m:300}]};
+      }
+      else if (endpoint.startsWith("/locations/map-tile/")) return route.fulfill({contentType:"image/svg+xml",body:'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#eee8f4"/><path d="M0 220L256 40" stroke="#aaa" stroke-width="12"/></svg>'});
       else if (endpoint === "/deliveries/me/earnings") response = { paid_ugx: 0, pending_ugx: 0 };
       else if (endpoint === "/retailers/me/categories") response = { id: "new-category", name: body.name };
       else if (endpoint === "/retailers/me/products" && request.method() === "POST") response = { id: "new-product", listings: [{ retailer_product_id: "new-listing" }] };
@@ -114,7 +125,13 @@ async function runCase(browser, engine, width, height = 900) {
       return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(response) });
     }
     // Exercise the map-unavailable path deterministically; location selection/quotes still work.
-    if (url.hostname === "cdn.jsdelivr.net" || url.hostname === "unpkg.com") return route.abort();
+    if (url.hostname === "cdn.jsdelivr.net" || url.hostname === "unpkg.com") {
+      if (navigationLibraries && process.env.WEWE_TEST_LEAFLET_DIR && /\/leaflet\.(js|css)$/.test(url.pathname)) {
+        const filename = path.basename(url.pathname);
+        return route.fulfill({contentType: filename.endsWith(".js") ? "application/javascript" : "text/css", body: fs.readFileSync(path.join(process.env.WEWE_TEST_LEAFLET_DIR, filename))});
+      }
+      return route.abort();
+    }
     // Keep layout tests deterministic/offline; photography loads normally in the product.
     if (url.hostname === "images.unsplash.com") {
       if (process.env.WEWE_TEST_PHOTOS === "live") return route.continue();
@@ -129,6 +146,7 @@ async function runCase(browser, engine, width, height = 900) {
   try {
     await page.goto(base);
     await page.locator("#productGrid .product-card").first().waitFor();
+    if (!navigationOnly) {
     await noOverflow(page, engine + " homepage " + width);
     await page.locator("#departmentMenu summary").click();
     await page.locator('#categoryList [data-category-id="c2"]').click();
@@ -292,6 +310,7 @@ async function runCase(browser, engine, width, height = 900) {
     assert.ok(calls.some(call => call.endpoint === "/retailers/me/categories" && call.body.name === "Home essentials"));
     assert.ok(calls.some(call => call.endpoint === "/retailers/me/products" && call.body?.category_id === "new-category"));
     assert.equal(calls.filter(call => call.endpoint === "/retailers/me/products/new-listing/images").length, 2);
+    }
     // Both rider availability controls must reflect the same saved server state.
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation({ latitude: 0.335, longitude: 32.57, accuracy: 10 });
@@ -316,6 +335,48 @@ async function runCase(browser, engine, width, height = 900) {
     await bottomToggle.filter({ hasText: "Go online" }).waitFor();
     assert.deepEqual(calls.filter(call => call.endpoint === "/deliveries/me/availability").map(call => call.body.availability_status), ["AVAILABLE", "OFFLINE", "AVAILABLE", "OFFLINE"]);
     await noOverflow(page, "Rider availability " + width);
+    // Accepting an offer opens the active job with both exact navigation stops.
+    navigationLibraries = true;
+    await page.evaluate(() => {
+      const button = document.createElement("button");
+      button.dataset.action = "accept-delivery-offer"; button.dataset.id = "offer1";
+      button.id = "fixtureAcceptOffer"; button.textContent = "Accept test delivery";
+      document.querySelector("#dashboardContent").appendChild(button);
+    });
+    await page.locator("#fixtureAcceptOffer").click();
+    await page.getByRole("button", {name:"Navigate to retailer",exact:true}).waitFor();
+    assert.equal(await page.locator('#dashNav [data-section="active"]').getAttribute("class").then(value => value.includes("active")), true);
+    await page.getByRole("button", {name:"Navigate to retailer",exact:true}).click();
+    await page.locator("#riderRouteSummary").filter({hasText:"1.5 km"}).waitFor();
+    assert.ok((await page.getByRole("link", {name:"Open in maps ↗",exact:true}).getAttribute("href")).includes("0.3476%2C32.5825"));
+    await page.getByText("Arrive at Retailer pickup", {exact:true}).waitFor();
+    if (process.env.WEWE_TEST_LEAFLET_DIR) assert.ok(await page.locator("#riderNavigationMap .leaflet-overlay-pane path").count() >= 3, "Embedded destination, GPS marker and road route rendered");
+    await noOverflow(page, "Embedded retailer navigation " + width, "#modalContent");
+    await page.getByRole("button", {name:"Customer delivery point",exact:true}).click();
+    await page.getByText("Arrive at Chosen customer point", {exact:true}).waitFor();
+    assert.ok((await page.getByRole("link", {name:"Open in maps ↗",exact:true}).getAttribute("href")).includes("0.35%2C32.585"));
+    const routeCalls = calls.filter(call => call.endpoint === "/deliveries/job1/navigation").length;
+    await context.setGeolocation({latitude:0.338,longitude:32.573,accuracy:8});
+    assert.equal(calls.filter(call => call.endpoint === "/deliveries/job1/navigation").length, routeCalls, "GPS updates do not consume new road route requests");
+    await noOverflow(page, "Embedded customer navigation " + width, "#modalContent");
+    navigationFailure = true;
+    await page.getByRole("button", {name:"Refresh route from my location",exact:true}).click();
+    await page.locator("#riderRouteSummary").filter({hasText:"Use Open in maps or retry"}).waitFor();
+    assert.equal(await page.getByRole("link", {name:"Open in maps ↗",exact:true}).isVisible(), true);
+    await page.keyboard.press("Escape");
+    navigationFailure = false;
+    await page.evaluate(() => { navigator.geolocation.getCurrentPosition = (success,error) => error({code:1,message:"Permission denied"}); });
+    await page.getByRole("button", {name:"Navigate to customer",exact:true}).click();
+    await page.locator("#riderRouteSummary").filter({hasText:"Allow location access"}).waitFor();
+    await page.keyboard.press("Escape");
+    navigationLibraries = false;
+    await page.evaluate(() => { delete window.L; });
+    await page.getByRole("button", {name:"Navigate to retailer",exact:true}).click();
+    await page.locator("#riderMapMessage").filter({hasText:"embedded map could not load"}).waitFor();
+    assert.equal(await page.getByRole("link", {name:"Open in maps ↗",exact:true}).isVisible(), true);
+    await page.keyboard.press("Escape");
+
+    if (!navigationOnly) {
     accountRole = "CUSTOMER";
     await page.evaluate(() => { localStorage.removeItem("wewe_access_token"); localStorage.removeItem("wewe_refresh_token"); });
     await page.reload();
@@ -367,8 +428,9 @@ async function runCase(browser, engine, width, height = 900) {
     await maintenanceForm.getByRole("button", {name:"Save maintenance settings"}).click();
     await page.getByText("The marketplace is open.", {exact:false}).waitFor();
     assert.equal(maintenanceEnabled, false);
+    }
     assert.deepEqual(errors, [], "No uncaught browser errors");
-    console.log("PASS " + engine + " " + width + "x" + height + ": storefront, SVG, search, auth keyboard, basket, delivery/pickup, payment contract, dashboard, retry");
+    console.log("PASS " + engine + " " + width + "x" + height + (navigationOnly ? ": rider availability, acceptance, embedded routes, GPS and map/provider fallbacks" : ": storefront, SVG, search, auth keyboard, basket, delivery/pickup, payment contract, dashboard, navigation, retry"));
   } catch (error) {
     await screenshot(page, engine + "-" + width + "-failure");
     throw error;
