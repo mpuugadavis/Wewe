@@ -97,7 +97,8 @@ class ResetRequestIn(BaseModel):
 
 
 class ResetConfirmIn(BaseModel):
-    token: str = Field(min_length=32, max_length=256)
+    identifier: str = Field(min_length=3, max_length=320)
+    token: str = Field(pattern=r"^[0-9]{6}$")
     new_password: str = Field(min_length=12, max_length=128)
 
 

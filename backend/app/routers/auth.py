@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
+import secrets
+import hmac
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -196,6 +198,12 @@ def me(principal: Principal = Depends(get_principal)) -> User:
     return principal.user
 
 
+def _reset_code_hash(reset_id, code):
+    # A server-keyed hash prevents offline guessing of short codes from a DB dump.
+    key = get_settings().secret_key.get_secret_value().encode()
+    return hmac.new(key, f"{reset_id}:{code}".encode(), "sha256").hexdigest()
+
+
 @router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("4/minute")
 def request_password_reset(
@@ -205,14 +213,24 @@ def request_password_reset(
     db: Session = Depends(get_db),
 ) -> dict:
     identifier = payload.identifier.strip()
-    user = db.scalar(select(User).where(or_(func_lower_email(identifier.lower()), User.phone == identifier)))
+    user = db.scalar(select(User).where(or_(func_lower_email(identifier.lower()), User.phone == identifier)).with_for_update())
     response = {"message": "If the account exists, password-reset instructions will be sent."}
     if user:
-        token_value = new_opaque_token()
+        # A persistent per-account limit supplements the per-IP limiter.
+        recent = db.scalar(select(func.count()).select_from(PasswordResetToken).where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.created_at >= utcnow() - timedelta(hours=1)))
+        if recent >= 4:
+            return response
+        token_value = f"{secrets.randbelow(1_000_000):06d}"
+        reset_id = uuid4()
+        db.execute(update(PasswordResetToken).where(PasswordResetToken.user_id == user.id,
+            PasswordResetToken.consumed_at.is_(None)).values(consumed_at=utcnow()))
         db.add(
             PasswordResetToken(
+                id=reset_id,
                 user_id=user.id,
-                token_hash=hash_token(token_value),
+                token_hash=_reset_code_hash(reset_id, token_value),
                 expires_at=utcnow() + timedelta(minutes=get_settings().password_reset_minutes),
             )
         )
@@ -223,7 +241,7 @@ def request_password_reset(
         if user.email and email_configured:
             db.add(NotificationOutbox(user_id=user.id, channel="EMAIL", event_type="PASSWORD_RESET",
                 payload={"to": user.email, "subject": "Reset your WEWE password",
-                         "body": f"Open WEWE, choose Sign in, then Forgot password? and I already have a reset code. Paste this one-time code:\n\n{token_value}\n\nThe code expires in {settings.password_reset_minutes} minutes. Share it with nobody. If you did not request a reset, ignore this email."}))
+                         "body": f"Open WEWE, choose Sign in, then Forgot password? and I already have a reset code. Paste this one-time code:\n\n{token_value}\n\nThe code expires in {settings.password_reset_minutes} minutes. Only the latest code works. Share it with nobody. If you did not request a reset, ignore this email."}))
         elif settings.app_env in {"development", "test"}:
             response["development_token"] = token_value
         db.commit()
@@ -233,16 +251,20 @@ def request_password_reset(
 @router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("5/minute")
 def confirm_password_reset(request: Request, payload: ResetConfirmIn, db: Session = Depends(get_db)) -> None:
-    token = db.scalar(
-        select(PasswordResetToken)
-        .where(PasswordResetToken.token_hash == hash_token(payload.token))
-        .with_for_update()
-    )
-    if token is None or token.consumed_at is not None or _expired(token.expires_at):
-        raise HTTPException(status_code=400, detail={"code": "invalid_reset_token", "message": "Reset token is invalid or expired."})
-    user = db.get(User, token.user_id)
-    if user is None:
-        raise HTTPException(status_code=400, detail={"code": "invalid_reset_token", "message": "Reset token is invalid or expired."})
+    identifier = payload.identifier.strip()
+    user = db.scalar(select(User).where(or_(func_lower_email(identifier.lower()), User.phone == identifier)).with_for_update())
+    token = None if user is None else db.scalar(select(PasswordResetToken).where(
+        PasswordResetToken.user_id == user.id, PasswordResetToken.consumed_at.is_(None)
+    ).order_by(PasswordResetToken.created_at.desc()).limit(1).with_for_update())
+    invalid = {"code": "invalid_reset_token", "message": "Reset code is invalid or expired. Request a new code if needed."}
+    if token is None or _expired(token.expires_at) or token.failed_attempts >= 5:
+        raise HTTPException(status_code=400, detail=invalid)
+    if not hmac.compare_digest(token.token_hash, _reset_code_hash(token.id, payload.token)):
+        token.failed_attempts += 1
+        if token.failed_attempts >= 5:
+            token.consumed_at = utcnow()
+        db.commit()  # Preserve limits even though the request returns an error.
+        raise HTTPException(status_code=400, detail=invalid)
     token.consumed_at = utcnow()
     user.password_hash = hash_password(payload.new_password)
     user.token_version += 1

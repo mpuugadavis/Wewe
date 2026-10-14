@@ -112,7 +112,7 @@ def test_password_reset_invalidates_existing_access(client: TestClient) -> None:
     token = reset.json()["development_token"]
     changed = client.post(
         "/api/v1/auth/password-reset/confirm",
-        json={"token": token, "new_password": "new-strong-campus-password-43"},
+        json={"identifier": "reset@example.test", "token": token, "new_password": "new-strong-campus-password-43"},
     )
     assert changed.status_code == 204
     assert client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {access}"}).status_code == 401

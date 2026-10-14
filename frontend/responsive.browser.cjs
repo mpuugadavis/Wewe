@@ -169,7 +169,7 @@ async function runCase(browser, engine, width, height = 900) {
     await resetRequest.locator('button[type="submit"]').click();
     const resetConfirm = page.locator('form[data-form="password-reset-confirm"]');
     await resetConfirm.waitFor();
-    await resetConfirm.locator('[name="token"]').fill("x".repeat(43));
+    await resetConfirm.locator('[name="token"]').fill("012345");
     await resetConfirm.locator('[name="new_password"]').fill("a-new-private-password");
     await resetConfirm.locator('[name="confirm_password"]').fill("a-different-password");
     await resetConfirm.locator('button[type="submit"]').click();
