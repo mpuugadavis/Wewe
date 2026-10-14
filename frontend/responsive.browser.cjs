@@ -48,6 +48,7 @@ async function runCase(browser, engine, width, height = 900) {
   const errors = [];
   const calls = [];
   let accountRole = "CUSTOMER";
+  let riderAvailability = "OFFLINE";
   let failCatalog = false, trackingStage = 0, failTracking = false, orderPaid = false;
   const trackedOrder = () => ({ id: "order1", order_number: "WEWE-TEST-001", status: trackingStage === 3 ? "DELIVERED" : trackingStage ? "OUT_FOR_DELIVERY" : "PREPARING", payment_status: orderPaid ? "PAID" : "PENDING", subtotal_ugx: 25000, delivery_fee_ugx: 3500, total_ugx: 28500, items: [] });
   page.on("pageerror", error => errors.push(error.message));
@@ -73,6 +74,9 @@ async function runCase(browser, engine, width, height = 900) {
       else if (endpoint === "/auth/password-reset/request") { response = {message:"If the account exists, instructions will be sent."}; status = 202; }
       else if (endpoint === "/auth/password-reset/confirm") { response = null; status = 204; }
       else if (endpoint === "/auth/me") response = { id: "u1", name: "Campus shopper", role: accountRole, email: "shopper@example.com" };
+      else if (endpoint === "/deliveries/me/availability") { riderAvailability = body.availability_status; response = { availability_status: riderAvailability }; }
+      else if (endpoint === "/deliveries/me/profile") response = { availability_status: riderAvailability, verification_status: "VERIFIED", profile_image_url: "/api/v1/products/images/fixture-media" };
+      else if (endpoint === "/deliveries/me/earnings") response = { paid_ugx: 0, pending_ugx: 0 };
       else if (endpoint === "/retailers/me/categories") response = { id: "new-category", name: body.name };
       else if (endpoint === "/retailers/me/products" && request.method() === "POST") response = { id: "new-product", listings: [{ retailer_product_id: "new-listing" }] };
       else if (endpoint === "/retailers/me") response = { business_name: "Test shop", verification_status: "VERIFIED", status: "ACTIVE", is_open: true };
@@ -279,6 +283,30 @@ async function runCase(browser, engine, width, height = 900) {
     assert.ok(calls.some(call => call.endpoint === "/retailers/me/categories" && call.body.name === "Home essentials"));
     assert.ok(calls.some(call => call.endpoint === "/retailers/me/products" && call.body?.category_id === "new-category"));
     assert.equal(calls.filter(call => call.endpoint === "/retailers/me/products/new-listing/images").length, 2);
+    // Both rider availability controls must reflect the same saved server state.
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation({ latitude: 0.335, longitude: 32.57, accuracy: 10 });
+    accountRole = "DELIVERY_AGENT";
+    await page.evaluate(() => localStorage.setItem("wewe_access_token", "fixture-rider"));
+    await page.reload();
+    await page.getByRole("button", { name: "My account", exact: true }).waitFor();
+    await page.locator("#accountButton").click();
+    const bottomToggle = page.locator('.rider-empty [data-action="agent-availability"]');
+    await bottomToggle.filter({ hasText: "Go online" }).waitFor();
+    await bottomToggle.click();
+    await bottomToggle.filter({ hasText: "Go offline" }).waitFor();
+    assert.equal(await bottomToggle.getAttribute("data-status"), "OFFLINE");
+    assert.equal(await page.locator('.rider-online-control [data-action="agent-availability"]').textContent(), "Go offline");
+    await page.getByRole("heading", { name: "Waiting for your next delivery", exact: true }).waitFor();
+    await page.locator('.rider-online-control [data-action="agent-availability"]').click();
+    await bottomToggle.filter({ hasText: "Go online" }).waitFor();
+    assert.equal(await bottomToggle.getAttribute("data-status"), "AVAILABLE");
+    await bottomToggle.click();
+    await bottomToggle.filter({ hasText: "Go offline" }).waitFor();
+    await bottomToggle.click();
+    await bottomToggle.filter({ hasText: "Go online" }).waitFor();
+    assert.deepEqual(calls.filter(call => call.endpoint === "/deliveries/me/availability").map(call => call.body.availability_status), ["AVAILABLE", "OFFLINE", "AVAILABLE", "OFFLINE"]);
+    await noOverflow(page, "Rider availability " + width);
     assert.deepEqual(errors, [], "No uncaught browser errors");
     console.log("PASS " + engine + " " + width + "x" + height + ": storefront, SVG, search, auth keyboard, basket, delivery/pickup, payment contract, dashboard, retry");
   } catch (error) {
