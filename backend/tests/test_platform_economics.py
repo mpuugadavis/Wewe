@@ -61,7 +61,7 @@ def test_commission_snapshot_does_not_change_when_setting_changes():
         session.commit()
         order = _order(25_000)
         snapshot_order_commission(session, order)
-        session.add(PlatformSetting(key="platform_commission", value={"percent": "12"}))
+        session.get(PlatformSetting, "platform_commission").value = {"percent": "12"}
         session.commit()
         assert order.platform_commission_percent == Decimal("8")
         assert order.platform_commission_ugx == 2_000

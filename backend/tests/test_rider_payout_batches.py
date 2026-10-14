@@ -63,6 +63,7 @@ def test_failed_batch_releases_earnings_for_retry():
         assignment = _earning(session, agent, 5000)
 
         first = generate_rider_payout_batch(session, agent_id=agent)
+        submit_rider_payout_batch(session, batch_id=first.batch_id, authorized_by_user_id=uuid4())
         fail_rider_payout_batch(session, batch_id=first.batch_id)
 
         retry = generate_rider_payout_batch(session, agent_id=agent)

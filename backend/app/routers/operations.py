@@ -1,3 +1,4 @@
+from app.services.delivery_confirmation import issue_delivery_confirmation
 from datetime import datetime, timezone
 from hmac import compare_digest
 from uuid import UUID
@@ -93,7 +94,8 @@ def set_availability(
     principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
     db: Session = Depends(get_db),
 ) -> dict:
-    agent = _agent_profile(db, principal.user.id)
+    agent = db.scalar(select(DeliveryAgent).where(DeliveryAgent.user_id == principal.user.id).with_for_update())
+    _agent_profile(db, principal.user.id)
     if payload.availability_status == "AVAILABLE" and not principal.user.profile_image_storage_key:
         raise HTTPException(status_code=409, detail={"code": "rider_photo_required", "message": "Upload an identification photo and obtain approval before going online."})
     active = db.scalar(
@@ -102,11 +104,9 @@ def set_availability(
             DeliveryAssignment.status.in_(["ACCEPTED", "PICKED_UP", "OUT_FOR_DELIVERY"]),
         )
     )
-    if active and payload.availability_status == "OFFLINE":
-        raise HTTPException(status_code=409, detail={"code": "active_delivery", "message": "Complete your active delivery before going offline."})
+    if active:
+        raise HTTPException(status_code=409, detail={"code": "active_delivery", "message": "Complete your active delivery before changing availability."})
     agent.availability_status = payload.availability_status
-    if payload.availability_status == "AVAILABLE":
-        dispatch_ready_queue(db)
     db.commit()
     return {"availability_status": agent.availability_status}
 
@@ -249,7 +249,10 @@ def my_delivery_offers(
     principal: Principal = Depends(require_roles("DELIVERY_AGENT")),
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    _agent_profile(db, principal.user.id)
+    agent = _agent_profile(db, principal.user.id)
+    if agent.availability_status != "AVAILABLE":
+        return []
+    dispatch_ready_queue(db)
     offers = list_active_offers(db, principal.user.id, limit=limit)
     db.commit()
     return offers
@@ -364,7 +367,7 @@ def accept_delivery(
     agent.availability_status = "BUSY"
     db.add(DeliveryEvent(assignment_id=assignment.id, actor_user_id=principal.user.id, previous_status="UNASSIGNED", new_status="ACCEPTED"))
     if order:
-        db.add(NotificationOutbox(user_id=order.customer_id, event_type="DELIVERY_ASSIGNED", payload={"order_id": str(order.id), "order_number": order.order_number}))
+        issue_delivery_confirmation(db, assignment, order)
     db.commit()
     return _delivery_view(db, assignment, reveal_destination=True)
 
@@ -477,8 +480,8 @@ def update_delivery_status(
         fulfillment.status, payload.status
     ):
         raise HTTPException(status_code=409, detail={"code": "invalid_transition", "message": f"Cannot move a {fulfillment.status.lower()} fulfillment to {payload.status.lower()}."})
-    if payload.status == "DELIVERED" and assignment.confirmation_code_hash is not None:
-        if not payload.confirmation_code or not compare_digest(
+    if payload.status == "DELIVERED":
+        if not assignment.confirmation_code_hash or not payload.confirmation_code or not compare_digest(
             hash_token(payload.confirmation_code),
             assignment.confirmation_code_hash,
         ):
@@ -495,9 +498,15 @@ def update_delivery_status(
     elif payload.status == "DELIVERED":
         fulfillment.status = "DELIVERED"
         assignment.delivered_at = now
+        assignment.confirmation_code_hash = None
         _consume_fulfillment_inventory(db, fulfillment)
         recompute_order_status(db, order)
-        db.add(NotificationOutbox(user_id=order.customer_id, event_type="ORDER_DELIVERED", payload={"order_id": str(order.id), "order_number": order.order_number}))
+        db.add(NotificationOutbox(
+            user_id=order.customer_id,
+            event_type="ORDER_DELIVERED" if order.status in {"DELIVERED", "PARTIALLY_DELIVERED"} else "DELIVERY_COMPLETED",
+            payload={"order_id": str(order.id), "order_number": order.order_number,
+                     "message": f"Delivery confirmed for {order.order_number}. " + ("Your order is now closed." if order.status in {"DELIVERED", "PARTIALLY_DELIVERED"} else "Your other deliveries are still in progress.")},
+        ))
         # Payments settle online through the provider webhook; a completed
         # delivery never marks a payment successful (cash is out of scope).
         assignment_count = db.scalar(

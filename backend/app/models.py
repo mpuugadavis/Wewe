@@ -494,6 +494,13 @@ class DeliveryAssignment(TimestampMixin, Base):
             "status IN ('UNASSIGNED','ACCEPTED','PICKED_UP','OUT_FOR_DELIVERY','DELIVERED','CANCELLED')",
             name="ck_delivery_assignment_status",
         ),
+        Index(
+            "uq_rider_active_delivery",
+            "agent_id",
+            unique=True,
+            sqlite_where=text("status IN ('ACCEPTED','PICKED_UP','OUT_FOR_DELIVERY')"),
+            postgresql_where=text("status IN ('ACCEPTED','PICKED_UP','OUT_FOR_DELIVERY')"),
+        ),
     )
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     fulfillment_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("retailer_fulfillments.id", ondelete="CASCADE"), index=True)

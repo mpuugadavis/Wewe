@@ -1206,11 +1206,21 @@ button{font-weight:650}
       <nav class="nav-links" aria-label="Main navigation"><a class="active" href="#home">Discover</a><a href="#products">Shop</a><a href="#retailers">Retailers</a></nav>
       <div class="nav-spacer"></div>
       <button class="location" id="locationButton" aria-label="Choose delivery location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg><span><small>Delivery location</small><br>Choose at checkout ▾</span></button>
-      <label class="searchbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input id="searchInput" type="search" placeholder="Search what you need…" aria-label="Search products"></label>
+      <label class="searchbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input id="searchInput" type="search" placeholder="Search products, brands and everyday essentials" aria-label="Search products"></label>
       <button class="icon-button" id="cartButton" aria-label="Open cart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8h12l1 12H5L6 8Z"></path><path d="M9 8a3 3 0 0 1 6 0"></path></svg><span class="cart-count" id="cartCount">0</span></button>
       <button class="account" id="accountButton">Sign in</button>
       <button class="icon-button mobile-menu" aria-label="Account menu" id="mobileAccount">☰</button>
     </div>
+    <nav class="category-navigation" id="categoriesSection" aria-label="Shop by category">
+      <div class="shell category-navigation-inner">
+        <details class="department-menu" id="departmentMenu">
+          <summary><span aria-hidden="true">☰</span> Shop by category <span class="department-chevron" aria-hidden="true">⌄</span></summary>
+          <div class="department-dropdown"><div class="department-heading"><strong>Find your everyday</strong><small>Good things, closer to you.</small></div><div id="categoryList"></div></div>
+        </details>
+        <div id="categoryQuickLinks" class="category-quick-links" aria-label="Popular departments"></div>
+        <a class="nav-local-shops" href="#retailers">Meet the shops <span aria-hidden="true">↗</span></a>
+      </div>
+    </nav>
   </header>
   <main id="storefront">
     <section class="brand-hero" id="home" aria-labelledby="heroTitle">
@@ -1235,7 +1245,7 @@ button{font-weight:650}
       <div class="brand-marquee" aria-hidden="true"><span>GOOD FINDS</span><i>✦</i><span>LOCAL CONNECTIONS</span><i>✦</i><span>CAMPUS ENERGY</span><i>✦</i><span>ALL AROUND YOU</span></div>
     </section>
     <div class="trustbar"><div class="shell trust-inner"><div class="trust-item"><b>●</b> Discover campus retailers</div><div class="trust-item"><b>↗</b> Campus delivery &amp; pickup</div><div class="trust-item"><b>UGX</b> Local prices in UGX</div><div class="trust-item"><b>♡</b> Local spend, shared growth</div></div></div>
-    <section class="section shell" id="categoriesSection"><div class="section-head"><div><div class="section-kicker">A little bit of everything</div><h2>What are you after?</h2></div><button class="text-link" id="allCategories">Browse all categories →</button></div><div class="category-showcase" id="categoryList"></div></section>
+
     <section class="products-section" id="products"><div class="shell section"><div class="section-head"><div><div class="section-kicker">Picked for campus life</div><h2 id="productHeading">Good finds, close by</h2><div class="section-count" id="productCount"></div></div><div class="filters"><select class="filter-select" id="availabilityFilter" aria-label="Filter availability"><option value="all">All availability</option><option value="in-stock">In stock</option><option value="nearby" disabled>Near me (unavailable)</option></select><select class="filter-select" id="sortFilter" aria-label="Sort products"><option value="featured">Sort: Featured</option><option value="price-low">Price: Low to high</option><option value="price-high">Price: High to low</option></select></div></div><div class="catalog-toolbar"><span class="catalog-label">Fresh on WEWE</span><span class="catalog-hint">Tap a product to see the story behind it</span></div><div class="product-grid" id="productGrid"></div></div></section>
     <section class="shell section commerce-rail-section" id="dealsSection">
       <div class="section-head"><div><div class="section-kicker">Save more on campus</div><h2>Deals worth catching.</h2><p class="section-subcopy">Discounted products from WEWE retailers, updated with the live catalog.</p></div></div>

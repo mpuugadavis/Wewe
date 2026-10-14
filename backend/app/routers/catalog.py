@@ -1,11 +1,14 @@
 import io
 import re
-from uuid import UUID
+import unicodedata
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from app.limiter import limiter
 
 from app.config import get_settings
 from app.db import get_db
@@ -19,7 +22,7 @@ from app.models import (
     RetailerProduct,
     User,
 )
-from app.schemas import CategoryOut, ProductCreate, ProductImageReorder, ProductOut, ProductUpdate
+from app.schemas import RetailerCategoryCreate, CategoryOut, ProductCreate, ProductImageReorder, ProductOut, ProductUpdate
 from app.services.media_storage import (
     MAX_PRODUCT_IMAGES,
     MediaStorageError,
@@ -119,6 +122,35 @@ def _serialize_products(db: Session, products: list[Product]) -> list[dict]:
 @router.get("/categories", response_model=list[CategoryOut])
 def list_categories(db: Session = Depends(get_db)) -> list[Category]:
     return list(db.scalars(select(Category).where(Category.is_active.is_(True)).order_by(Category.sort_order, Category.name)).all())
+
+
+@router.post("/retailers/me/categories", response_model=CategoryOut)
+@limiter.limit("10/minute")
+def create_retailer_category(
+    payload: RetailerCategoryCreate,
+    request: Request,
+    principal: Principal = Depends(require_roles("RETAILER")),
+    db: Session = Depends(get_db),
+) -> Category:
+    _owned_retailer(db, principal.user.id)
+    name = payload.name
+    normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9]+", "-", normalized.lower()).strip("-") or f"category-{uuid4().hex[:12]}"
+    existing = db.scalar(select(Category).where(or_(func.lower(Category.name) == name.lower(), Category.slug == slug)))
+    if existing is None:
+        try:
+            with db.begin_nested():
+                existing = Category(name=name, slug=slug)
+                db.add(existing)
+                db.flush()
+        except IntegrityError:
+            existing = db.scalar(select(Category).where(Category.slug == slug))
+            if existing is None:
+                raise
+    if not existing.is_active:
+        raise HTTPException(status_code=409, detail={"code": "category_inactive", "message": "This category is unavailable. Choose an active category or contact WEWE."})
+    db.commit()
+    return existing
 
 
 @router.get("/products", response_model=list[ProductOut])

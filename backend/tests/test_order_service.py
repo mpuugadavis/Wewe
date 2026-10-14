@@ -1,3 +1,4 @@
+from app.services.delivery_confirmation import issue_delivery_confirmation
 import secrets
 
 from fastapi import HTTPException
@@ -825,7 +826,9 @@ def test_pickup_is_distinct_from_acceptance_and_duplicate_delivery_is_rejected(c
     order.status = "READY"
     assignment.agent_id = agent_user.id
     assignment.status = "ACCEPTED"
-    assignment.confirmation_code_hash = None
+    issue_delivery_confirmation(database, assignment, order)
+    database.flush()
+    code = database.scalar(select(NotificationOutbox).where(NotificationOutbox.event_type == "DELIVERY_ASSIGNED", NotificationOutbox.channel == "IN_APP")).payload["confirmation_code"]
     database.commit()
     customer_delivery_fee = order.delivery_fee_ugx
     headers = _authorization(database, agent_user)
@@ -833,7 +836,7 @@ def test_pickup_is_distinct_from_acceptance_and_duplicate_delivery_is_rejected(c
     invalid_direct_delivery = client.post(
         f"/api/v1/deliveries/{assignment.id}/status",
         headers=headers,
-        json={"status": "DELIVERED"},
+        json={"status": "DELIVERED", "confirmation_code": code},
     )
     picked_up = client.post(
         f"/api/v1/deliveries/{assignment.id}/status",
@@ -853,12 +856,12 @@ def test_pickup_is_distinct_from_acceptance_and_duplicate_delivery_is_rejected(c
     delivered = client.post(
         f"/api/v1/deliveries/{assignment.id}/status",
         headers=headers,
-        json={"status": "DELIVERED"},
+        json={"status": "DELIVERED", "confirmation_code": code},
     )
     duplicate_delivery = client.post(
         f"/api/v1/deliveries/{assignment.id}/status",
         headers=headers,
-        json={"status": "DELIVERED"},
+        json={"status": "DELIVERED", "confirmation_code": code},
     )
 
     assert invalid_direct_delivery.status_code == 409
@@ -949,6 +952,7 @@ def test_agent_acceptance_does_not_block_customer_cancellation(client, database)
         role="DELIVERY_AGENT",
         status="ACTIVE",
     )
+    agent_user.profile_image_storage_key = "profiles/test-approved-rider.webp"
     database.add(agent_user)
     database.flush()
     database.add(
@@ -1240,8 +1244,8 @@ def test_recompute_mixed_delivered_cancelled_fulfillments_does_not_fall_back_to_
 
     recompute_order_status(database, order)
 
-    assert order.status != "PENDING"
-    assert order.status == "OUT_FOR_DELIVERY"
+    assert order.status == "PARTIALLY_DELIVERED"
+    assert order.delivered_at is not None
 
 
 def test_refund_transition_never_refunds_more_than_captured_full_payment(client, database, monkeypatch) -> None:
@@ -1312,6 +1316,7 @@ def test_payment_idempotency_key_rejects_changed_amount(client, database, monkey
     )
     database.commit()
     first = _start_payment(client, database, order, customer, "changed-amount-key")
+    order.gross_delivery_fee_ugx += 1000
     order.delivery_fee_ugx += 1000
     order.total_ugx += 1000
     database.commit()
@@ -1656,6 +1661,7 @@ def test_delivery_completion_requires_customer_confirmation_code(client, databas
         role="DELIVERY_AGENT",
         status="ACTIVE",
     )
+    agent_user.profile_image_storage_key = "profiles/test-approved-rider.webp"
     database.add(agent_user)
     database.flush()
     database.add(
@@ -1670,13 +1676,16 @@ def test_delivery_completion_requires_customer_confirmation_code(client, databas
     assignment.status = "OUT_FOR_DELIVERY"
     fulfillment.status = "OUT_FOR_DELIVERY"
     order.status = "OUT_FOR_DELIVERY"
+    issue_delivery_confirmation(database, assignment, order)
+    database.flush()
     notification = database.scalar(
         select(NotificationOutbox).where(
             NotificationOutbox.user_id == customer.id,
-            NotificationOutbox.event_type == "ORDER_PLACED",
+            NotificationOutbox.event_type == "DELIVERY_ASSIGNED",
+            NotificationOutbox.channel == "IN_APP",
         )
     )
-    confirmation_code = notification.payload["delivery_confirmation_codes"][str(fulfillment.id)]
+    confirmation_code = notification.payload["confirmation_code"]
     wrong_confirmation_code = "00000000" if confirmation_code != "00000000" else "00000001"
     family = RefreshTokenFamily(user_id=agent_user.id, token_version=agent_user.token_version)
     database.add(family)
@@ -1708,6 +1717,9 @@ def test_delivery_completion_requires_customer_confirmation_code(client, databas
     assert database.get(DeliveryAssignment, assignment.id).status == "DELIVERED"
     assert inventory.quantity == 0
     assert inventory.reserved_quantity == 0
+    assert database.get(Order, order.id).status == "DELIVERED"
+    assert database.get(DeliveryAgent, agent_user.id).availability_status == "AVAILABLE"
+    assert assignment.confirmation_code_hash is None
 
 
 def test_admin_cannot_assign_delivery_to_inactive_agent(client, database) -> None:

@@ -427,19 +427,20 @@
   }
 
   function renderCategories() {
-    const categories = [{ id: "all", name: "Everything" }, ...state.categories];
-    const categoryImage = name => {
-      const key = String(name || "").toLowerCase();
-      if (/food|grocer|grocery|meal|restaurant|bakery|snack|drink|beverage/.test(key)) return "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=82";
-      if (/fashion|cloth|wear|shoe|footwear|bag|accessor/.test(key)) return "https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=600&q=82";
-      if (/electronic|phone|computer|laptop|tech|gadget/.test(key)) return "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=600&q=82";
-      if (/station|book|school|academic|study|office/.test(key)) return "https://images.unsplash.com/photo-1455885666463-2c6c4fce7b8b?auto=format&fit=crop&w=600&q=82";
-      if (/beauty|cosmetic|hair|skin/.test(key)) return "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=600&q=82";
-      if (/home|house|furniture|decor|kitchen/.test(key)) return "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=600&q=82";
-      if (/health|care|pharmacy|fitness|sport/.test(key)) return "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=600&q=82";
-      return "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=600&q=82";
-    };
-    $("#categoryList").innerHTML = categories.map(category => `<button class="category ${state.activeCategory === category.id ? "active" : ""}" data-action="category" data-category-id="${escapeHtml(category.id)}" aria-label="Browse ${escapeHtml(category.name)}"><span class="category-image" style="background-image:url('${categoryImage(category.name)}')"></span><span class="category-label"><span>${escapeHtml(category.name)}</span><span>→</span></span></button>`).join("");
+    const categories = [{ id: "all", name: "All products" }, ...state.categories];
+    const paths = [
+      [/food|grocer|drink/i, '<path d="M4 9h16l-2 11H6L4 9Zm3 0 3-6m7 6-3-6M9 13v3m6-3v3"/>'],
+      [/cloth|fashion/i, '<path d="m8 3-6 4 3 5 3-2v11h8V10l3 2 3-5-6-4c0 4-8 4-8 0Z"/>'],
+      [/shoe|footwear/i, '<path d="M3 5h6v6l5 3 7 2v5H3V5Zm6 6 3-2m0 4 3-2M3 17h18"/>'],
+      [/electronic|comput|phone/i, '<rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8m-4-5v5"/>'],
+      [/station|book|office/i, '<path d="M12 5C8 2 4 3 2 4v16c4-2 7-1 10 1 3-2 6-3 10-1V4c-2-1-6-2-10 1v16Z"/>'],
+      [/beauty|skin/i, '<path d="M8 10h8v12H8zM9 10V4l6-3v9M6 22h12"/>'],
+      [/accessor|bag/i, '<rect x="4" y="7" width="16" height="15" rx="3"/><path d="M8 9V5a4 4 0 0 1 8 0v4"/>']
+    ];
+    const icon = name => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths.find(([match]) => match.test(name))?.[1] || '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>') + '</svg>';
+    const button = (category, menu) => `<button class="department-link ${state.activeCategory === category.id ? "active" : ""}" data-action="category" data-category-id="${escapeHtml(category.id)}" aria-pressed="${state.activeCategory === category.id}">${menu ? icon(category.name) : ""}<span>${escapeHtml(category.name)}</span>${menu ? '<span class="department-arrow" aria-hidden="true">›</span>' : ""}</button>`;
+    $("#categoryList").innerHTML = categories.map(category => button(category, true)).join("");
+    $("#categoryQuickLinks").innerHTML = state.categories.map(category => button(category, false)).join("");
   }
 
   function renderRetailers() {
@@ -1642,7 +1643,7 @@
         : row.status === "PICKED_UP"
           ? `<button class="rider-primary-action" data-action="delivery-status" data-id="${escapeHtml(row.id)}" data-status="OUT_FOR_DELIVERY">Start delivery</button>`
           : row.status === "OUT_FOR_DELIVERY"
-            ? `<form data-form="delivery-code" data-id="${escapeHtml(row.id)}" class="rider-code-form"><input name="confirmation_code" required minlength="4" maxlength="12" placeholder="Customer code"><button class="rider-primary-action">Complete delivery</button></form>`
+            ? `<form data-form="delivery-code" data-id="${escapeHtml(row.id)}" class="rider-code-form"><label>Customer handover code<input name="confirmation_code" required inputmode="numeric" pattern="[0-9]{8}" minlength="8" maxlength="8" autocomplete="off" placeholder="8-digit code"></label><small>Ask the customer for the code from their WEWE notifications or email after handing over their delivery.</small><button class="rider-primary-action">Complete delivery</button></form>`
             : "";
     const currentStep = row.status === "ACCEPTED" ? "Confirm pickup at the retailer." :
       row.status === "PICKED_UP" ? "Start the delivery route." :
@@ -2056,7 +2057,7 @@
 
   async function newProduct() {
     const categories = state.categories.length ? state.categories : await apiFetch("/categories");
-    setModal(`<div class="modal-head"><h2>Add a product</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-product" class="api-form"><label class="field">Product name<input name="name" required minlength="2" maxlength="220"></label><label class="field">Description<textarea name="description" rows="4" maxlength="5000" placeholder="Describe the quality, sizes, colours, features and what is included."></textarea></label><label class="field">Category<select name="category_id" required>${categories.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" required></label><label class="field">Old price (UGX) <small class="muted">Optional — used to show a discount</small><input name="original_price_ugx" type="number" min="1" step="1" placeholder="e.g. 50000"></label><label class="field">Stock quantity<input name="stock_quantity" type="number" min="0" step="1" required></label><label class="field">Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple required><small class="muted">JPEG, PNG or WebP · up to 12 photos · max 5 MiB each.</small></label><p data-product-upload-progress class="muted" aria-live="polite"></p><p class="form-message" aria-live="polite"></p><button class="button-primary">Create product</button></form>`);
+    setModal(`<div class="modal-head"><h2>Add a product</h2><button class="close-modal" data-action="close-modal">×</button></div><form data-form="new-product" class="api-form"><label class="field">Product name<input name="name" required minlength="2" maxlength="220"></label><label class="field">Description<textarea name="description" rows="4" maxlength="5000" placeholder="Describe the quality, sizes, colours, features and what is included."></textarea></label><label class="field">Product category<select name="category_id" required><option value="">Choose a category</option>${categories.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}</select></label><details class="new-category-inline"><summary>Can't find it? Add a category</summary><label class="field">New category name<input name="new_category_name" minlength="2" maxlength="100" placeholder="e.g. Home essentials"><small>Leave blank to use the selected category.</small></label></details><label class="field">Current price (UGX)<input name="price_ugx" type="number" min="1" step="1" required></label><label class="field">Old price (UGX) <small class="muted">Optional — used to show a discount</small><input name="original_price_ugx" type="number" min="1" step="1" placeholder="e.g. 50000"></label><label class="field">Stock quantity<input name="stock_quantity" type="number" min="0" step="1" required></label><label class="field">Product photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple required><small class="muted">JPEG, PNG or WebP · up to 12 photos · max 5 MiB each.</small></label><p data-product-upload-progress class="muted" aria-live="polite"></p><p class="form-message" aria-live="polite"></p><button class="button-primary">Create product</button></form>`);
   }
 
   async function createProduct(form) {
@@ -2067,6 +2068,13 @@
     for (const file of files) {
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Only JPEG, PNG and WebP product photos are supported.");
       if (!file.size || file.size > 5 * 1024 * 1024) throw new Error("Each product photo must be between 1 byte and 5 MiB.");
+    }
+    const categoryName = values.new_category_name?.trim();
+    if (categoryName && !form.dataset.createdListingId) {
+      const category = await apiFetch("/retailers/me/categories", { method: "POST", body: JSON.stringify({ name: categoryName }) });
+      values.category_id = category.id;
+      if (!state.categories.some(item => item.id === category.id)) state.categories.push(category);
+      renderCategories();
     }
     let listingId = form.dataset.createdListingId;
     if (!listingId) {
@@ -2214,9 +2222,13 @@
       return renderDashboard();
     }
     if (action === "category") {
+      $("#departmentMenu").open = false;
       state.activeCategory = button.dataset.categoryId;
       renderCategories();
-      return renderCatalog();
+      renderCatalog();
+      $("#departmentMenu summary").focus({ preventScroll: true });
+      $("#products")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      return;
     }
     if (action === "product-details") return showProduct(button.dataset.productId);
     if (action === "product-gallery-select") return selectProductGalleryImage(Number(button.dataset.index));
@@ -2577,6 +2589,20 @@
       if (event.key === "Escape" && $("#modalBackdrop")?.classList.contains("open")) closeModal();
     });
 
+    on("#modalContent", "input", event => {
+      if (event.target.name === "new_category_name") {
+        const select = event.target.form?.elements.category_id;
+        if (select) select.required = !event.target.value.trim();
+      }
+    });
+    document.addEventListener("click", event => {
+      const menu = $("#departmentMenu");
+      if (menu?.open && !menu.contains(event.target)) menu.open = false;
+    });
+    document.addEventListener("keydown", event => {
+      const menu = $("#departmentMenu");
+      if (event.key === "Escape" && menu?.open) { menu.open = false; menu.querySelector("summary").focus(); }
+    });
     on("#modalContent", "change", event => {
       if (event.target.closest('form[data-form="checkout"]')) {
         if (event.target.name === "delivery_point_id") selectCheckoutPoint(event.target.value);

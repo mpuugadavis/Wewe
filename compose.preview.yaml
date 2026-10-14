@@ -1,0 +1,78 @@
+name: wewe-preview
+x-backend: &backend
+  build: ./backend
+  image: wewe-preview-api:local
+  env_file: ./backend/.env.preview
+  environment:
+    APP_ENV: staging
+    PAWAPAY_ENVIRONMENT: SANDBOX
+    PAWAPAY_API_BASE_URL: https://api.sandbox.pawapay.io
+    RATE_LIMIT_STORAGE_URI: redis://redis:6379/0
+    MAX_REQUEST_BODY_BYTES: 6291456
+    MEDIA_CLEANUP_DRY_RUN: "true"
+  init: true
+  stop_grace_period: 30s
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: wewe_preview
+      POSTGRES_USER: wewe
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes: ["preview_database:/var/lib/postgresql/data"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wewe -d wewe_preview"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres: {condition: service_healthy}
+  api:
+    <<: *backend
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  notification-worker:
+    <<: *backend
+    command: ["python", "-m", "app.workers.notification_worker"]
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  media-cleanup-worker:
+    <<: *backend
+    command: ["python", "-m", "app.workers.media_cleanup_worker"]
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  web:
+    build: ./frontend
+    environment:
+      WEWE_DOMAIN: ${WEWE_DOMAIN:?Set the preview hostname}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes: ["preview_tls:/data", "preview_caddy:/config"]
+    restart: unless-stopped
+    depends_on:
+      api: {condition: service_healthy}
+volumes:
+  preview_database:
+  preview_tls:
+  preview_caddy:

@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlsplit
@@ -7,7 +8,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore", case_sensitive=False)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        if os.getenv("APP_ENV") == "test":
+            return (init_settings, env_settings, file_secret_settings)
+        return (init_settings, env_settings, dotenv_settings, file_secret_settings)
 
     app_env: Literal["development", "test", "staging", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
@@ -258,7 +272,7 @@ class Settings(BaseSettings):
             raise ValueError("PAWAPAY_API_TOKEN must be a real token or be left empty")
         if self.routing_provider == "GOOGLE_MAPS" and not self.google_maps_api_key:
             raise ValueError("GOOGLE_MAPS_API_KEY is required when ROUTING_PROVIDER is GOOGLE_MAPS")
-        if self.routing_provider == "OPENROUTESERVICE" and not self.openrouteservice_api_key:
+        if self.routing_provider == "OPENROUTESERVICE" and not self.openrouteservice_api_key and self.app_env not in {"development", "test"}:
             raise ValueError(
                 "OPENROUTESERVICE_API_KEY is required when ROUTING_PROVIDER is OPENROUTESERVICE"
             )

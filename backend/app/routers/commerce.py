@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 import logging
 import secrets
 from uuid import UUID
@@ -17,6 +18,7 @@ from app.models import (
     CartItem,
     DeliveryAssignment,
     DeliveryEvent,
+    DeliveryQuote,
     Inventory,
     NotificationOutbox,
     Order,
@@ -622,7 +624,25 @@ def _adjust_order_after_rejection(db: Session, order: Order, fulfillment: Retail
             )
         ) or 1
         fee_share = order.delivery_fee_ugx // fulfillment_count if order.delivery_method == "DELIVERY" else 0
-    order.delivery_fee_ugx = max(0, order.delivery_fee_ugx - fee_share)
+    if committed_fee is not None:
+        # Reprice only the surviving committed snapshots; do not request new routes.
+        with db.no_autoflush:
+            remaining = db.scalars(select(DeliveryQuote).join(
+                RetailerFulfillment, RetailerFulfillment.id == DeliveryQuote.fulfillment_id
+            ).where(RetailerFulfillment.order_id == order.id, DeliveryQuote.fulfillment_id != fulfillment.id,
+                    DeliveryQuote.removed_at.is_(None))).all()
+        gross = sum(quote.delivery_fee_ugx for quote in remaining)
+        percent = order.multi_retailer_discount_percent if len(remaining) >= 2 else Decimal("0")
+        discount = int((Decimal(gross) * percent / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        order.gross_delivery_fee_ugx = gross
+        order.multi_retailer_discount_percent = percent
+        order.multi_retailer_discount_ugx = discount
+        order.delivery_fee_ugx = gross - discount
+    else:
+        order.delivery_fee_ugx = max(0, order.delivery_fee_ugx - fee_share)
+        order.gross_delivery_fee_ugx = order.delivery_fee_ugx
+        order.multi_retailer_discount_ugx = 0
+        order.multi_retailer_discount_percent = Decimal("0")
     order.total_ugx = order.subtotal_ugx + order.delivery_fee_ugx
     # WEWE is online-payment-only. Rejection adjusts the order amount, but it
     # Any existing online payment attempt must be resolved/refunded before the

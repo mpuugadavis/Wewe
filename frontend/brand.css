@@ -207,3 +207,21 @@ img{max-width:100%}
  .brand-hero{background:#fff}.brand-hero-inner{grid-template-columns:1fr}.brand-editorial{display:none}
  .section{break-inside:avoid}.footer{padding-bottom:20px}
 }
+
+/* Department navigation: self-contained icons, no fragile category photography. */
+#categoriesSection.category-navigation{padding:0;background:#fff;border-top:1px solid #eee7f5;border-bottom:1px solid #e9e1f2;position:relative;z-index:30}
+.category-navigation-inner{display:flex;align-items:center;gap:22px;min-height:54px}
+.department-menu{flex:none;position:relative;width:218px}
+.department-menu summary{display:flex;align-items:center;gap:12px;padding:17px 0;color:#351859;cursor:pointer;font-size:13px;font-weight:800;list-style:none}
+.department-menu summary::-webkit-details-marker{display:none}.department-chevron{margin-left:auto}.department-menu[open] .department-chevron{transform:rotate(180deg)}
+.department-dropdown{position:absolute;top:100%;left:0;width:280px;max-height:70vh;overflow-y:auto;background:white;border:1px solid #e8def3;border-radius:0 0 16px 16px;box-shadow:0 18px 44px #29124422;padding:10px;z-index:60}
+.department-heading{padding:12px 12px 18px;border-bottom:1px solid #f0eaf7;margin-bottom:6px}.department-heading strong,.department-heading small{display:block}.department-heading strong{font-size:16px;color:#2b1747}.department-heading small{font-size:11px;color:#786a88;margin-top:5px}
+.department-link{border:0;background:transparent;color:#584766;display:flex;gap:13px;align-items:center;min-height:44px;padding:11px 12px;font:600 13px "DM Sans",sans-serif;text-align:left;cursor:pointer;border-radius:8px;flex:none;white-space:nowrap}
+#categoryList .department-link{width:100%;white-space:normal}#categoryList .department-link>span{overflow-wrap:anywhere}.department-link svg{width:21px;height:21px;flex:none;color:#8056bd}.department-arrow{margin-left:auto;color:#ae99c2}.department-link:hover,.department-link.active{background:#f2ebff;color:#6834d8}.department-link:focus-visible,summary:focus-visible{outline:3px solid #8b59ef;outline-offset:2px}
+.category-quick-links{display:flex;gap:4px;overflow-x:auto;min-width:0;flex:1;scrollbar-width:thin;padding:4px 0}.category-quick-links .department-link{font-size:12px;padding-inline:11px;min-height:38px}.nav-local-shops{flex:none;color:#6b35c2;font-size:12px;font-weight:800;text-decoration:none}.new-category-inline{border:1px solid #e8def3;border-radius:10px;padding:12px;background:#faf7ff}.new-category-inline summary{cursor:pointer;color:#673bb3;font-weight:700;font-size:13px}.new-category-inline .field{margin-top:12px}.topbar .searchbox{max-width:500px}
+@media(max-width:1100px){.category-navigation-inner{gap:12px}.department-menu{width:185px}.nav-local-shops{display:none}}
+@media(max-width:680px){.category-navigation-inner{flex-wrap:wrap;gap:0;padding-block:0}.department-menu{width:100%}.department-menu summary{padding:12px 0;min-height:44px}.department-dropdown{width:min(310px,calc(100vw - 40px))}.category-quick-links{flex-basis:100%;border-top:1px solid #f1ebf8;padding-block:5px}.category-quick-links .department-link{font-size:12px;min-height:38px;padding-inline:12px}.brand-hero-inner{padding-top:28px}}
+
+.topbar{flex-direction:column;align-items:stretch}.category-navigation{width:100%;min-width:0}.topbar-inner{flex:none}.brand-logo{object-fit:contain}
+
+#products{scroll-margin-top:150px}@media(max-width:680px){#products{scroll-margin-top:220px}}

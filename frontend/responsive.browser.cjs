@@ -47,6 +47,7 @@ async function runCase(browser, engine, width, height = 900) {
   const page = await context.newPage();
   const errors = [];
   const calls = [];
+  let accountRole = "CUSTOMER";
   let failCatalog = false, trackingStage = 0, failTracking = false, orderPaid = false;
   const trackedOrder = () => ({ id: "order1", order_number: "WEWE-TEST-001", status: trackingStage === 3 ? "DELIVERED" : trackingStage ? "OUT_FOR_DELIVERY" : "PREPARING", payment_status: orderPaid ? "PAID" : "PENDING", subtotal_ugx: 25000, delivery_fee_ugx: 3500, total_ugx: 28500, items: [] });
   page.on("pageerror", error => errors.push(error.message));
@@ -59,7 +60,7 @@ async function runCase(browser, engine, width, height = 900) {
     if (url.pathname.startsWith("/api/v1/")) {
       const endpoint = url.pathname.slice(7);
       let body;
-      if (request.postData()) body = JSON.parse(request.postData());
+      if (request.postData() && request.headers()["content-type"]?.includes("application/json")) body = JSON.parse(request.postData());
       calls.push({ endpoint, method: request.method(), body, headers: request.headers() });
       let response = [];
       let status = 200;
@@ -68,7 +69,11 @@ async function runCase(browser, engine, width, height = 900) {
         else response = products;
       } else if (endpoint === "/categories") response = categories;
       else if (endpoint === "/retailers") response = [{ id: "r1", slug: "campus-shop", business_name: "Campus community shop", product_count: 7 }];
-      else if (endpoint === "/auth/me") response = { id: "u1", name: "Campus shopper", role: "CUSTOMER", email: "shopper@example.com" };
+      else if (endpoint === "/auth/me") response = { id: "u1", name: "Campus shopper", role: accountRole, email: "shopper@example.com" };
+      else if (endpoint === "/retailers/me/categories") response = { id: "new-category", name: body.name };
+      else if (endpoint === "/retailers/me/products" && request.method() === "POST") response = { id: "new-product", listings: [{ retailer_product_id: "new-listing" }] };
+      else if (endpoint === "/retailers/me") response = { business_name: "Test shop", verification_status: "VERIFIED", status: "ACTIVE", is_open: true };
+      else if (endpoint === "/retailers/me/earnings") response = { entries: [], settlements: [] };
       else if (endpoint === "/cart" || endpoint.startsWith("/cart/items")) response = cart;
       else if (endpoint === "/users/me/profile") response = { preferred_delivery_point_id: "d1" };
       else if (endpoint.includes("/delivery-points")) response = [point];
@@ -109,6 +114,18 @@ async function runCase(browser, engine, width, height = 900) {
     await page.goto(base);
     await page.locator("#productGrid .product-card").first().waitFor();
     await noOverflow(page, engine + " homepage " + width);
+    await page.locator("#departmentMenu summary").click();
+    await page.locator('#categoryList [data-category-id="c2"]').click();
+    assert.equal(await page.locator("#departmentMenu").getAttribute("open"), null);
+    await noOverflow(page, "Category navigation " + width);
+    assert.equal(await page.locator("#productGrid .product-card").count(), 1);
+    await page.locator("#departmentMenu summary").click();
+    await page.locator('#categoryList [data-category-id="all"]').click();
+    assert.equal(await page.locator("#productGrid .product-card").count(), products.length);
+    await page.locator("#departmentMenu summary").click();
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator("#departmentMenu").getAttribute("open"), null);
+
     assert.equal(await page.locator(".brand-logo").count(), 3);
     await page.locator(".brand-logo").evaluateAll(images => Promise.all(images.map(image => image.decode())));
     const logoStates = await page.locator(".brand-logo").evaluateAll(images => images.map(image => ({ source: image.getAttribute("src"), complete: image.complete, width: image.naturalWidth, height: image.naturalHeight })));
@@ -217,6 +234,28 @@ async function runCase(browser, engine, width, height = 900) {
     failCatalog = false;
     await page.locator('[data-action="retry-catalog"]').click();
     await page.locator("#productGrid .product-card").first().waitFor();
+    accountRole = "RETAILER";
+    await page.evaluate(() => localStorage.setItem("wewe_access_token", "fixture-retailer"));
+    await page.reload();
+    await page.getByRole("button", { name: "My account", exact: true }).waitFor();
+    await page.locator("#accountButton").click();
+    await page.locator('#dashNav [data-section="products"]').click();
+    await page.locator('[data-action="new-product"]').first().click();
+    const form = page.locator('form[data-form="new-product"]');
+    await form.locator('[name="name"]').fill("Preview desk lamp");
+    await form.locator('[name="description"]').fill("Adjustable desk lamp with a warm light.");
+    await form.locator(".new-category-inline summary").click();
+    await form.locator('[name="new_category_name"]').fill("Home essentials");
+    await form.locator('[name="price_ugx"]').fill("25000");
+    await form.locator('[name="stock_quantity"]').fill("5");
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZuEAAAAASUVORK5CYII=", "base64");
+    await form.locator('[name="images"]').setInputFiles([{ name: "front.png", mimeType: "image/png", buffer: png }, { name: "side.png", mimeType: "image/png", buffer: png }]);
+    await noOverflow(page, "Retailer product entry " + width, "#modalContent");
+    await form.locator("button.button-primary").click();
+    await form.waitFor({ state: "hidden" });
+    assert.ok(calls.some(call => call.endpoint === "/retailers/me/categories" && call.body.name === "Home essentials"));
+    assert.ok(calls.some(call => call.endpoint === "/retailers/me/products" && call.body?.category_id === "new-category"));
+    assert.equal(calls.filter(call => call.endpoint === "/retailers/me/products/new-listing/images").length, 2);
     assert.deepEqual(errors, [], "No uncaught browser errors");
     console.log("PASS " + engine + " " + width + "x" + height + ": storefront, SVG, search, auth keyboard, basket, delivery/pickup, payment contract, dashboard, retry");
   } catch (error) {

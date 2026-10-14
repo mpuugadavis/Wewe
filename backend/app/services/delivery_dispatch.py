@@ -7,11 +7,13 @@ checkout/pricing services.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from app.services.delivery_confirmation import issue_delivery_confirmation
+
+from datetime import timedelta, timezone
 from math import asin, cos, radians, sin, sqrt
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -30,7 +32,11 @@ from app.models import (
 )
 
 RIDER_LOCATION_MAX_AGE_SECONDS = 60
-OFFER_TTL_SECONDS = 20
+OFFER_TTL_SECONDS = 60
+
+
+def _utc(value):
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
 class DispatchError(Exception):
@@ -81,7 +87,13 @@ def _candidate_rows(db: Session, assignment: DeliveryAssignment) -> list[tuple[D
     prior_agents = set(
         db.scalars(
             select(DeliveryOffer.agent_id)
-            .where(DeliveryOffer.assignment_id == assignment.id)
+            .where(
+                DeliveryOffer.assignment_id == assignment.id,
+                or_(
+                    DeliveryOffer.status.in_(["PENDING", "ACCEPTED", "REJECTED"]),
+                    DeliveryOffer.offered_at >= utcnow() - timedelta(minutes=2),
+                ),
+            )
         ).all()
     )
     candidates: list[tuple[DeliveryAgent, DeliveryAgentLocation, float]] = []
@@ -96,7 +108,7 @@ def _candidate_rows(db: Session, assignment: DeliveryAssignment) -> list[tuple[D
         )
         candidates.append((agent, location, distance_m))
 
-    candidates.sort(key=lambda row: (row[2], row[1].updated_at, str(row[0].user_id)))
+    candidates.sort(key=lambda row: (row[2], _utc(row[1].updated_at), str(row[0].user_id)))
     return candidates
 
 
@@ -114,7 +126,30 @@ def _create_offer(db: Session, assignment: DeliveryAssignment) -> DeliveryOffer 
         )
         or 0
     ) + 1
-    agent, _location, distance_m = candidates[0]
+    selected = None
+    for candidate, location, distance in candidates:
+        agent = db.scalar(
+            select(DeliveryAgent)
+            .where(DeliveryAgent.user_id == candidate.user_id)
+            .with_for_update(skip_locked=True)
+        )
+        if agent is None:
+            continue
+        pending = db.scalar(
+            select(DeliveryOffer.id)
+            .where(
+                DeliveryOffer.agent_id == agent.user_id,
+                DeliveryOffer.status == "PENDING",
+                DeliveryOffer.expires_at > utcnow(),
+            )
+            .limit(1)
+        )
+        if agent.availability_status == "AVAILABLE" and not _active_assignment_exists(db, agent.user_id) and pending is None:
+            selected = (agent, distance)
+            break
+    if selected is None:
+        return None
+    agent, distance_m = selected
     now = utcnow()
     offer = DeliveryOffer(
         assignment_id=assignment.id,
@@ -175,9 +210,10 @@ def advance_dispatch(db: Session, assignment_id: UUID) -> DeliveryOffer | None:
     )
     now = utcnow()
     if pending is not None:
-        if pending.expires_at > now:
+        agent = db.get(DeliveryAgent, pending.agent_id)
+        if agent and agent.availability_status == "AVAILABLE" and not _active_assignment_exists(db, pending.agent_id) and _utc(pending.expires_at) > now:
             return pending
-        pending.status = "EXPIRED"
+        pending.status = "EXPIRED" if _utc(pending.expires_at) <= now else "CANCELLED"
         pending.responded_at = now
 
     return _create_offer(db, assignment)
@@ -232,7 +268,7 @@ def offer_view(db: Session, offer: DeliveryOffer) -> dict:
         "status": offer.status,
         "offer_sequence": offer.offer_sequence,
         "offered_at": offer.offered_at,
-        "expires_at": offer.expires_at,
+        "expires_at": _utc(offer.expires_at),
         "responded_at": offer.responded_at,
         "distance_m": float(offer.distance_m),
         "delivery": {
@@ -252,13 +288,10 @@ def list_active_offers(db: Session, agent_id: UUID, limit: int = 20) -> list[dic
         )
         .order_by(DeliveryOffer.expires_at.asc(), DeliveryOffer.created_at.asc())
         .limit(limit)
-        .with_for_update()
     ).all()
     now = utcnow()
     for offer in offers:
-        if offer.expires_at <= now:
-            offer.status = "EXPIRED"
-            offer.responded_at = now
+        if _utc(offer.expires_at) <= now:
             advance_dispatch(db, offer.assignment_id)
     db.flush()
     current = db.scalars(
@@ -270,18 +303,29 @@ def list_active_offers(db: Session, agent_id: UUID, limit: int = 20) -> list[dic
         .order_by(DeliveryOffer.expires_at.asc(), DeliveryOffer.created_at.asc())
         .limit(limit)
     ).all()
-    return [offer_view(db, offer) for offer in current]
+    return [
+        offer_view(db, offer)
+        for offer in current
+        if _utc(offer.expires_at) > now
+        and db.get(DeliveryAssignment, offer.assignment_id).status == "UNASSIGNED"
+        and not _active_assignment_exists(db, agent_id)
+    ]
 
 
 def reject_offer(db: Session, agent_id: UUID, offer_id: UUID) -> DeliveryOffer:
+    reference = db.get(DeliveryOffer, offer_id)
+    if reference is None or reference.agent_id != agent_id:
+        raise OfferUnavailableError("Delivery offer was not found.")
+    db.scalar(select(DeliveryAssignment).where(DeliveryAssignment.id == reference.assignment_id).with_for_update())
     offer = db.scalar(
         select(DeliveryOffer)
         .where(DeliveryOffer.id == offer_id)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
     if offer is None or offer.agent_id != agent_id:
         raise OfferUnavailableError("Delivery offer was not found.")
-    if offer.status != "PENDING" or offer.expires_at <= utcnow():
+    if offer.status != "PENDING" or _utc(offer.expires_at) <= utcnow():
         if offer.status == "PENDING":
             offer.status = "EXPIRED"
             offer.responded_at = utcnow()
@@ -293,9 +337,14 @@ def reject_offer(db: Session, agent_id: UUID, offer_id: UUID) -> DeliveryOffer:
 
 
 def accept_offer(db: Session, agent_id: UUID, offer_id: UUID) -> DeliveryAssignment:
+    reference = db.get(DeliveryOffer, offer_id)
+    if reference is None or reference.agent_id != agent_id:
+        raise OfferUnavailableError("Delivery offer was not found.")
+    db.scalar(select(DeliveryAssignment).where(DeliveryAssignment.id == reference.assignment_id).with_for_update())
     offer = db.scalar(
         select(DeliveryOffer)
         .where(DeliveryOffer.id == offer_id)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
     if offer is None or offer.agent_id != agent_id:
@@ -312,7 +361,7 @@ def accept_offer(db: Session, agent_id: UUID, offer_id: UUID) -> DeliveryAssignm
     )
     if assignment is None or agent is None:
         raise OfferUnavailableError("Delivery offer is no longer available.")
-    if offer.status != "PENDING" or offer.expires_at <= utcnow():
+    if offer.status != "PENDING" or _utc(offer.expires_at) <= utcnow():
         if offer.status == "PENDING":
             offer.status = "EXPIRED"
             offer.responded_at = utcnow()
@@ -365,11 +414,5 @@ def accept_offer(db: Session, agent_id: UUID, offer_id: UUID) -> DeliveryAssignm
             note="Accepted instant dispatch offer",
         )
     )
-    db.add(
-        NotificationOutbox(
-            user_id=order.customer_id,
-            event_type="DELIVERY_ASSIGNED",
-            payload={"order_id": str(order.id), "order_number": order.order_number},
-        )
-    )
+    issue_delivery_confirmation(db, assignment, order)
     return assignment

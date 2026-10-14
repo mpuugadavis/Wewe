@@ -131,6 +131,15 @@ class CategoryUpdate(BaseModel):
     sort_order: int | None = Field(default=None, ge=0)
 
 
+class RetailerCategoryCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def clean_name(cls, value):
+        return " ".join(value.split()) if isinstance(value, str) else value
+
+
 class ProductCreate(BaseModel):
     name: str = Field(min_length=2, max_length=220)
     description: str | None = Field(default=None, max_length=10000)

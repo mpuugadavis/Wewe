@@ -85,6 +85,7 @@ services:
     build: .
     env_file: .env
     environment:
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-6291456}
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to use host postgres}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-S3}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-wewe-media}

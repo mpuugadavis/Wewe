@@ -104,8 +104,8 @@ def test_pending_settlement_is_reserved_but_failed_settlement_releases_it():
             idempotency_key="IDEMP-SUBMITTED",
         )
         failed = RetailerSettlement(
-            id=uuid4(), retailer_id=retailer.id, amount_ugx=0, currency="UGX",
-            status="FAILED", amount_ugx=1, settlement_reference="SET-FAILED",
+            id=uuid4(), retailer_id=retailer.id, amount_ugx=1, currency="UGX",
+            status="FAILED", settlement_reference="SET-FAILED",
             idempotency_key="IDEMP-FAILED",
         )
         session.add_all([pending, failed])

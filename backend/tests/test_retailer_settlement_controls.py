@@ -13,6 +13,7 @@ from app.models import (
     RetailerFulfillment,
     RetailerPayableEntry,
     RetailerSettlement,
+    RetailerSettlementLine,
     User,
     University,
 )
