@@ -19,6 +19,8 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
+      - key: DATABASE_URL_UNPOOLED
+        sync: false
       - key: RATE_LIMIT_STORAGE_URI
         value: memory://
       - key: NOTIFICATION_WORKER_POLL_SECONDS

@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "@neon/config": "^1.9.1",
+    "@neon/env": "^1.6.2"
+  },
+  "name": "wewe-deployment",
+  "private": true,
+  "scripts": {
+    "build": "docker build -f deploy/Dockerfile -t wewe-free-preview:local ."
+  }
+}

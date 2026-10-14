@@ -26,10 +26,10 @@ Sleeping suspends dispatch and email processing. Rider locations must be refresh
 
 ## Setup
 
-1. Keep the existing local database and backups intact. Create a separate Neon **Free** project in a nearby European region. Copy its **direct** PostgreSQL connection URL with `sslmode=require`; keep it private. The launcher converts `postgresql://` to the installed psycopg driver. Never point the free preview at a live production database.
+1. Keep the existing local database and backups intact. Create a separate Neon **Free** project in a nearby European region. Keep both URLs private: pooled `DATABASE_URL` for the application and direct `DATABASE_URL_UNPOOLED` for migrations, both using `sslmode=require`. Settings convert standard PostgreSQL URLs to the installed psycopg driver. Never point the free preview at a live production database.
 2. In Brevo, verify a sender you control and create an API key. A verified email address can be used for initial testing without buying a domain; delivery/reputation restrictions still apply. Do not use the SMTP login or SMTP password as the API key.
 3. In Render, create a Blueprint from `mpuugadavis/Wewe`, selecting the branch containing this file. The Blueprint contains exactly one **Free** web service. Do not add Render's free PostgreSQL database: it expires after 30 days. Automatic deploys are off to avoid unnecessary builds; deploy deliberately after reviewed updates.
-4. Fill only the private values requested by Render: `DATABASE_URL`, `BREVO_API_KEY`, `EMAIL_FROM`, `PAWAPAY_API_TOKEN` (sandbox), `OPENROUTESERVICE_API_KEY`, and the four private R2 fields (`STORAGE_BUCKET`, `STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`; the provider is already S3). Use a separate preview bucket if you later operate production. No secrets belong in Git.
+4. Fill only the private values requested by Render: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BREVO_API_KEY`, `EMAIL_FROM`, `PAWAPAY_API_TOKEN` (sandbox), `OPENROUTESERVICE_API_KEY`, and the four private R2 fields (`STORAGE_BUCKET`, `STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`; the provider is already S3). Use a separate preview bucket if you later operate production. No secrets belong in Git.
 5. Render supplies `RENDER_EXTERNAL_HOSTNAME`; the launcher derives the exact trusted host, CORS origin and callback URLs. No guessed hostname is embedded in code. After deployment, register the resulting checkout/deposit/payout/refund callback URLs in PawaPay wherever its sandbox requires them. Paths are `/api/v1/payments/pawapay/<type>-callback`.
 6. Every startup applies committed migrations before starting the API. It never seeds sample accounts or resets passwords. A new database is empty except for data introduced by the existing migrations.
 
@@ -47,7 +47,7 @@ Create a private, Git-ignored `backend/.env.free` containing the same new sandbo
 docker run --rm -it --env-file backend/.env.free wewe-free-preview:local python -m app.bootstrap_admin --email YOUR_REAL_EMAIL
 ```
 
-Use `postgresql+psycopg://` in this local file because this direct command bypasses the launcher. The tool prompts privately for a password of at least 16 characters and refuses to create a second administrator or promote an existing account. Use a unique password, not the shared local demo password. Configure campuses, delivery points, categories and retailers through the admin API/dashboard. Do not run the legacy development seed on a public environment.
+Settings accept `postgresql://` and `postgresql+psycopg://` URLs. The tool prompts privately for a password of at least 16 characters and refuses to create a second administrator or promote an existing account. Use a unique password, not the shared local demo password. Configure campuses, delivery points, categories and retailers through the admin API/dashboard. Do not run the legacy development seed on a public environment.
 
 If you deliberately need sample listings after creating a campus, `python -m app.seed_catalog` adds labelled demo listings only. It generates private random retailer passwords and does not create orders or successful payments. Existing local demo credentials are not copied to the new database.
 
@@ -68,3 +68,23 @@ Removed the unused old homepage backup, old raster logo and duplicate migration 
 ## Repository validation
 
 305 backend tests passed with two opt-in checks skipped; the additional first-admin guard test passed separately (306 passing tests total). Frontend smoke checks and the official Render Blueprint JSON schema passed. The exact deployment image built with locked dependencies and passed `pip check`. A disposable PostgreSQL database migrated successfully, and the container served the homepage, SVG branding, categories API and readiness endpoint; private configuration and removed backup files returned 404. No live cloud resource or real email was created during these checks.
+
+## Neon CLI integration
+
+The repository is configured for Neon project `odd-mode-92589149`, organization `org-misty-lab-00313240`, branch `production`. The local `.neon` binding and pulled `.env.local` are ignored by Git. `neon.ts` declares PostgreSQL only; existing WEWE authentication, Cloudflare R2, routing and payment adapters remain in use. The Codex Neon plugin is installed; MCP access may require reconnecting the plugin in the app.
+
+`neon deploy` applies Neon service configuration and pulls environment values; it does not publish the WEWE website. `npm run build` builds the actual FastAPI/frontend deployment container. The application uses `DATABASE_URL`; Alembic uses `DATABASE_URL_UNPOOLED` when provided. Both URLs are normalised to the existing psycopg driver.
+
+A separate private `.env.neon-preview` combines the local integration settings with the new Neon URLs for local validation; `backend/.env` is unchanged. The old local catalogue and account data are not copied automatically. Set both Neon URLs privately in Render when publishing the website. Do not commit any of these environment files.
+
+### Neon setup verification
+
+- Neon CLI 8.4.4 authenticated and `neon deploy` reported `No changes` and `Utilized services: Postgres`; three variables were pulled privately.
+- `npm run build` completed successfully for `wewe-free-preview:local`.
+- Six focused configuration tests passed.
+- A temporary branch of `production` migrated successfully and passed API customer registration, login, authenticated profile and catalogue reads. The branch and test account were then deleted.
+- The selected `production` branch reached `0028_one_active_rider_delivery`; the encrypted client connection, readiness and catalogue API checks passed.
+- The free plan rejected a custom suspension setting; retrying with free-plan defaults succeeded. Staging correctly rejected the initial reserved `.test` email fixture; an `example.com` fixture passed with email sending disabled.
+- The plugin configures MCP at `https://mcp.neon.tech/mcp`; MCP tool calls were not available in this chat, so cloud operations were verified through the authenticated CLI.
+
+The Neon validation container is stopped to conserve database compute. To test it locally again, run `docker start wewe-neon-preview`, then open http://localhost:8090. Run `docker stop wewe-neon-preview` when finished. The existing http://localhost:8088 sandbox and its database were preserved. This does not publish the website to Render.

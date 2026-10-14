@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     api_prefix: str = "/api/v1"
     database_url: str = "sqlite:///./wewe.db"
+    database_url_unpooled: str | None = None
     secret_key: SecretStr
     access_token_minutes: int = 15
     refresh_token_days: int = 30
@@ -105,6 +106,15 @@ class Settings(BaseSettings):
     notification_worker_poll_seconds: float = 2.0
     notification_worker_stale_after_seconds: int = 300
     notification_worker_max_attempts: int = 8
+
+    @field_validator("database_url", "database_url_unpooled", mode="before")
+    @classmethod
+    def normalize_postgres_driver(cls, value):
+        if isinstance(value, str):
+            for prefix in ("postgresql://", "postgres://"):
+                if value.startswith(prefix):
+                    return "postgresql+psycopg://" + value[len(prefix):]
+        return value
 
     @field_validator("secret_key")
     @classmethod

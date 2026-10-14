@@ -23,3 +23,6 @@ artifacts/
 **/build/
 **/*.db
 **/*.sqlite*
+
+# Local Neon project binding and secrets
+.neon
