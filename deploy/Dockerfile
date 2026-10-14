@@ -9,6 +9,9 @@ COPY backend/app ./app
 COPY backend/migrations ./migrations
 RUN pip install --no-cache-dir --no-deps --no-build-isolation .
 COPY --from=web /usr/bin/caddy /usr/bin/caddy
+# Copy without file capabilities: restricted hosts drop CAP_NET_BIND_SERVICE.
+# Port 10000 does not require privileged-port capabilities.
+RUN cp /usr/bin/caddy /usr/bin/caddy-nocaps && mv /usr/bin/caddy-nocaps /usr/bin/caddy
 COPY frontend/index.html frontend/app.js frontend/brand.css frontend/brand-ui.js frontend/retailer-media.js /srv/
 COPY frontend/assets/brand /srv/assets/brand
 COPY deploy /app/deploy
