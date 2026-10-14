@@ -443,10 +443,20 @@
     $("#categoryQuickLinks").innerHTML = state.categories.map(category => button(category, false)).join("");
   }
 
+  // Display-only artwork: never stored as an identification photo or approval evidence.
+  function profileArtwork(name, kind = "shop") {
+    const label = String(name || "WEWE");
+    const initials = label.replace(/ · Demo$/, "").split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join("").toUpperCase();
+    const hues = [258, 276, 239, 291, 252, 265, 230];
+    const hue = hues[Array.from(label).reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % hues.length];
+    const icon = kind === "rider" ? '<circle cx="40" cy="27" r="10"/><path d="M22 54c0-18 36-18 36 0"/>' : '<path d="M19 22h42l-4-10H23l-4 10Zm3 3v25h36V25M32 50V34h16v16"/>';
+    return `<svg class="profile-artwork" viewBox="0 0 80 80" role="img" aria-label="${escapeHtml(label)} — ${kind === "rider" ? "placeholder, identification photo required" : "shop monogram"}"><rect width="80" height="80" rx="20" fill="hsl(${hue} 65% 94%)"/><circle cx="72" cy="9" r="28" fill="hsl(${hue} 75% 88%)"/><g fill="none" stroke="hsl(${hue} 60% 39%)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${icon}</g><text x="40" y="69" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="hsl(${hue} 60% 30%)">${escapeHtml(initials)}</text></svg>`;
+  }
+
   function renderRetailers() {
     $("#sellerRow").innerHTML = state.retailers.length ? state.retailers.map(retailer => {
       const image = safeImage(retailer.profile_image_url || retailer.logo_url || retailer.image_url);
-      return `<button class="seller-card" data-action="retailer-details" data-retailer-slug="${escapeHtml(retailer.slug)}"><span class="seller-avatar">${image ? `<img src="${escapeHtml(image)}" alt="">` : escapeHtml((retailer.business_name || "?").slice(0, 1))}</span><span><b>${escapeHtml(retailer.business_name)}</b><small>${escapeHtml(retailer.product_count ?? "Campus retailer")}</small></span></button>`;
+      return `<button class="seller-card" data-action="retailer-details" data-retailer-slug="${escapeHtml(retailer.slug)}"><span class="seller-avatar">${image ? `<img src="${escapeHtml(image)}" alt="">` : profileArtwork(retailer.business_name)}</span><span><b>${escapeHtml(retailer.business_name)}</b><small>${escapeHtml(retailer.product_count ?? "Campus retailer")}</small></span></button>`;
     }).join("") : '<p class="api-state">No retailers are listed right now.</p>';
   }
 
@@ -1353,7 +1363,7 @@
     if (safeImage(user.profile_image_url)) {
       dashboardAvatar.innerHTML = '<img src="' + escapeHtml(safeImage(user.profile_image_url)) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">';
     } else {
-      dashboardAvatar.textContent = (user.name || "?").slice(0, 1).toUpperCase();
+      dashboardAvatar.innerHTML = profileArtwork(user.name, role === "DELIVERY_AGENT" ? "rider" : "shop");
     }
     $("#dashAccountRole").textContent = `${role.replaceAll("_", " ")} account`;
     $("#dashNav").innerHTML = `${nav.map(([key, label]) => `<button class="${key === state.dashboardSection ? "active" : ""}" data-action="dashboard-section" data-section="${key}">${label}</button>`).join("")}<button data-action="sign-out">Sign out</button><button data-action="storefront">Back to shop</button>`;
@@ -1529,7 +1539,7 @@
         ? '<div class="retailer-location-status"><b>Pickup location set</b><span>' + escapeHtml(selectedLocation.name) + (selectedLocation.directions ? ' · ' + escapeHtml(selectedLocation.directions) : '') + '</span></div>'
         : '<div class="retailer-location-warning"><b>Pickup location required</b><span>Set your pickup point before opening your store or requesting verification.</span></div>';
       const form = '<form data-form="retailer-profile" class="api-form dashboard-form">' +
-        '<div style="display:flex;align-items:center;gap:14px;padding:12px;border:1px solid #e7e0ef;border-radius:14px;background:#faf8fd"><div style="width:64px;height:64px;border-radius:16px;overflow:hidden;display:grid;place-items:center;background:#eee8fa;color:#6c3df4;font-weight:900;font-size:23px;flex:none">' + (safeImage(profile.profile_image_url) ? '<img src="' + escapeHtml(safeImage(profile.profile_image_url)) + '" alt="Store profile picture" style="width:100%;height:100%;object-fit:cover">' : '<span>' + escapeHtml((profile.business_name || "W").slice(0, 1).toUpperCase()) + '</span>') + '</div><div><b>Store profile picture</b><small class="muted">Upload a clear photo or logo students can recognize.</small><label class="button-outline" style="display:inline-flex;margin-top:7px;cursor:pointer">Choose picture<input data-profile-image type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div></div>' +
+        '<div style="display:flex;align-items:center;gap:14px;padding:12px;border:1px solid #e7e0ef;border-radius:14px;background:#faf8fd"><div style="width:64px;height:64px;border-radius:16px;overflow:hidden;display:grid;place-items:center;background:#eee8fa;color:#6c3df4;font-weight:900;font-size:23px;flex:none">' + (safeImage(profile.profile_image_url) ? '<img src="' + escapeHtml(safeImage(profile.profile_image_url)) + '" alt="Store profile picture" style="width:100%;height:100%;object-fit:cover">' : profileArtwork(profile.business_name)) + '</div><div><b>Store profile picture</b><small class="muted">Upload a clear photo or logo students can recognize.</small><label class="button-outline" style="display:inline-flex;margin-top:7px;cursor:pointer">Choose picture<input data-profile-image type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div></div>' +
         '<label class="field">Business name<input name="business_name" value="' + escapeHtml(profile.business_name) + '" required></label>' +
         '<label class="field">Description<textarea name="description">' + escapeHtml(profile.description || "") + '</textarea></label>' +
         '<label class="field">Phone<input name="phone" value="' + escapeHtml(profile.phone || "") + '" required></label>' +
@@ -1763,7 +1773,7 @@
     if (section === "profile") {
       const profile = await profilePromise;
       const available = profile.availability_status === "AVAILABLE";
-      return dashboardPage("Rider profile","Keep your contact and transport details ready for delivery work.",`<div class="rider-profile-grid"><div class="rider-profile-card"><div class="rider-avatar-large" style="overflow:hidden">${safeImage(profile.profile_image_url) ? '<img src="' + escapeHtml(safeImage(profile.profile_image_url)) + '" alt="Rider profile picture" style="width:100%;height:100%;object-fit:cover">' : escapeHtml((state.user.name || "?").slice(0,1).toUpperCase())}</div><div><h3>${escapeHtml(state.user.name)}</h3><span>${escapeHtml(profile.verification_status || "PENDING")} verification</span></div>${!safeImage(profile.profile_image_url) ? '<p class="rider-photo-warning">An identification photo is required before WEWE can approve you for deliveries. Upload a clear picture showing your face.</p>' : ""}<label class="button-outline" style="display:inline-flex;cursor:pointer">Upload identification photo<input data-profile-image type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div>
+      return dashboardPage("Rider profile","Keep your contact and transport details ready for delivery work.",`<div class="rider-profile-grid"><div class="rider-profile-card"><div class="rider-avatar-large" style="overflow:hidden">${safeImage(profile.profile_image_url) ? '<img src="' + escapeHtml(safeImage(profile.profile_image_url)) + '" alt="Rider profile picture" style="width:100%;height:100%;object-fit:cover">' : profileArtwork(state.user.name, "rider")}</div><div><h3>${escapeHtml(state.user.name)}</h3><span>${escapeHtml(profile.verification_status || "PENDING")} verification</span></div>${!safeImage(profile.profile_image_url) ? '<p class="rider-photo-warning">An identification photo is required before WEWE can approve you for deliveries. Upload a clear picture showing your face.</p>' : ""}<label class="button-outline" style="display:inline-flex;cursor:pointer">Upload identification photo<input data-profile-image type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div>
       <form data-form="agent-profile" class="api-form dashboard-form rider-form"><label class="field">Phone<input name="phone" value="${escapeHtml(profile.phone || "")}" autocomplete="tel"></label><label class="field">Transport mode<input name="transport_mode" value="${escapeHtml(profile.transport_mode || "")}" placeholder="Bicycle, motorcycle, car…" maxlength="40"></label><button class="rider-primary-action">Save rider profile</button></form>
       <div class="rider-status-panel"><div><small>WORK STATUS</small><strong>${available ? "You are online" : "You are offline"}</strong><span>${available ? "New delivery offers can reach you." : "Go online when you are ready to receive work."}</span></div><button class="${available ? "rider-offline-button" : "rider-online-button"}" data-action="agent-availability" data-status="${available ? "OFFLINE" : "AVAILABLE"}">${available ? "Go offline" : "Go online"}</button></div></div>`);
     }
@@ -1946,7 +1956,7 @@
         (agents.map(agent => {
           const src = safeImage(agent.profile_image_url);
           return `<article class="dashboard-list-item admin-rider-identity"><div class="admin-rider-identity">` +
-            (src ? `<img src="${escapeHtml(src)}" alt="Identification photo for ${escapeHtml(agent.name)}">` : `<span class="missing-photo">No photo</span>`) +
+            (src ? `<img src="${escapeHtml(src)}" alt="Identification photo for ${escapeHtml(agent.name)}">` : `<span class="missing-photo">${profileArtwork(agent.name, "rider")}</span>`) +
             `<div><b>${escapeHtml(agent.name)}</b><small>${escapeHtml(agent.phone || "No phone")} · ${escapeHtml(agent.transport_mode || "Rider")}</small><small>${escapeHtml(agent.availability_status || "OFFLINE")}</small></div></div>` +
             `<div>${statusBadge(agent.verification_status)} ${agent.verification_status !== "VERIFIED" && src ? `<button class="button-primary" data-action="verify-agent" data-id="${escapeHtml(agent.user_id)}">Verify photo & rider</button>` : ""}` +
             `${!src ? `<small class="rider-photo-warning">Photo required before approval</small>` : ""}</div></article>`;
@@ -2000,7 +2010,7 @@
       else if (rider) locationHtml = '<div class="tracking-location-muted"><b>Waiting for rider location</b><small>The rider is assigned, but a fresh GPS position is not available yet.</small></div>';
       else locationHtml = '<div class="tracking-location-muted"><b>Finding your rider</b><small>WEWE is dispatching this delivery to an eligible nearby rider.</small></div>';
       return '<article class="tracking-live-card"><div class="tracking-card-head"><div><span class="section-kicker">Delivery</span><h3>' + escapeHtml(delivery.retailer_name || "Campus retailer") + '</h3></div>' + statusBadge(delivery.status) + '</div>' +
-        (rider ? '<div class="tracking-rider">' + (safeImage(rider.profile_image_url) ? '<img class="tracking-rider-photo" src="' + escapeHtml(safeImage(rider.profile_image_url)) + '" alt="Photo of assigned rider">' : '') + '<div><b>' + escapeHtml(rider.name) + '</b><small>' + escapeHtml(rider.transport_mode || "Delivery agent") + '</small></div></div>' : '') +
+        (rider ? '<div class="tracking-rider">' + (safeImage(rider.profile_image_url) ? '<img class="tracking-rider-photo" src="' + escapeHtml(safeImage(rider.profile_image_url)) + '" alt="Photo of assigned rider">' : '<span class="tracking-rider-placeholder">' + profileArtwork(rider.name, "rider") + '</span>') + '<div><b>' + escapeHtml(rider.name) + '</b><small>' + escapeHtml(rider.transport_mode || "Delivery agent") + '</small></div></div>' : '') +
         locationHtml + '<div class="tracking-route"><div><span>Pickup</span><b>' + escapeHtml(delivery.pickup?.name || "Retailer pickup") + '</b></div><span class="tracking-arrow">→</span><div><span>Drop-off</span><b>' + escapeHtml(delivery.dropoff?.name || "Your delivery point") + '</b></div></div></article>';
     }).join("");
   }

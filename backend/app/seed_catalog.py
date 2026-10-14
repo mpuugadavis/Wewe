@@ -46,7 +46,18 @@ CATALOG = [
 ]
 
 
-def seed_catalog(db, *, environment: str):
+# One independently selected image per listing, never one shared category image.
+PRODUCT_PHOTOS = [
+    ['1504674900247-0877df9cc836', '1512621776951-a57141f2eefd', '1547592180-85f173990554', '1511690743698-d9d85f2fbf38'],
+    ['1434389677669-e08b4cac3105', '1576566588028-4147f3842f27', '1551028719-00167b16eac5', '1554568218-0f1715e72254'],
+    ['1542291026-7eec264c27ff', '1549298916-b41d501d3772', '1600185365483-26d7a4cc7519', '1608231387042-66d1773070a5'],
+    ['1505740420928-5e560c06d30e', '1484704849700-f032a568e944', '1546435770-a3e426bf472b', '1583394838336-acd977736f90'],
+    ['1455390582262-044cdead277a', '1517842645767-c639042777db', '1456324504439-367cee3b3c32', '1531346878377-a5be20888e57'],
+    ['1596462502278-27bfdc403348', '1522335789203-aabd1fc54bc9', '1512496015851-a90fb38ba796', '1515377905703-c4788e51af15'],
+    ['1553062407-98eeb64c6a62', '1548036328-c9fa89d128fa', '1584917865442-de89df76afd3', '1622560480605-d83c853bc5c3'],
+]
+
+def seed_catalog(db, *, environment: str, refresh_demo_images: bool = False):
     if environment not in {"development", "test", "staging"}:
         raise ValueError("Demo catalogue is forbidden in production.")
     campus = db.scalar(select(Campus).order_by(Campus.created_at))
@@ -71,14 +82,25 @@ def seed_catalog(db, *, environment: str):
             db.add(retailer); db.flush()
         for number, (name, price, description) in enumerate(products):
             sku = f"DEMO-{index + 1:02d}-{number + 1:02d}"
-            if db.scalar(select(RetailerProduct.id).where(RetailerProduct.retailer_id == retailer.id, RetailerProduct.sku == sku)):
+            photo = "photo-" + PRODUCT_PHOTOS[index][number]
+            existing = db.scalar(select(RetailerProduct).where(RetailerProduct.retailer_id == retailer.id, RetailerProduct.sku == sku))
+            if existing:
+                if refresh_demo_images:
+                    # Only seed-owned illustrative photos; never touch retailer uploads.
+                    images = db.scalars(select(ProductImage).where(ProductImage.product_id == existing.product_id).order_by(ProductImage.sort_order)).all()
+                    for position, image in enumerate(images):
+                        if image.url.startswith("https://images.unsplash.com/") and "illustrative demo photo" in (image.alt_text or ""):
+                            if position == 0:
+                                image.url = f"https://images.unsplash.com/{photo}?auto=format&fit=crop&w=900&q=85"
+                            else:
+                                db.delete(image)
                 continue
             product = Product(name=name, category_id=category.id, description=description + "\n\nDemo listing. Photography is illustrative; this item is not a real offer for sale.", status="ACTIVE")
             db.add(product); db.flush()
             listing = RetailerProduct(product_id=product.id, retailer_id=retailer.id, sku=sku, price_ugx=price, original_price_ugx=(price + price // 5 if number % 2 == 0 else None), is_active=True)
             db.add(listing); db.flush()
             db.add(Inventory(product_id=product.id, retailer_id=retailer.id, retailer_product_id=listing.id, owner_type="RETAILER", quantity=15 + number * 3, reserved_quantity=0))
-            for position, width in enumerate([900, 1200]):
+            for position, width in enumerate([900]):
                 db.add(ProductImage(product_id=product.id, url=f"https://images.unsplash.com/{photo}?auto=format&fit=crop&w={width}&q=85", alt_text=name + " — illustrative demo photo", sort_order=position))
             created += 1
     db.flush()
@@ -86,9 +108,13 @@ def seed_catalog(db, *, environment: str):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--refresh-demo-images", action="store_true", help="Replace only seed-owned illustrative demo photos")
+    args = parser.parse_args()
     settings = get_settings()
     with SessionLocal.begin() as db:
-        created = seed_catalog(db, environment=settings.app_env)
+        created = seed_catalog(db, environment=settings.app_env, refresh_demo_images=args.refresh_demo_images)
     print(f"Demo catalogue ready: {created} new products. Existing shops, orders and payments were left unchanged.")
 
 

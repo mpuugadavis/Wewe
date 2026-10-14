@@ -53,3 +53,7 @@ Migrations run before the application. Configure the campus, public destinations
 Verify `/health/ready`, check both worker heartbeats in admin, test a sandbox payment and delivery handover, and schedule database backups before opening the preview to testers. A readiness response alone does not prove that email delivery or mobile location permissions work for every tester. Riders must grant location permission and keep WEWE open; use HTTPS on public previews.
 
 The public preview requires the hosting/domain and secret configuration above. This is not a live-money launch configuration.
+
+## Demo image refresh
+
+Run `python -m app.seed_catalog --refresh-demo-images` in the configured non-production backend to replace seed-owned category photos with 28 distinct listing images and remove duplicate-size gallery entries. Retailer-uploaded photos are preserved. Shops without uploaded photos display personalised branded monograms; riders without identification photos display labelled placeholders and still require real approved face photos. No stock portrait is accepted as identification.

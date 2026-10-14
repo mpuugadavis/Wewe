@@ -1,5 +1,5 @@
 from sqlalchemy import select, func
-from app.models import Category, Retailer, RetailerProduct, Product, User
+from app.models import Category, Retailer, RetailerProduct, Product, ProductImage, User
 from app.seed_catalog import seed_catalog
 from test_order_service import marketplace_fixture, _authorization
 import pytest
@@ -40,6 +40,13 @@ def test_demo_catalogue_is_repeatable_and_forbidden_in_production(database):
     original = database.scalar(select(func.count()).select_from(Product))
     assert seed_catalog(database, environment="test") == 28
     database.commit()
+    demo_ids = select(RetailerProduct.product_id).where(RetailerProduct.sku.like("DEMO-%"))
+    demo_images = database.scalars(select(ProductImage).where(ProductImage.product_id.in_(demo_ids))).all()
+    assert len(demo_images) == 28
+    assert len({image.url for image in demo_images}) == 28
+    demo_images[0].url = "https://images.unsplash.com/old-shared-photo"
+    assert seed_catalog(database, environment="test", refresh_demo_images=True) == 0
+    assert "old-shared-photo" not in demo_images[0].url
     assert seed_catalog(database, environment="test") == 0
     assert database.scalar(select(func.count()).select_from(Product)) == original + 28
     assert database.scalar(select(func.count()).select_from(Retailer).where(Retailer.slug.like("demo-%"))) == 7
