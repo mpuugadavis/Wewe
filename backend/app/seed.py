@@ -33,6 +33,7 @@ from app.models import (
     utcnow,
 )
 from app.security import hash_password
+from app.public_locations import CURATED_COORDINATES, HOSTEL_COORDINATES, SERVICE_AREAS
 
 
 def seed() -> None:
@@ -96,17 +97,7 @@ def seed() -> None:
             return point
 
         shop_point = public_point("Kikoni shopfront", directions="Opposite the main campus gate", latitude="0.335300", longitude="32.571300")
-        curated_coordinates = {
-            "Africa Hall": ("0.337890", "32.568910"),
-            "Complex Hall": ("0.329530", "32.569750"),
-            "Livingstone Hall": ("0.338770", "32.567990"),
-            "Lumumba Hall": ("0.331960", "32.566610"),
-            "Mary Stuart Hall": ("0.330580", "32.566590"),
-            "Mitchell Hall": ("0.3338875", "32.5705214"),
-            "Nkrumah Hall": ("0.335840", "32.569380"),
-            "Nsibirwa Hall": ("0.336080", "32.569900"),
-            "University Hall": ("0.332897", "32.572208"),
-        }
+        curated_coordinates = CURATED_COORDINATES
         for curated_hall in hall_records.values():
             if curated_hall.kind != "HALL":
                 continue
@@ -124,20 +115,13 @@ def seed() -> None:
         # University confirms these hostels are part of the Makerere student
         # accommodation ecosystem; individual coordinates are sourced from
         # public map records and kept to six decimal places.
-        hostel_coordinates = {
-            "Makerere International Students Hostel": ("0.334990", "32.560500"),
-            "Muhika Hostel": ("0.333190", "32.562550"),
-            "JJ Hostel": ("0.337670", "32.561720"),
-            "Apex Girls Hostel": ("0.333050", "32.562700"),
-            "Makerere Garden Courts": ("0.331290", "32.562080"),
-            "Nana Hostel": ("0.325474", "32.566765"),
-            "Galloway House": ("0.338690", "32.577920"),
-        }
+        hostel_coordinates = HOSTEL_COORDINATES
         for hostel_name in hostel_coordinates:
             latitude, longitude = hostel_coordinates[hostel_name]
             public_point(
                 hostel_name,
                 kind="BUILDING",
+                hall_id=hall_records[hostel_name].id,
                 directions="Makerere student accommodation area",
                 latitude=latitude,
                 longitude=longitude,
@@ -146,13 +130,7 @@ def seed() -> None:
         # Named surrounding service areas. They remain in the same main-campus
         # delivery catalogue so customers can select a neighborhood without
         # dropping a marker for every possible address.
-        service_areas = {
-            "Kikoni": ("0.335750", "32.562050"),
-            "Wandegeya": ("0.331112", "32.573600"),
-            "Kagugube": ("0.326810", "32.567820"),
-            "Mulago": ("0.342508", "32.576959"),
-            "Makerere": ("0.339656", "32.564142"),
-        }
+        service_areas = SERVICE_AREAS
         for area_name, (latitude, longitude) in service_areas.items():
             public_point(
                 area_name,

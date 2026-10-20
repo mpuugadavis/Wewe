@@ -115,3 +115,18 @@ Administrators open **My account → Settings → Maintenance mode**, enter an o
 ### Rider navigation
 
 Accepting a delivery opens **Active delivery** with **Navigate to retailer** and **Navigate to customer**. Each opens an embedded Leaflet/OpenStreetMap map using the saved stop coordinates, the rider’s GPS location, and an OpenRouteService road route with estimated distance/time and written directions. Bicycle and walking profiles use matching ORS modes; other transport uses driving. The route screen can switch stops, refresh the route and open a maps app for turn-by-turn guidance. GPS marker updates do not recalculate routes or consume extra routing requests. Closing or switching the navigation screen stops its GPS watch and removes the map. Missing pins, denied GPS, map library/tile failures and ORS errors show a fallback instead of invented directions. Routing keys remain server-side; only the assigned rider can request an active delivery route. This reuses existing services and requires no paid map SDK or database migration.
+
+### Restore public delivery destinations
+
+An existing Makerere main campus needs its public hall, hostel and service-area
+catalogue in the hosted database. With the intended DATABASE_URL configured, run
+`python -m app.public_locations` from `backend/`. This idempotent command creates
+missing destinations and links hostel points to their halls; it does not seed
+accounts, orders or payments, change existing coordinates, or reactivate disabled
+locations. It uses the same coordinate catalogue as the development seed.
+
+Checkout keeps OpenRouteService as its primary road-routing provider. On network
+failure only, it uses the existing OSRM road-routing adapter with a five-second
+timeout. The quote records the actual provider and road-distance source. If both
+providers fail, checkout refuses to invent a delivery fee. Authentication, quota,
+and no-route errors do not trigger a fallback.

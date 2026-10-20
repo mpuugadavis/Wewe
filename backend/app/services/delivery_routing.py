@@ -22,7 +22,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import Block, Campus, DeliveryPoint, Hall, Retailer, University
-from app.services.routing import GeoCoordinate, RouteDistance, RoutingProviderError, get_routing_provider
+from app.services.routing import GeoCoordinate, RouteDistance, RoutingProviderError, OsrmRoutingProvider, get_routing_provider
 
 
 class DeliveryRoutingError(Exception):
@@ -132,6 +132,7 @@ def resolve_route_distances(
     destination_coordinate = _coordinate_for_point(db, provider, destination, "your delivery point")
 
     distances: dict[UUID, RouteDistance] = {}
+    used_providers: set[str] = set()
     for retailer_id in retailer_ids:
         retailer = db.get(Retailer, retailer_id)
         if retailer is None:
@@ -152,9 +153,21 @@ def resolve_route_distances(
                 destination_place_id=destination.google_place_id,
             )
         except RoutingProviderError as exc:
-            raise _unavailable(
-                "WEWE could not calculate a road route for this delivery. Please try again or choose pickup."
-            ) from exc
+            # Keep ORS authoritative when available. Only network outages use
+            # the existing OSRM adapter, which also returns actual road routes.
+            # Never mask invalid locations, rejected credentials or quota errors.
+            if provider.name != "OPENROUTESERVICE" or exc.code != "routing_provider_unreachable":
+                raise _unavailable(
+                    "WEWE could not calculate a road route for this delivery. Please try again or choose pickup."
+                ) from exc
+            provider = OsrmRoutingProvider(base_url="https://router.project-osrm.org", timeout=5)
+            try:
+                route = provider.route_distance(origin_coordinate, destination_coordinate)
+            except RoutingProviderError as fallback_error:
+                raise _unavailable(
+                    "Delivery routing is temporarily unavailable. Please try again or choose pickup."
+                ) from fallback_error
         distances[retailer_id] = route
-    return distances, provider.name
+        used_providers.add(route.provider)
+    return distances, "+".join(sorted(used_providers)) or provider.name
 
